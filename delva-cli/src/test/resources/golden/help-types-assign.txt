@@ -1,0 +1,16 @@
+Give an object a type, replacing the one it had
+
+Usage:
+  delva types assign [options] <node> <type>
+
+Arguments:
+  node  The node, as doc:node
+  type  The type's name
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]

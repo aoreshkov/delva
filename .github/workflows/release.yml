@@ -1,0 +1,210 @@
+name: Release
+
+# A tag vX.Y.Z tests, signs, attests, uploads to the Central Portal and drafts the GitHub release; project/RELEASING.md
+# has the setup it needs and the manual steps after it.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache on the release path: a release is built from the tag alone, never from state a cache could carry in.
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-disabled: true
+
+      - name: All test suites
+        run: ./gradlew check heapCappedTest crashTest --console=plain
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-test-reports-${{ matrix.os }}
+          path: '**/build/reports/tests/'
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Holds the signing key and the Portal token; give it a required reviewer so a release waits for approval.
+    environment: release
+    permissions:
+      contents: write # draft the GitHub release
+      id-token: write # sign the provenance attestation
+      attestations: write # store it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-disabled: true
+
+      # Everything that can fail without building fails here, before anything is uploaded: a deployment left half done
+      # in the Portal, or a release once published, can't simply be undone.
+      - name: Check the tag matches the version, and extract the release notes
+        run: |
+          version=$(sed -n 's/^version=//p' gradle.properties)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version=$version in gradle.properties"
+            exit 1
+          fi
+          case "$version" in *-SNAPSHOT) echo "::error::Snapshots aren't released"; exit 1;; esac
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          # The notes are the version's CHANGELOG.md section, without its heading or the link references after it.
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+
+      - name: Build the signed bundle
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          ./gradlew :delva:publishMavenPublicationToStagingRepository \
+            :delva-kotlinx-serialization:publishMavenPublicationToStagingRepository \
+            :cli-kit:publishAllPublicationsToStagingRepository \
+            :cli-kit-testing:publishAllPublicationsToStagingRepository --console=plain
+          # Every file the Portal gets must be signed; an unsigned bundle means the key wasn't configured.
+          unsigned=$(find build/staging-repository \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \) \
+            -exec sh -c '[ -f "$1.asc" ] || echo "$1"' _ {} \;)
+          if [ -n "$unsigned" ]; then
+            echo "::error::Unsigned files: $unsigned"
+            exit 1
+          fi
+          (cd build/staging-repository && zip -qr ../delva-bundle.zip .)
+
+      # The command line ships as archives on the GitHub release, not on Maven Central.
+      - name: Build the command-line distribution
+        run: |
+          ./gradlew :delva-cli:distZip :delva-cli:distTar --console=plain
+          cd delva-cli/build/distributions
+          # The start scripts, the jars, the licences and the README; anything else riding along is a mistake.
+          unexpected=$(unzip -Z1 "delva-cli-$VERSION.zip" \
+            | grep -vE "^delva-cli-$VERSION/(bin/(delva|delva\.bat)?|lib/([^/]+\.jar)?|LICENSE|NOTICE|README\.txt)?$" || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::Unexpected files in the distribution: $unexpected"
+            exit 1
+          fi
+          sha256sum "delva-cli-$VERSION.zip" "delva-cli-$VERSION.tar" > SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            build/staging-repository/**/*.jar
+            build/staging-repository/**/*.pom
+            build/staging-repository/**/*.module
+            delva-cli/build/distributions/delva-cli-*.zip
+            delva-cli/build/distributions/delva-cli-*.tar
+
+      # USER_MANAGED: the Portal validates the deployment and waits for it to be released by hand. The upload returns as
+      # soon as the bundle lands and validation runs after it, so this step waits for the verdict: a deployment the
+      # Portal rejects gets no draft release and no KDoc.
+      - name: Upload to the Central Portal and wait for its validation
+        env:
+          CENTRAL_TOKEN: ${{ secrets.CENTRAL_TOKEN }}
+        run: |
+          id=$(curl --fail-with-body --silent --show-error --request POST \
+            --header "Authorization: Bearer $CENTRAL_TOKEN" \
+            --form bundle=@build/delva-bundle.zip \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=USER_MANAGED&name=delva-$VERSION")
+          if ! [[ $id =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "::error::The Portal answered the upload with no deployment id: $id"
+            exit 1
+          fi
+          # The id is what dropping the deployment needs, if it never gets published.
+          echo "Central Portal deployment: \`$id\`" >> "$GITHUB_STEP_SUMMARY"
+          # Up to 20 minutes, every 20 seconds; a status request that fails transiently is retried, not fatal.
+          for _ in $(seq 60); do
+            status=$(curl --fail-with-body --silent --show-error --retry 3 --request POST \
+              --header "Authorization: Bearer $CENTRAL_TOKEN" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$id")
+            state=$(jq -r .deploymentState <<< "$status")
+            case "$state" in
+              VALIDATED|PUBLISHING|PUBLISHED)
+                echo "Deployment $id: $state"
+                exit 0;;
+              FAILED)
+                echo "::error::The Central Portal rejected deployment $id"
+                jq .errors <<< "$status"
+                exit 1;;
+            esac
+            sleep 20
+          done
+          echo "::error::Deployment $id was still $state after 20 minutes"
+          exit 1
+
+      - name: Draft the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A version with a hyphen, such as 0.1.0-rc.1, is a pre-release, so it never becomes the latest release.
+          prerelease=()
+          case "$VERSION" in *-*) prerelease=(--prerelease);; esac
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag "${prerelease[@]}" \
+            --title "Delva $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" \
+            build/staging-repository/app/oreshkov/delva/delva/"$VERSION"/*.jar \
+            build/staging-repository/app/oreshkov/delva/delva-kotlinx-serialization/"$VERSION"/*.jar \
+            delva-cli/build/distributions/delva-cli-"$VERSION".zip \
+            delva-cli/build/distributions/delva-cli-"$VERSION".tar \
+            delva-cli/build/distributions/SHA256SUMS
+
+  # The KDoc on GitHub Pages. Pre-releases (any tag with a hyphen, such as -rc.1) are skipped, so the site always shows
+  # the newest release.
+  pages:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      pages: write # deploy the site
+      id-token: write # prove the deployment comes from this workflow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-disabled: true
+
+      - name: Render the KDoc
+        run: ./gradlew :delva:dokkaGeneratePublicationHtml --console=plain
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: delva/build/dokka/html
+
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

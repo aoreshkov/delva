@@ -1,0 +1,50 @@
+# Delva's expected outcome for JSONTestSuite files that aren't a plain "y_ accepts / n_ rejects".
+# <file> accept
+# <file> reject <RejectReason>
+#
+# Duplicate keys are rejected (valid RFC 8259, but ambiguous).
+y_object_duplicated_key.json reject DUPLICATE_KEY
+y_object_duplicated_key_and_value.json reject DUPLICATE_KEY
+#
+# Numbers are exact decimals; only a normalized exponent outside the Int range is rejected.
+i_number_double_huge_neg_exp.json accept
+i_number_huge_exp.json reject NUMBER_OUT_OF_RANGE
+i_number_neg_int_huge_exp.json accept
+i_number_pos_double_huge_exp.json accept
+i_number_real_neg_overflow.json accept
+i_number_real_pos_overflow.json accept
+i_number_real_underflow.json accept
+i_number_too_big_neg_int.json accept
+i_number_too_big_pos_int.json accept
+i_number_very_big_negative_int.json accept
+#
+# Escaped surrogates must form high-low pairs.
+i_object_key_lone_2nd_surrogate.json reject INVALID_STRING
+i_string_1st_surrogate_but_2nd_missing.json reject INVALID_STRING
+i_string_1st_valid_surrogate_2nd_invalid.json reject INVALID_STRING
+i_string_incomplete_surrogate_and_escape_valid.json reject INVALID_STRING
+i_string_incomplete_surrogate_pair.json reject INVALID_STRING
+i_string_incomplete_surrogates_escape_valid.json reject INVALID_STRING
+i_string_invalid_lonely_surrogate.json reject INVALID_STRING
+i_string_invalid_surrogate.json reject INVALID_STRING
+i_string_inverted_surrogates_U+1D11E.json reject INVALID_STRING
+i_string_lone_second_surrogate.json reject INVALID_STRING
+#
+# Input must be UTF-8. Invalid bytes inside a string are INVALID_UTF8; elsewhere they're unexpected bytes.
+i_string_UTF-16LE_with_BOM.json reject MALFORMED_JSON
+i_string_UTF-8_invalid_sequence.json reject INVALID_UTF8
+i_string_UTF8_surrogate_U+D800.json reject INVALID_UTF8
+i_string_invalid_utf-8.json reject INVALID_UTF8
+i_string_iso_latin_1.json reject INVALID_UTF8
+i_string_lone_utf8_continuation_byte.json reject INVALID_UTF8
+i_string_not_in_unicode_range.json reject INVALID_UTF8
+i_string_overlong_sequence_2_bytes.json reject INVALID_UTF8
+i_string_overlong_sequence_6_bytes.json reject INVALID_UTF8
+i_string_overlong_sequence_6_bytes_null.json reject INVALID_UTF8
+i_string_truncated-utf-8.json reject INVALID_UTF8
+i_string_utf16BE_no_BOM.json reject MALFORMED_JSON
+i_string_utf16LE_no_BOM.json reject MALFORMED_JSON
+#
+# Default depth limit is 1024; one leading UTF-8 BOM is skipped.
+i_structure_500_nested_arrays.json accept
+i_structure_UTF-8_BOM_empty_object.json accept

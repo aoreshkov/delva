@@ -1,0 +1,15 @@
+Print a shell completion script to stdout
+
+Usage:
+  delva completion [options] <shell>
+
+Arguments:
+  shell  The shell to write the script for (bash|zsh|fish|powershell)
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]

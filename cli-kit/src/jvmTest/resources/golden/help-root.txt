@@ -1,0 +1,19 @@
+A fixture tree for cli-kit's tests.
+
+Usage:
+  demo [options] <command>
+
+Commands:
+  session     Sessions
+  request     Requests
+  store       The store
+  completion  Print a shell completion script to stdout
+
+Options:
+      --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
+      --json            Machine-readable output on stdout
+  -v, --verbose         More detail on stderr
+
+Run 'demo <command> --help' for more on a command.
+
+Documentation: https://example.invalid/demo

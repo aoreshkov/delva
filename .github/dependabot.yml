@@ -1,0 +1,26 @@
+# Weekly updates, grouped so a week's worth arrives as one pull request per ecosystem. A version update waits out a
+# cooldown after its release, so one that is pulled soon after it ships never arrives; security updates don't wait.
+version: 2
+updates:
+  # The SHA pins in the workflows and the setup action, with their version comments.
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/setup-build"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # gradle/libs.versions.toml, the build-logic plugins and the Gradle wrapper.
+  - package-ecosystem: gradle
+    directories: ["/", "/build-logic"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      gradle:
+        patterns: ["*"]

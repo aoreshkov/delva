@@ -1,0 +1,19 @@
+Search every document
+
+Usage:
+  delva search [options] <command>
+
+Commands:
+  kv    Find the objects with a member equal to a value
+  path  Find the nodes a JSONPath query selects, in every document
+  key   List documents in the order of their keys, in a store created with --document-key
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]
+
+Run 'delva search <command> --help' for more on a command.

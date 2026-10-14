@@ -1,0 +1,50 @@
+name: Bug report
+description: Something Delva does differently from what the documentation, KDoc or SPEC.md say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. **Data loss, corruption, or anything hostile input can trigger
+        belongs in a [private security report](https://github.com/aoreshkov/delva/security/advisories/new) instead.**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Include the full stack trace if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Reproducer
+      description: The smallest code and JSON that show the problem. A failing test is ideal.
+      render: kotlin
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Delva version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: JDK and operating system
+      placeholder: Corretto 25.0.1 on Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Store options and durability
+      description: The `StoreOptions` and `Durability` the store was opened with, if not the defaults.
+      render: kotlin
+  - type: textarea
+    id: verify
+    attributes:
+      label: Output of `verify`
+      description: If a store is involved, what `JsonStore.verify` reports for it.
+      render: text

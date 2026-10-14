@@ -1,0 +1,41 @@
+Find the nodes a JSONPath query selects, in every document
+
+Usage:
+  delva search path [options] <query>
+
+Examples:
+  # The SKU of every item out of stock
+  delva -s store search path '$..[?@.qty < 1].sku'
+
+  # Whether at least ten items are out of stock
+  delva -s store search path '$..[?@.qty < 1]' --mode element -c -n 10
+
+  # Every SKU in the documents of kind order
+  delva -s store search path '$..sku' --where "@.kind == 'order'"
+
+Arguments:
+  query  An RFC 9535 JSONPath query
+
+Options:
+      --scan              Read every document when no index term narrows the query
+      --where <filter>    Only the documents whose root passes this filter, such as "@.kind == 'order'"
+      --mode <mode>       Hits are whole documents, or the objects that contain the match (document|element) [default: document]
+      --nested <which>    With --mode element, keep hits inside other hits, or only the outermost (all|outermost) [default: all]
+  -t, --type <name>       Only objects of this type
+  -n, --limit <n>         At most n results; a notice says how to get the rest [default: all]
+      --order <order>     Oldest documents first, or newest (asc|desc) [default: asc]
+      --after <cursor>    Resume after this cursor, from a hit's JSON or a 'more:' notice
+      --max-bytes <size>  End a page before its hits pass this size, such as 16MiB
+  -c, --count             Print how many hits there are, not the hits; with --limit, count at most n
+  -e, --exit-status       Exit 1 when nothing was found
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]
+
+Notes:
+  --count and --max-bytes cannot be combined

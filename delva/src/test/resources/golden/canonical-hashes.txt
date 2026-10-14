@@ -1,0 +1,17 @@
+# Canonical XXH3-128 value hashes: <high><low> hex, then the value. Changing any line breaks stored data.
+51025a4491835505e12ef9d2eb86ceeb null
+e3ab152fcb1762bfc9f42e6c9e93dfff false
+22bbb76b211a39ba13e608bc156defed true
+8742f574ac294c8947b365ac7d81b697 0
+cebf6fe7f97208ec58fb5e2c2d719d93 1
+7c785637e89b2c0014a39a05a58c77ae -1.5e3
+2ee1cc92cd2548178612e653722abcc3 0.777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777
+4f4a9030b7abd431fc1537fc103cb7cf ""
+67e56c88666e65c35a982aa66d566503 "a"
+f6aeac3d70a39191f2f6cb2e68b5ad8e "ключ 😀"
+283a9a5f367685dbed3f187d7fb9df90 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+f05e7d578628b9f3243e7f63c9c0ba28 []
+1570bb4987cc055b9e314fec7c583174 {}
+7436cb4b8dc2db6074dc3b7d09f7aa34 [1,"a",null]
+fc1471a9caa0f9663165205620706a53 {"id":7,"tags":["x","y"]}
+88995a0453a727652acdbbc911238d31 {"order":{"id":7,"items":[{"sku":"A1","qty":2}]}}

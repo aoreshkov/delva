@@ -1,0 +1,27 @@
+Delete documents; asks first at a terminal, and needs --force without one
+
+Usage:
+  delva delete [options] <doc>...
+
+Examples:
+  # Which of them exist, deleting nothing
+  delva delete 12 13 --dry-run
+
+  # Delete every match
+  delva search kv status lost -S --json | jq .doc | delva delete - --force
+
+Arguments:
+  doc  Document ids, or - to read them from standard input
+
+Options:
+      --dry-run   Show which documents would be deleted, and delete nothing
+  -f, --force     Don't ask for confirmation
+      --no-input  Never prompt
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]

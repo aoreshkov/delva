@@ -1,0 +1,26 @@
+# Build
+.gradle/
+build/
+out/
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+
+# Local machine config
+local.properties
+
+# Local notes and sample data
+docs/
+
+# Logs & OS noise
+*.log
+.DS_Store
+Thumbs.db
+
+# Heap dumps the heap-capped suites can leave
+*.hprof
+
+# JVM crash logs
+hs_err_pid*

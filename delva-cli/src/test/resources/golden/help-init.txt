@@ -1,0 +1,35 @@
+Create a store; what it is created with is fixed for its life
+
+Usage:
+  delva init [options] <dir>
+
+Examples:
+  # A store that indexes everything
+  delva init ./data/store
+
+  # Unicode-normalized, without the notes
+  delva init ./data/store --normalization nfc --exclude-key notes
+
+  # Each document named by its id member
+  delva init ./data/store --document-key '$.id'
+
+Arguments:
+  dir  Where to create the store
+
+Options:
+      --normalization <form>    Normalize every string and key to NFC as it is read (none|nfc) [default: none]
+      --fragment-size <size>    Target size of the fragments documents are split into [default: 64K]
+      --no-hash-terms           Don't index whole objects and arrays; searches for object or array values then fail
+      --index-key <key>         Index only members with this key; repeat for more
+      --exclude-key <key>       Never index members with this key; repeat for more
+      --min-indexed-string <n>  Index only string values of at least n bytes
+      --max-indexed-string <n>  Index only string values of at most n bytes
+      --document-key <path>     The JSONPath of the string that names each document; no two documents then share one
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]

@@ -1,0 +1,38 @@
+Inspect, search and check Delva JSON stores.
+
+Usage:
+  delva [options] <command>
+
+Examples:
+  # Name the store once for every command after
+  export DELVA_STORE=./data/store
+
+  # Pipe the hits on as JSON Lines
+  delva search kv name ada --string --json | jq .doc
+
+Commands:
+  info        Show what a store holds and how it was created
+  get         Print a stored document, or the nodes a JSONPath query selects from it
+  search      Search every document
+  explain     Show how a JSONPath search would find its documents, without running it
+  path        Print where a node is in its document, as a Normalized Path
+  types       Inspect the types assigned to objects
+  init        Create a store; what it is created with is fixed for its life
+  insert      Insert JSON documents, each file one document, and print their ids
+  delete      Delete documents; asks first at a terminal, and needs --force without one
+  reset       Delete every document and type, leaving the store as init created it; asks first at a terminal
+  verify      Read the whole store and report any damage, changing nothing; exits 1 when there is some
+  compare     Compare two JSON values, stored or not; exits 0 when equal and 1 when not
+  completion  Print a shell completion script to stdout
+
+Options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]
+
+Run 'delva <command> --help' for more on a command.
+
+Documentation and issues: https://github.com/aoreshkov/delva

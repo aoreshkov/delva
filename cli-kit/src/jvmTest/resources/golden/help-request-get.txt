@@ -1,0 +1,26 @@
+Issue a read
+
+Usage:
+  demo request get [options] <endpoint>
+
+Examples:
+  # Read game.startup as alice
+  demo request get -a alice game.startup
+
+  # The second page of 50
+  demo request get -a alice -p page=2 -p limit=50 game.list
+
+Arguments:
+  endpoint  Endpoint id
+
+Options:
+  -a, --account <name>  Account to act as
+  -p, --param <k=v>     Query parameter, repeatable
+
+Global options:
+      --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
+      --json            Machine-readable output on stdout
+  -v, --verbose         More detail on stderr
+
+Notes:
+  --param requires --account

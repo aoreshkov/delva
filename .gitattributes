@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
+
+# Third-party test data: keep the exact bytes
+delva-testkit/src/main/resources/jsontestsuite/test_parsing/** binary

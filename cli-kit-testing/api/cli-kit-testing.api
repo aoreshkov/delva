@@ -1,0 +1,53 @@
+public final class app/oreshkov/clikit/testing/GoldenFiles {
+	public static final field Companion Lapp/oreshkov/clikit/testing/GoldenFiles$Companion;
+	public fun <init> (Ljava/nio/file/Path;Ljava/lang/String;)V
+	public final fun assertMatches (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun assertNoOrphans (Ljava/util/Set;)V
+	public final fun assertSurface (Lapp/oreshkov/clikit/CommandSpec;Lapp/oreshkov/clikit/Styler;Ljava/util/Set;)V
+	public static synthetic fun assertSurface$default (Lapp/oreshkov/clikit/testing/GoldenFiles;Lapp/oreshkov/clikit/CommandSpec;Lapp/oreshkov/clikit/Styler;Ljava/util/Set;ILjava/lang/Object;)V
+	public final fun existing ()Ljava/util/Set;
+}
+
+public final class app/oreshkov/clikit/testing/GoldenFiles$Companion {
+	public final fun completionFileName (Lapp/oreshkov/clikit/Shell;)Ljava/lang/String;
+	public final fun helpFileName (Ljava/util/List;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/testing/ProgramRunsJvmKt {
+	public static final fun record (Lapp/oreshkov/clikit/Program;[Ljava/lang/String;[BLapp/oreshkov/clikit/testing/RecordingTerminalIo;)Lapp/oreshkov/clikit/testing/RunResult;
+	public static synthetic fun record$default (Lapp/oreshkov/clikit/Program;[Ljava/lang/String;[BLapp/oreshkov/clikit/testing/RecordingTerminalIo;ILjava/lang/Object;)Lapp/oreshkov/clikit/testing/RunResult;
+	public static final fun withStdin (Lapp/oreshkov/clikit/testing/RecordingTerminalIo;[B)Lapp/oreshkov/clikit/TerminalIo;
+}
+
+public final class app/oreshkov/clikit/testing/ProgramRunsKt {
+	public static final fun record (Lapp/oreshkov/clikit/Program;[Ljava/lang/String;Lapp/oreshkov/clikit/testing/RecordingTerminalIo;)Lapp/oreshkov/clikit/testing/RunResult;
+	public static synthetic fun record$default (Lapp/oreshkov/clikit/Program;[Ljava/lang/String;Lapp/oreshkov/clikit/testing/RecordingTerminalIo;ILjava/lang/Object;)Lapp/oreshkov/clikit/testing/RunResult;
+}
+
+public final class app/oreshkov/clikit/testing/RecordingTerminalIo : app/oreshkov/clikit/InterruptRegistry, app/oreshkov/clikit/TerminalIo {
+	public fun <init> ()V
+	public fun <init> (ZILapp/oreshkov/clikit/Styler;Lapp/oreshkov/clikit/BorderStyle;[CLjava/util/List;)V
+	public synthetic fun <init> (ZILapp/oreshkov/clikit/Styler;Lapp/oreshkov/clikit/BorderStyle;[CLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun err (Ljava/lang/String;)V
+	public fun getBorderStyle ()Lapp/oreshkov/clikit/BorderStyle;
+	public fun getInteractive ()Z
+	public final fun getStderr ()Ljava/lang/String;
+	public final fun getStdout ()Ljava/lang/String;
+	public fun getStyler ()Lapp/oreshkov/clikit/Styler;
+	public fun getWidth ()I
+	public final fun interrupt ()Z
+	public fun onInterrupt (Lkotlin/jvm/functions/Function0;)Ljava/lang/AutoCloseable;
+	public fun out (Ljava/lang/String;)V
+	public fun readLine (Ljava/lang/String;)Ljava/lang/String;
+	public fun readPassword (Ljava/lang/String;)[C
+}
+
+public final class app/oreshkov/clikit/testing/RunResult {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;)V
+	public final fun assertPipeSafe ()Lapp/oreshkov/clikit/testing/RunResult;
+	public final fun getStatus ()I
+	public final fun getStderr ()Ljava/lang/String;
+	public final fun getStdout ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+

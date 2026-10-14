@@ -1,0 +1,65 @@
+name: CodeQL
+
+# Code scanning of the Kotlin and Java sources, and of the workflows themselves. CodeQL reads Kotlin only while it
+# compiles, so the java-kotlin analysis builds the project with the same JDK and Gradle setup as every other job. It
+# supports Kotlin up to a version it lists: check that list before merging a Kotlin update.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 3 * * 3' # Wednesdays, for queries CodeQL adds between pushes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # Code scanning on a private repository needs a paid plan; while it is private, the analysis is skipped.
+    if: ${{ !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: actions
+            build-mode: none
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write # upload the results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: matrix.build-mode == 'manual'
+        uses: ./.github/actions/setup-build
+
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # CodeQL sees only the compilers that run after init, so every class is compiled here, none comes from earlier
+      # output or a cache, and no daemon started before init does the work: no Gradle daemon, and Kotlin compiled
+      # inside Gradle's own process.
+      - name: Build
+        if: matrix.build-mode == 'manual'
+        run: >-
+          ./gradlew clean assemble --no-build-cache --no-configuration-cache --no-daemon
+          -Pkotlin.compiler.execution.strategy=in-process --console=plain
+
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:${{ matrix.language }}

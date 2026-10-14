@@ -1,0 +1,30 @@
+Compare two JSON values, stored or not; exits 0 when equal and 1 when not
+
+Usage:
+  delva compare [options] <a> <b>
+
+Examples:
+  # What changed between two versions of a document
+  delva compare 41 42 --diff
+
+  # A stored document against a file
+  delva compare 42 expected.json --ignore-path '$.updatedAt'
+
+Arguments:
+  a  A document (42), a node (42:7), a JSON file, or - for standard input
+  b  The same, for the other side
+
+Options:
+  -d, --diff                 List the differences, not just whether there are any
+      --ignore-key <key>     Leave out members with this key, at any depth
+      --ignore-path <path>   Leave out the value at this path, such as $.updatedAt
+      --types                Objects differ when their assigned types do
+      --max-differences <n>  Stop after n differences [default: 1000]
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]

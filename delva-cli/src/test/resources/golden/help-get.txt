@@ -1,0 +1,39 @@
+Print a stored document, or the nodes a JSONPath query selects from it
+
+Usage:
+  delva get [options] [doc]
+
+Examples:
+  # Document 42, indented at a terminal and compact down a pipe
+  delva -s store get 42
+
+  # The SKU of every item, one per line
+  delva -s store get 42 --path '$.items[*].sku'
+
+  # The document whose key is order-1042
+  delva -s store get --key order-1042
+
+Arguments:
+  doc  The document id; or give --key
+
+Options:
+  -k, --key <key>       The document with this key, in a store created with --document-key
+  -p, --path <query>    Only the nodes this JSONPath query selects, one per line
+  -e, --exit-status     Exit 1 when nothing was found
+      --pretty          Indent the JSON (the default at a terminal)
+      --compact         Write the JSON on one line (the default down a pipe)
+      --line-width <n>  Columns an indented container may take on one line; 0 breaks every one [default: the terminal's width]
+      --max-levels <n>  Write containers nested deeper than n as {...} and [...]; implies --pretty
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]
+
+Notes:
+  --pretty and --compact cannot be combined
+  --json and --pretty cannot be combined
+  --json and --max-levels cannot be combined

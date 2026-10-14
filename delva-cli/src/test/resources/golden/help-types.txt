@@ -1,0 +1,21 @@
+Inspect the types assigned to objects
+
+Usage:
+  delva types [options] <command>
+
+Commands:
+  list     List the types and about how many objects each has
+  count    Count the objects of a type exactly
+  objects  List the objects of a type, as doc:node
+  assign   Give an object a type, replacing the one it had
+  clear    Take an object's type away
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Table width [default: $COLUMNS or 80]
+
+Run 'delva types <command> --help' for more on a command.

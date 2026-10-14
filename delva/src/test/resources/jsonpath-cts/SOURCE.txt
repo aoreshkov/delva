@@ -1,0 +1,5 @@
+JSONPath Compliance Test Suite (RFC 9535), unmodified.
+Source: https://github.com/jsonpath-standard/jsonpath-compliance-test-suite
+Commit: 9d1a415a53f5dfb291bc874823892e49174e38eb (2026-09-17)
+License: BSD-2-Clause, see LICENSE in this directory. Test data only; not part of any published artifact.
+To update: replace cts.json with the file at a newer commit and change the commit above.

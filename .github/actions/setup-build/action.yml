@@ -1,0 +1,22 @@
+name: Set up the build
+description: JDK 25 and Gradle, with the Gradle wrapper validated.
+
+inputs:
+  cache-disabled:
+    description: "'true' builds without the Gradle cache, as a release does."
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      with:
+        distribution: corretto
+        java-version: 25
+
+    # The 'basic' cache is the open-source one on the GitHub Actions cache; the default 'enhanced' one is a proprietary
+    # component under separate terms of use.
+    - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      with:
+        cache-provider: basic
+        cache-disabled: ${{ inputs.cache-disabled }}

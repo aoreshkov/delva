@@ -1,0 +1,707 @@
+public final class app/oreshkov/clikit/Align : java/lang/Enum {
+	public static final field Left Lapp/oreshkov/clikit/Align;
+	public static final field Right Lapp/oreshkov/clikit/Align;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/Align;
+	public static fun values ()[Lapp/oreshkov/clikit/Align;
+}
+
+public abstract class app/oreshkov/clikit/Argument : app/oreshkov/clikit/Operand {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public abstract fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getHelp ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getRequired ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Argument$Single : app/oreshkov/clikit/Argument {
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
+}
+
+public final class app/oreshkov/clikit/Argument$Variadic : app/oreshkov/clikit/Argument {
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
+}
+
+public abstract interface class app/oreshkov/clikit/BinaryInput {
+	public abstract fun getStdin ()Ljava/io/InputStream;
+}
+
+public abstract interface class app/oreshkov/clikit/BinaryPayload {
+	public abstract fun getPayload ()Ljava/io/OutputStream;
+}
+
+public final class app/oreshkov/clikit/BorderStyle : java/lang/Enum {
+	public static final field Ascii Lapp/oreshkov/clikit/BorderStyle;
+	public static final field Unicode Lapp/oreshkov/clikit/BorderStyle;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/BorderStyle;
+	public static fun values ()[Lapp/oreshkov/clikit/BorderStyle;
+}
+
+public final class app/oreshkov/clikit/Column {
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/Align;ZI)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/Align;ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAlign ()Lapp/oreshkov/clikit/Align;
+	public final fun getFlexible ()Z
+	public final fun getHeader ()Ljava/lang/String;
+	public final fun getMinWidth ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/CommandContext {
+	public fun <init> (Lapp/oreshkov/clikit/ParseResult$Invocation;Lapp/oreshkov/clikit/TerminalIo;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/ParseResult$Invocation;Lapp/oreshkov/clikit/TerminalIo;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getEnvironment ()Lkotlin/jvm/functions/Function1;
+	public final fun getInvocation ()Lapp/oreshkov/clikit/ParseResult$Invocation;
+	public final fun getIo ()Lapp/oreshkov/clikit/TerminalIo;
+	public final fun getOutput ()Lapp/oreshkov/clikit/Output;
+	public final fun getValues ()Lapp/oreshkov/clikit/OptionValues;
+}
+
+public final class app/oreshkov/clikit/CommandFailure : java/lang/RuntimeException {
+	public fun <init> (ILjava/lang/String;Z)V
+	public synthetic fun <init> (ILjava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getShowUsage ()Z
+	public final fun getStatus ()I
+}
+
+public abstract interface class app/oreshkov/clikit/CommandHandler {
+	public abstract fun run (Lapp/oreshkov/clikit/CommandContext;)I
+}
+
+public final class app/oreshkov/clikit/CommandSpec {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getArguments ()Ljava/util/List;
+	public final fun getConstraints ()Ljava/util/List;
+	public final fun getEpilogue ()Ljava/lang/String;
+	public final fun getExamples ()Ljava/util/List;
+	public final fun getHelp ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getOptions ()Ljava/util/List;
+	public final fun getRunnable ()Z
+	public final fun getSubcommands ()Ljava/util/List;
+	public final fun subcommand (Ljava/lang/String;)Lapp/oreshkov/clikit/CommandSpec;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/CommandTreeKt {
+	public static final fun commandLine (Ljava/util/List;)Ljava/lang/String;
+	public static final fun pathTo (Lapp/oreshkov/clikit/CommandSpec;[Ljava/lang/String;)Ljava/util/List;
+	public static final fun paths (Lapp/oreshkov/clikit/CommandSpec;)Lkotlin/sequences/Sequence;
+	public static final fun runnablePaths (Lapp/oreshkov/clikit/CommandSpec;)Lkotlin/sequences/Sequence;
+}
+
+public final class app/oreshkov/clikit/CompletionGenerator {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun generate (Lapp/oreshkov/clikit/Shell;Lapp/oreshkov/clikit/CommandSpec;)Ljava/lang/String;
+}
+
+public abstract class app/oreshkov/clikit/Constraint {
+	public synthetic fun <init> (Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getOperands ()Ljava/util/List;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Constraint$ExactlyOne : app/oreshkov/clikit/Constraint {
+	public fun <init> ([Lapp/oreshkov/clikit/Operand;)V
+}
+
+public final class app/oreshkov/clikit/Constraint$Exclusive : app/oreshkov/clikit/Constraint {
+	public fun <init> ([Lapp/oreshkov/clikit/Operand;)V
+}
+
+public final class app/oreshkov/clikit/Constraint$Requires : app/oreshkov/clikit/Constraint {
+	public fun <init> (Lapp/oreshkov/clikit/Operand;Lapp/oreshkov/clikit/Operand;)V
+	public final fun getRequirement ()Lapp/oreshkov/clikit/Operand;
+	public final fun getSubject ()Lapp/oreshkov/clikit/Operand;
+}
+
+public abstract interface class app/oreshkov/clikit/ConversionResult {
+}
+
+public final class app/oreshkov/clikit/ConversionResult$Invalid : app/oreshkov/clikit/ConversionResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lapp/oreshkov/clikit/ConversionResult$Invalid;
+	public static synthetic fun copy$default (Lapp/oreshkov/clikit/ConversionResult$Invalid;Ljava/lang/String;ILjava/lang/Object;)Lapp/oreshkov/clikit/ConversionResult$Invalid;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/ConversionResult$Ok : app/oreshkov/clikit/ConversionResult {
+	public fun <init> (Ljava/lang/Object;)V
+	public final fun component1 ()Ljava/lang/Object;
+	public final fun copy (Ljava/lang/Object;)Lapp/oreshkov/clikit/ConversionResult$Ok;
+	public static synthetic fun copy$default (Lapp/oreshkov/clikit/ConversionResult$Ok;Ljava/lang/Object;ILjava/lang/Object;)Lapp/oreshkov/clikit/ConversionResult$Ok;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Ljava/lang/Object;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Converters {
+	public static final field INSTANCE Lapp/oreshkov/clikit/Converters;
+	public final fun choice ([Ljava/lang/String;)Lapp/oreshkov/clikit/ValueConverter;
+	public final fun enum (Lkotlin/enums/EnumEntries;Lkotlin/jvm/functions/Function1;)Lapp/oreshkov/clikit/ValueConverter;
+	public static synthetic fun enum$default (Lapp/oreshkov/clikit/Converters;Lkotlin/enums/EnumEntries;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getByteSize ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getDuration ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getInt ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getKeyValue ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getLong ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getNonNegativeInt ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getPositiveInt ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getPositiveLong ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getString ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getTypedKeyValue ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun intRange (Lkotlin/ranges/IntRange;)Lapp/oreshkov/clikit/ValueConverter;
+	public final fun longRange (Lkotlin/ranges/LongRange;)Lapp/oreshkov/clikit/ValueConverter;
+	public final fun timePoint (Lapp/oreshkov/clikit/TimePoint$Direction;)Lapp/oreshkov/clikit/ValueConverter;
+	public static synthetic fun timePoint$default (Lapp/oreshkov/clikit/Converters;Lapp/oreshkov/clikit/TimePoint$Direction;ILjava/lang/Object;)Lapp/oreshkov/clikit/ValueConverter;
+}
+
+public final class app/oreshkov/clikit/ConvertersKt {
+	public static final fun uniqueKeys (Lapp/oreshkov/clikit/OptionValues;Lapp/oreshkov/clikit/Option$Repeated;Lkotlin/jvm/functions/Function1;)Ljava/util/Map;
+}
+
+public final class app/oreshkov/clikit/Example {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getCommandLine ()Ljava/lang/String;
+	public final fun getDescription ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/ExitStatus {
+	public static final field CONFIG I
+	public static final field DATA_ERR I
+	public static final field FAILURE I
+	public static final field INSTANCE Lapp/oreshkov/clikit/ExitStatus;
+	public static final field INTERRUPTED I
+	public static final field IO_ERR I
+	public static final field NO_INPUT I
+	public static final field NO_PERM I
+	public static final field OK I
+	public static final field SOFTWARE I
+	public static final field TEMP_FAIL I
+	public static final field UNAVAILABLE I
+	public static final field USAGE I
+}
+
+public final class app/oreshkov/clikit/Format {
+	public static final field INSTANCE Lapp/oreshkov/clikit/Format;
+	public final fun bytes (J)Ljava/lang/String;
+	public final fun duration (J)Ljava/lang/String;
+	public final fun instant (J)Ljava/lang/String;
+	public final fun instantMillis (J)Ljava/lang/String;
+	public final fun optional (Ljava/lang/Object;)Ljava/lang/String;
+	public final fun ratio (Ljava/lang/Double;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/HelpRenderer {
+	public fun <init> ()V
+	public fun <init> (Lapp/oreshkov/clikit/Styler;Ljava/lang/String;)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/Styler;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun render (Ljava/util/List;)Ljava/lang/String;
+	public final fun usageLine (Ljava/util/List;)Ljava/lang/String;
+}
+
+public abstract interface class app/oreshkov/clikit/InlineOrFile : app/oreshkov/clikit/ReadsStandardInput {
+	public abstract fun readText (Lapp/oreshkov/clikit/TerminalIo;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/InlineOrFile$FromInput : app/oreshkov/clikit/InlineOrFile {
+	public fun <init> (Lapp/oreshkov/clikit/InputSource;)V
+	public final fun component1 ()Lapp/oreshkov/clikit/InputSource;
+	public final fun copy (Lapp/oreshkov/clikit/InputSource;)Lapp/oreshkov/clikit/InlineOrFile$FromInput;
+	public static synthetic fun copy$default (Lapp/oreshkov/clikit/InlineOrFile$FromInput;Lapp/oreshkov/clikit/InputSource;ILjava/lang/Object;)Lapp/oreshkov/clikit/InlineOrFile$FromInput;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getReadsStandardInput ()Z
+	public final fun getSource ()Lapp/oreshkov/clikit/InputSource;
+	public fun hashCode ()I
+	public fun readText (Lapp/oreshkov/clikit/TerminalIo;)Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/InlineOrFile$Inline : app/oreshkov/clikit/InlineOrFile {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lapp/oreshkov/clikit/InlineOrFile$Inline;
+	public static synthetic fun copy$default (Lapp/oreshkov/clikit/InlineOrFile$Inline;Ljava/lang/String;ILjava/lang/Object;)Lapp/oreshkov/clikit/InlineOrFile$Inline;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getReadsStandardInput ()Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun readText (Lapp/oreshkov/clikit/TerminalIo;)Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/InputKt {
+	public static final fun getInlineOrFile (Lapp/oreshkov/clikit/Converters;)Lapp/oreshkov/clikit/ValueConverter;
+	public static final fun getInputSource (Lapp/oreshkov/clikit/Converters;)Lapp/oreshkov/clikit/ValueConverter;
+}
+
+public abstract interface class app/oreshkov/clikit/InputSource : app/oreshkov/clikit/ReadsStandardInput {
+	public abstract fun getName ()Ljava/lang/String;
+	public abstract fun open (Lapp/oreshkov/clikit/TerminalIo;)Ljava/io/InputStream;
+}
+
+public final class app/oreshkov/clikit/InputSource$File : app/oreshkov/clikit/InputSource {
+	public fun <init> (Ljava/nio/file/Path;)V
+	public fun getName ()Ljava/lang/String;
+	public final fun getPath ()Ljava/nio/file/Path;
+	public fun getReadsStandardInput ()Z
+	public fun open (Lapp/oreshkov/clikit/TerminalIo;)Ljava/io/InputStream;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/InputSource$Stdin : app/oreshkov/clikit/InputSource {
+	public static final field INSTANCE Lapp/oreshkov/clikit/InputSource$Stdin;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getName ()Ljava/lang/String;
+	public fun getReadsStandardInput ()Z
+	public fun hashCode ()I
+	public fun open (Lapp/oreshkov/clikit/TerminalIo;)Ljava/io/InputStream;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class app/oreshkov/clikit/InterruptRegistry {
+	public abstract fun onInterrupt (Lkotlin/jvm/functions/Function0;)Ljava/lang/AutoCloseable;
+}
+
+public final class app/oreshkov/clikit/JsonLines {
+	public fun <init> (Ljava/io/OutputStream;)V
+	public final fun record (Lkotlin/jvm/functions/Function1;)V
+	public final fun stream ()Ljava/io/OutputStream;
+}
+
+public final class app/oreshkov/clikit/JsonWriter {
+	public static final field Companion Lapp/oreshkov/clikit/JsonWriter$Companion;
+	public fun <init> (Ljava/lang/Appendable;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/Appendable;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun beginArray ()Lapp/oreshkov/clikit/JsonWriter;
+	public final fun beginObject ()Lapp/oreshkov/clikit/JsonWriter;
+	public final fun endArray ()Lapp/oreshkov/clikit/JsonWriter;
+	public final fun endObject ()Lapp/oreshkov/clikit/JsonWriter;
+	public final fun getDepth ()I
+	public final fun getIndent ()Ljava/lang/String;
+	public final fun isComplete ()Z
+	public final fun name (Ljava/lang/String;)Lapp/oreshkov/clikit/JsonWriter;
+	public final fun nullValue ()Lapp/oreshkov/clikit/JsonWriter;
+	public final fun rawValue (Ljava/lang/String;Z)Lapp/oreshkov/clikit/JsonWriter;
+	public final fun rawValue (Lkotlin/jvm/functions/Function0;)Lapp/oreshkov/clikit/JsonWriter;
+	public static synthetic fun rawValue$default (Lapp/oreshkov/clikit/JsonWriter;Ljava/lang/String;ZILjava/lang/Object;)Lapp/oreshkov/clikit/JsonWriter;
+	public final fun value (I)Lapp/oreshkov/clikit/JsonWriter;
+	public final fun value (J)Lapp/oreshkov/clikit/JsonWriter;
+	public final fun value (Ljava/lang/String;)Lapp/oreshkov/clikit/JsonWriter;
+	public final fun value (Z)Lapp/oreshkov/clikit/JsonWriter;
+}
+
+public final class app/oreshkov/clikit/JsonWriter$Companion {
+	public final fun quote (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/JsonWriterKt {
+	public static final fun field (Lapp/oreshkov/clikit/JsonWriter;Ljava/lang/String;I)Lapp/oreshkov/clikit/JsonWriter;
+	public static final fun field (Lapp/oreshkov/clikit/JsonWriter;Ljava/lang/String;J)Lapp/oreshkov/clikit/JsonWriter;
+	public static final fun field (Lapp/oreshkov/clikit/JsonWriter;Ljava/lang/String;Ljava/lang/String;)Lapp/oreshkov/clikit/JsonWriter;
+	public static final fun field (Lapp/oreshkov/clikit/JsonWriter;Ljava/lang/String;Z)Lapp/oreshkov/clikit/JsonWriter;
+	public static final fun writeArray (Lapp/oreshkov/clikit/JsonWriter;Lkotlin/jvm/functions/Function1;)Lapp/oreshkov/clikit/JsonWriter;
+	public static final fun writeObject (Lapp/oreshkov/clikit/JsonWriter;Lkotlin/jvm/functions/Function1;)Lapp/oreshkov/clikit/JsonWriter;
+}
+
+public final class app/oreshkov/clikit/LogLevel : java/lang/Enum {
+	public static final field DEBUG Lapp/oreshkov/clikit/LogLevel;
+	public static final field ERROR Lapp/oreshkov/clikit/LogLevel;
+	public static final field INFO Lapp/oreshkov/clikit/LogLevel;
+	public static final field WARN Lapp/oreshkov/clikit/LogLevel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/LogLevel;
+	public static fun values ()[Lapp/oreshkov/clikit/LogLevel;
+}
+
+public final class app/oreshkov/clikit/ModelKt {
+	public static final fun map (Lapp/oreshkov/clikit/ConversionResult;Lkotlin/jvm/functions/Function1;)Lapp/oreshkov/clikit/ConversionResult;
+}
+
+public abstract interface class app/oreshkov/clikit/Operand {
+}
+
+public abstract class app/oreshkov/clikit/Option : app/oreshkov/clikit/Operand {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getHelp ()Ljava/lang/String;
+	public final fun getHidden ()Z
+	public final fun getLong ()Ljava/lang/String;
+	public abstract fun getRequired ()Z
+	public final fun getShort ()Ljava/lang/String;
+	public abstract fun getTakesValue ()Z
+	public final fun render ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Option$Flag : app/oreshkov/clikit/Option {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getRequired ()Z
+	public fun getTakesValue ()Z
+}
+
+public final class app/oreshkov/clikit/Option$Repeated : app/oreshkov/clikit/Option {
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
+	public fun getRequired ()Z
+	public fun getTakesValue ()Z
+}
+
+public final class app/oreshkov/clikit/Option$Single : app/oreshkov/clikit/Option {
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getEnv ()Ljava/lang/String;
+	public fun getRequired ()Z
+	public fun getTakesValue ()Z
+}
+
+public final class app/oreshkov/clikit/OptionValues {
+	public final fun get (Lapp/oreshkov/clikit/Argument$Single;)Ljava/lang/Object;
+	public final fun get (Lapp/oreshkov/clikit/Argument$Variadic;)Ljava/util/List;
+	public final fun get (Lapp/oreshkov/clikit/Option$Flag;)Z
+	public final fun get (Lapp/oreshkov/clikit/Option$Repeated;)Ljava/util/List;
+	public final fun get (Lapp/oreshkov/clikit/Option$Single;)Ljava/lang/Object;
+	public final fun required (Lapp/oreshkov/clikit/Argument$Single;)Ljava/lang/Object;
+	public final fun required (Lapp/oreshkov/clikit/Option$Single;)Ljava/lang/Object;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Output {
+	public static final field Companion Lapp/oreshkov/clikit/Output$Companion;
+	public fun <init> (Lapp/oreshkov/clikit/TerminalIo;ZZZ)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/TerminalIo;ZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun error (Ljava/lang/String;)V
+	public final fun getMachineReadable ()Z
+	public final fun getQuiet ()Z
+	public final fun getVerbose ()Z
+	public final fun log (Lapp/oreshkov/clikit/LogLevel;Ljava/lang/String;Ljava/lang/Throwable;Ljava/lang/String;)V
+	public static synthetic fun log$default (Lapp/oreshkov/clikit/Output;Lapp/oreshkov/clikit/LogLevel;Ljava/lang/String;Ljava/lang/Throwable;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun notice (Ljava/lang/String;)V
+	public final fun progress (Ljava/lang/String;Ljava/lang/Long;)Lapp/oreshkov/clikit/Progress;
+	public static synthetic fun progress$default (Lapp/oreshkov/clikit/Output;Ljava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Lapp/oreshkov/clikit/Progress;
+	public final fun properties (Ljava/util/List;)V
+	public final fun table (Ljava/util/List;Ljava/util/List;Ljava/lang/String;)V
+	public final fun text (Ljava/lang/String;)V
+	public final fun warn (Ljava/lang/String;)V
+}
+
+public final class app/oreshkov/clikit/Output$Companion {
+	public final fun fixed (Ljava/lang/String;Lapp/oreshkov/clikit/Align;)Lapp/oreshkov/clikit/Column;
+	public static synthetic fun fixed$default (Lapp/oreshkov/clikit/Output$Companion;Ljava/lang/String;Lapp/oreshkov/clikit/Align;ILjava/lang/Object;)Lapp/oreshkov/clikit/Column;
+}
+
+public abstract interface class app/oreshkov/clikit/ParseResult {
+}
+
+public final class app/oreshkov/clikit/ParseResult$Help : app/oreshkov/clikit/ParseResult {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lapp/oreshkov/clikit/ParseResult$Help;
+	public static synthetic fun copy$default (Lapp/oreshkov/clikit/ParseResult$Help;Ljava/util/List;ILjava/lang/Object;)Lapp/oreshkov/clikit/ParseResult$Help;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPath ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/ParseResult$Invocation : app/oreshkov/clikit/ParseResult {
+	public final fun commandLine ()Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCommand ()Lapp/oreshkov/clikit/CommandSpec;
+	public final fun getPath ()Ljava/util/List;
+	public final fun getValues ()Lapp/oreshkov/clikit/OptionValues;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/ParseResult$UsageError : app/oreshkov/clikit/ParseResult {
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getPath ()Ljava/util/List;
+	public final fun getSuggestion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/ParseResult$Version : app/oreshkov/clikit/ParseResult {
+	public static final field INSTANCE Lapp/oreshkov/clikit/ParseResult$Version;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Parser {
+	public fun <init> (Lapp/oreshkov/clikit/CommandSpec;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/CommandSpec;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun parse (Ljava/util/List;)Lapp/oreshkov/clikit/ParseResult;
+	public final fun parse ([Ljava/lang/String;)Lapp/oreshkov/clikit/ParseResult;
+}
+
+public final class app/oreshkov/clikit/PayloadKt {
+	public static final fun payloadStream (Lapp/oreshkov/clikit/TerminalIo;)Ljava/io/OutputStream;
+}
+
+public final class app/oreshkov/clikit/Program {
+	public fun <init> (Lapp/oreshkov/clikit/CommandSpec;Ljava/lang/String;Ljava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/CommandSpec;Ljava/lang/String;Ljava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun run ([Ljava/lang/String;Lapp/oreshkov/clikit/TerminalIo;)I
+}
+
+public final class app/oreshkov/clikit/ProgramKt {
+	public static final fun confirm (Lapp/oreshkov/clikit/CommandContext;Ljava/lang/String;)Z
+	public static final fun onInterrupt (Lapp/oreshkov/clikit/CommandContext;Lkotlin/jvm/functions/Function0;)Ljava/lang/AutoCloseable;
+	public static final fun readSecret (Lapp/oreshkov/clikit/CommandContext;Ljava/lang/String;Ljava/lang/String;)[C
+	public static synthetic fun readSecret$default (Lapp/oreshkov/clikit/CommandContext;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)[C
+}
+
+public final class app/oreshkov/clikit/ProgramMainKt {
+	public static final fun getPath (Lapp/oreshkov/clikit/Converters;)Lapp/oreshkov/clikit/ValueConverter;
+	public static final fun implementationVersion (Lkotlin/reflect/KClass;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun implementationVersion$default (Lkotlin/reflect/KClass;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun runAndExit (Lapp/oreshkov/clikit/Program;[Ljava/lang/String;)Ljava/lang/Void;
+}
+
+public final class app/oreshkov/clikit/Progress {
+	public static final field Companion Lapp/oreshkov/clikit/Progress$Companion;
+	public fun <init> (Lapp/oreshkov/clikit/TerminalIo;Ljava/lang/String;Ljava/lang/Long;ZLkotlin/time/TimeSource;)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/TerminalIo;Ljava/lang/String;Ljava/lang/Long;ZLkotlin/time/TimeSource;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun finish (Ljava/lang/String;)V
+	public static synthetic fun finish$default (Lapp/oreshkov/clikit/Progress;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun step (Ljava/lang/String;)V
+	public static synthetic fun step$default (Lapp/oreshkov/clikit/Progress;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun update (JLjava/lang/Long;Ljava/lang/String;)V
+	public static synthetic fun update$default (Lapp/oreshkov/clikit/Progress;JLjava/lang/Long;Ljava/lang/String;ILjava/lang/Object;)V
+}
+
+public final class app/oreshkov/clikit/Progress$Companion {
+	public final fun clearShown ()V
+}
+
+public abstract interface class app/oreshkov/clikit/ReadsStandardInput {
+	public abstract fun getReadsStandardInput ()Z
+}
+
+public final class app/oreshkov/clikit/Shell : java/lang/Enum {
+	public static final field Bash Lapp/oreshkov/clikit/Shell;
+	public static final field Companion Lapp/oreshkov/clikit/Shell$Companion;
+	public static final field Fish Lapp/oreshkov/clikit/Shell;
+	public static final field PowerShell Lapp/oreshkov/clikit/Shell;
+	public static final field Zsh Lapp/oreshkov/clikit/Shell;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getId ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/Shell;
+	public static fun values ()[Lapp/oreshkov/clikit/Shell;
+}
+
+public final class app/oreshkov/clikit/Shell$Companion {
+	public final fun getIds ()Ljava/util/List;
+	public final fun of (Ljava/lang/String;)Lapp/oreshkov/clikit/Shell;
+}
+
+public final class app/oreshkov/clikit/StandardOptions {
+	public static final field INSTANCE Lapp/oreshkov/clikit/StandardOptions;
+	public final fun getCompletion ()Lapp/oreshkov/clikit/CommandSpec;
+	public final fun getDryRun ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getForce ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getJson ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getNoColor ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getNoInput ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getQuiet ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getShell ()Lapp/oreshkov/clikit/Argument$Single;
+	public final fun getVerbose ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getWidth ()Lapp/oreshkov/clikit/Option$Single;
+	public final fun noColor ([Ljava/lang/String;)Z
+	public final fun widthFrom ([Ljava/lang/String;)Ljava/lang/Integer;
+}
+
+public final class app/oreshkov/clikit/StdoutState : java/lang/Enum {
+	public static final field Failed Lapp/oreshkov/clikit/StdoutState;
+	public static final field ReaderGone Lapp/oreshkov/clikit/StdoutState;
+	public static final field Written Lapp/oreshkov/clikit/StdoutState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/StdoutState;
+	public static fun values ()[Lapp/oreshkov/clikit/StdoutState;
+}
+
+public final class app/oreshkov/clikit/Style : java/lang/Enum {
+	public static final field Blue Lapp/oreshkov/clikit/Style;
+	public static final field Bold Lapp/oreshkov/clikit/Style;
+	public static final field BrightBlack Lapp/oreshkov/clikit/Style;
+	public static final field Cyan Lapp/oreshkov/clikit/Style;
+	public static final field Dim Lapp/oreshkov/clikit/Style;
+	public static final field Green Lapp/oreshkov/clikit/Style;
+	public static final field Magenta Lapp/oreshkov/clikit/Style;
+	public static final field Red Lapp/oreshkov/clikit/Style;
+	public static final field White Lapp/oreshkov/clikit/Style;
+	public static final field Yellow Lapp/oreshkov/clikit/Style;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/Style;
+	public static fun values ()[Lapp/oreshkov/clikit/Style;
+}
+
+public final class app/oreshkov/clikit/Styler {
+	public static final field Companion Lapp/oreshkov/clikit/Styler$Companion;
+	public fun <init> (Z)V
+	public final fun bold (Ljava/lang/String;)Ljava/lang/String;
+	public final fun dim (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getEnabled ()Z
+	public final fun green (Ljava/lang/String;)Ljava/lang/String;
+	public final fun red (Ljava/lang/String;)Ljava/lang/String;
+	public final fun style (Ljava/lang/String;[Lapp/oreshkov/clikit/Style;)Ljava/lang/String;
+	public final fun yellow (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Styler$Companion {
+	public final fun displayWidth (Ljava/lang/String;)I
+	public final fun getPlain ()Lapp/oreshkov/clikit/Styler;
+	public final fun hasEscapes (Ljava/lang/String;)Z
+	public final fun truncate (Ljava/lang/String;ILjava/lang/String;)Ljava/lang/String;
+	public static synthetic fun truncate$default (Lapp/oreshkov/clikit/Styler$Companion;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/SystemTerminalIo : app/oreshkov/clikit/BinaryPayload, app/oreshkov/clikit/InterruptRegistry, app/oreshkov/clikit/TerminalIo {
+	public static final field Companion Lapp/oreshkov/clikit/SystemTerminalIo$Companion;
+	public fun <init> ()V
+	public fun <init> (ZILapp/oreshkov/clikit/Styler;Lapp/oreshkov/clikit/BorderStyle;Ljava/io/PrintStream;Ljava/io/PrintStream;Z)V
+	public synthetic fun <init> (ZILapp/oreshkov/clikit/Styler;Lapp/oreshkov/clikit/BorderStyle;Ljava/io/PrintStream;Ljava/io/PrintStream;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun err (Ljava/lang/String;)V
+	public fun flush ()V
+	public fun getBorderStyle ()Lapp/oreshkov/clikit/BorderStyle;
+	public fun getEscapesInterpreted ()Z
+	public fun getInteractive ()Z
+	public fun getPayload ()Ljava/io/OutputStream;
+	public fun getStyler ()Lapp/oreshkov/clikit/Styler;
+	public fun getWidth ()I
+	public fun onInterrupt (Lkotlin/jvm/functions/Function0;)Ljava/lang/AutoCloseable;
+	public fun out (Ljava/lang/String;)V
+	public fun readLine (Ljava/lang/String;)Ljava/lang/String;
+	public fun readPassword (Ljava/lang/String;)[C
+	public fun stdoutState ()Lapp/oreshkov/clikit/StdoutState;
+}
+
+public final class app/oreshkov/clikit/SystemTerminalIo$Companion {
+	public final fun create (ZLjava/lang/Integer;)Lapp/oreshkov/clikit/SystemTerminalIo;
+	public static synthetic fun create$default (Lapp/oreshkov/clikit/SystemTerminalIo$Companion;ZLjava/lang/Integer;ILjava/lang/Object;)Lapp/oreshkov/clikit/SystemTerminalIo;
+}
+
+public final class app/oreshkov/clikit/TableRenderer {
+	public static final field Companion Lapp/oreshkov/clikit/TableRenderer$Companion;
+	public static final field DEFAULT_WIDTH I
+	public fun <init> ()V
+	public fun <init> (Lapp/oreshkov/clikit/Styler;Lapp/oreshkov/clikit/BorderStyle;)V
+	public synthetic fun <init> (Lapp/oreshkov/clikit/Styler;Lapp/oreshkov/clikit/BorderStyle;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun render (Ljava/util/List;Ljava/util/List;I)Ljava/lang/String;
+	public static synthetic fun render$default (Lapp/oreshkov/clikit/TableRenderer;Ljava/util/List;Ljava/util/List;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun renderPlain (Ljava/util/List;Ljava/util/List;I)Ljava/lang/String;
+	public static synthetic fun renderPlain$default (Lapp/oreshkov/clikit/TableRenderer;Ljava/util/List;Ljava/util/List;IILjava/lang/Object;)Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/TableRenderer$Companion {
+}
+
+public abstract interface class app/oreshkov/clikit/TerminalIo {
+	public abstract fun err (Ljava/lang/String;)V
+	public fun errLine (Ljava/lang/String;)V
+	public static synthetic fun errLine$default (Lapp/oreshkov/clikit/TerminalIo;Ljava/lang/String;ILjava/lang/Object;)V
+	public fun flush ()V
+	public abstract fun getBorderStyle ()Lapp/oreshkov/clikit/BorderStyle;
+	public fun getEscapesInterpreted ()Z
+	public abstract fun getInteractive ()Z
+	public abstract fun getStyler ()Lapp/oreshkov/clikit/Styler;
+	public abstract fun getWidth ()I
+	public abstract fun out (Ljava/lang/String;)V
+	public fun outLine (Ljava/lang/String;)V
+	public static synthetic fun outLine$default (Lapp/oreshkov/clikit/TerminalIo;Ljava/lang/String;ILjava/lang/Object;)V
+	public fun readLine (Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun readPassword (Ljava/lang/String;)[C
+	public fun stdoutState ()Lapp/oreshkov/clikit/StdoutState;
+}
+
+public final class app/oreshkov/clikit/TerminalText {
+	public static final field INSTANCE Lapp/oreshkov/clikit/TerminalText;
+	public final fun escape (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class app/oreshkov/clikit/TimePoint {
+	public abstract fun resolve (Lkotlin/time/Instant;)Lkotlin/time/Instant;
+}
+
+public final class app/oreshkov/clikit/TimePoint$Absolute : app/oreshkov/clikit/TimePoint {
+	public fun <init> (Lkotlin/time/Instant;)V
+	public final fun component1 ()Lkotlin/time/Instant;
+	public final fun copy (Lkotlin/time/Instant;)Lapp/oreshkov/clikit/TimePoint$Absolute;
+	public static synthetic fun copy$default (Lapp/oreshkov/clikit/TimePoint$Absolute;Lkotlin/time/Instant;ILjava/lang/Object;)Lapp/oreshkov/clikit/TimePoint$Absolute;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getInstant ()Lkotlin/time/Instant;
+	public fun hashCode ()I
+	public fun resolve (Lkotlin/time/Instant;)Lkotlin/time/Instant;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/TimePoint$Direction : java/lang/Enum {
+	public static final field FUTURE Lapp/oreshkov/clikit/TimePoint$Direction;
+	public static final field PAST Lapp/oreshkov/clikit/TimePoint$Direction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/clikit/TimePoint$Direction;
+	public static fun values ()[Lapp/oreshkov/clikit/TimePoint$Direction;
+}
+
+public final class app/oreshkov/clikit/TimePoint$Relative : app/oreshkov/clikit/TimePoint {
+	public synthetic fun <init> (JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-UwyO8pc ()J
+	public final fun copy-LRDsOJo (J)Lapp/oreshkov/clikit/TimePoint$Relative;
+	public static synthetic fun copy-LRDsOJo$default (Lapp/oreshkov/clikit/TimePoint$Relative;JILjava/lang/Object;)Lapp/oreshkov/clikit/TimePoint$Relative;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOffset-UwyO8pc ()J
+	public fun hashCode ()I
+	public fun resolve (Lkotlin/time/Instant;)Lkotlin/time/Instant;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/clikit/Tty {
+	public static final field INSTANCE Lapp/oreshkov/clikit/Tty;
+	public final fun getBorderStyle ()Lapp/oreshkov/clikit/BorderStyle;
+	public final fun getCharset ()Ljava/nio/charset/Charset;
+	public final fun getInteractive ()Z
+	public final fun getWidth ()I
+	public final fun readLine (Ljava/lang/String;)Ljava/lang/String;
+	public final fun readPassword (Ljava/lang/String;)[C
+}
+
+public final class app/oreshkov/clikit/TtyKt {
+	public static final fun decideColour (ZZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;)Z
+	public static synthetic fun decideColour$default (ZZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)Z
+}
+
+public final class app/oreshkov/clikit/TypedKeyValue {
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getRaw ()Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class app/oreshkov/clikit/ValueConverter {
+	public abstract fun convert (Ljava/lang/String;)Lapp/oreshkov/clikit/ConversionResult;
+	public fun getChoices ()Ljava/util/List;
+}
+

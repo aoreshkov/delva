@@ -1,0 +1,25 @@
+name: Feature request
+description: Something Delva doesn't do yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [roadmap](https://github.com/aoreshkov/delva/blob/main/project/ROADMAP.md) first; it lists
+        what's already planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and why today's API makes it hard or impossible.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: The API or behavior you have in mind, and how it would interact with the semantics in SPEC.md.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered

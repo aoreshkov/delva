@@ -1,0 +1,886 @@
+public abstract interface class app/oreshkov/delva/BlockingJsonStore : app/oreshkov/delva/BlockingReadableJsonStore {
+	public abstract fun assignType (Lapp/oreshkov/delva/NodeRef;Ljava/lang/String;)V
+	public abstract fun assignTypes (Ljava/util/List;)V
+	public abstract fun clearType (Ljava/lang/String;)J
+	public abstract fun delete-Idz0xEs (J)Z
+	public abstract fun deleteAll (Ljava/util/Collection;)I
+	public abstract fun insert-KXkFlTY (Ljava/io/InputStream;Ljava/util/Map;)J
+	public abstract fun insert-KXkFlTY (Ljava/lang/String;Ljava/util/Map;)J
+	public abstract fun insert-KXkFlTY (Ljava/nio/file/Path;Ljava/util/Map;)J
+	public static synthetic fun insert-KXkFlTY$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/io/InputStream;Ljava/util/Map;ILjava/lang/Object;)J
+	public static synthetic fun insert-KXkFlTY$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)J
+	public static synthetic fun insert-KXkFlTY$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/nio/file/Path;Ljava/util/Map;ILjava/lang/Object;)J
+	public abstract fun insertAll (Ljava/lang/Iterable;)Ljava/util/List;
+	public abstract fun replace-6-oG2IA (Ljava/util/Collection;Ljava/io/InputStream;Ljava/util/Map;)J
+	public abstract fun replace-6-oG2IA (Ljava/util/Collection;Ljava/lang/String;Ljava/util/Map;)J
+	public abstract fun replace-6-oG2IA (Ljava/util/Collection;Ljava/nio/file/Path;Ljava/util/Map;)J
+	public static synthetic fun replace-6-oG2IA$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/util/Collection;Ljava/io/InputStream;Ljava/util/Map;ILjava/lang/Object;)J
+	public static synthetic fun replace-6-oG2IA$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/util/Collection;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)J
+	public static synthetic fun replace-6-oG2IA$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/util/Collection;Ljava/nio/file/Path;Ljava/util/Map;ILjava/lang/Object;)J
+	public abstract fun upsert-KXkFlTY (Ljava/io/InputStream;Ljava/util/Map;)J
+	public abstract fun upsert-KXkFlTY (Ljava/lang/String;Ljava/util/Map;)J
+	public abstract fun upsert-KXkFlTY (Ljava/nio/file/Path;Ljava/util/Map;)J
+	public static synthetic fun upsert-KXkFlTY$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/io/InputStream;Ljava/util/Map;ILjava/lang/Object;)J
+	public static synthetic fun upsert-KXkFlTY$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)J
+	public static synthetic fun upsert-KXkFlTY$default (Lapp/oreshkov/delva/BlockingJsonStore;Ljava/nio/file/Path;Ljava/util/Map;ILjava/lang/Object;)J
+}
+
+public abstract interface class app/oreshkov/delva/BlockingReadableJsonStore {
+	public abstract fun count (Lapp/oreshkov/delva/DocumentKeyQuery;J)J
+	public abstract fun count (Lapp/oreshkov/delva/JsonPathQuery;J)J
+	public abstract fun count (Lapp/oreshkov/delva/KeyValueQuery;J)J
+	public static synthetic fun count$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/DocumentKeyQuery;JILjava/lang/Object;)J
+	public static synthetic fun count$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/JsonPathQuery;JILjava/lang/Object;)J
+	public static synthetic fun count$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/KeyValueQuery;JILjava/lang/Object;)J
+	public abstract fun countOfType (Ljava/lang/String;)J
+	public abstract fun diff (Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;)Ljava/util/List;
+	public static synthetic fun diff$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;ILjava/lang/Object;)Ljava/util/List;
+	public abstract fun explain (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/QueryPlan;
+	public abstract fun get--VXxeG8 (Ljava/lang/String;)Lapp/oreshkov/delva/DocId;
+	public abstract fun getCreationOptions ()Lapp/oreshkov/delva/CreationOptions;
+	public abstract fun info ()Lapp/oreshkov/delva/StoreInfo;
+	public abstract fun isEqual (Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOptions;)Z
+	public static synthetic fun isEqual$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOptions;ILjava/lang/Object;)Z
+	public abstract fun listTypes ()Ljava/util/List;
+	public abstract fun objectsOfType (Ljava/lang/String;Lapp/oreshkov/delva/NodeRef;I)Ljava/util/List;
+	public static synthetic fun objectsOfType$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Ljava/lang/String;Lapp/oreshkov/delva/NodeRef;IILjava/lang/Object;)Ljava/util/List;
+	public abstract fun objectsOfTypePage (Ljava/lang/String;Lapp/oreshkov/delva/Cursor;I)Lapp/oreshkov/delva/TypePage;
+	public static synthetic fun objectsOfTypePage$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Ljava/lang/String;Lapp/oreshkov/delva/Cursor;IILjava/lang/Object;)Lapp/oreshkov/delva/TypePage;
+	public abstract fun pathOf (Lapp/oreshkov/delva/NodeRef;)Ljava/lang/String;
+	public abstract fun search (Lapp/oreshkov/delva/DocumentKeyQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun search (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun search (Lapp/oreshkov/delva/KeyValueQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun select (Lapp/oreshkov/delva/NodeRef;Lapp/oreshkov/delva/JsonPath;)Lapp/oreshkov/delva/SelectResult;
+	public abstract fun typeOf (Lapp/oreshkov/delva/NodeRef;)Ljava/lang/String;
+	public abstract fun verify (Lapp/oreshkov/delva/VerifyProgress;)Lapp/oreshkov/delva/VerifyReport;
+	public static synthetic fun verify$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/VerifyProgress;ILjava/lang/Object;)Lapp/oreshkov/delva/VerifyReport;
+}
+
+public abstract interface class app/oreshkov/delva/BlockingSecondaryJsonStore : app/oreshkov/delva/BlockingReadableJsonStore {
+	public abstract fun refresh ()Z
+	public abstract fun writer ()Lapp/oreshkov/delva/LockHolder;
+}
+
+public abstract interface class app/oreshkov/delva/CompareOperand {
+}
+
+public final class app/oreshkov/delva/CompareOperand$Json : app/oreshkov/delva/CompareOperand {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getJson ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/CompareOperand$JsonStream : app/oreshkov/delva/CompareOperand {
+	public fun <init> (Ljava/io/InputStream;)V
+	public final fun getSource ()Ljava/io/InputStream;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/CompareOperand$Stored : app/oreshkov/delva/CompareOperand {
+	public fun <init> (Lapp/oreshkov/delva/NodeRef;)V
+	public final fun getNode ()Lapp/oreshkov/delva/NodeRef;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/CompareOptions {
+	public fun <init> ()V
+	public fun <init> (ZLjava/util/Set;Ljava/util/Set;)V
+	public synthetic fun <init> (ZLjava/util/Set;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (ZLjava/util/Set;Ljava/util/Set;)Lapp/oreshkov/delva/CompareOptions;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/CompareOptions;ZLjava/util/Set;Ljava/util/Set;ILjava/lang/Object;)Lapp/oreshkov/delva/CompareOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIgnoreKeys ()Ljava/util/Set;
+	public final fun getIgnorePaths ()Ljava/util/Set;
+	public final fun getIncludeTypes ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/CorruptionException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getLocation ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/CreationOptions {
+	public static final field Companion Lapp/oreshkov/delva/CreationOptions$Companion;
+	public static final field MAX_DOCUMENT_KEY_BYTES I
+	public static final field MAX_FRAGMENT_BYTES I
+	public static final field MIN_FRAGMENT_BYTES I
+	public fun <init> (IZLjava/util/Set;Ljava/util/Set;IILapp/oreshkov/delva/Normalization;)V
+	public synthetic fun <init> (IZLjava/util/Set;Ljava/util/Set;IILapp/oreshkov/delva/Normalization;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (IZLjava/util/Set;Ljava/util/Set;IILapp/oreshkov/delva/Normalization;Ljava/lang/String;)V
+	public synthetic fun <init> (IZLjava/util/Set;Ljava/util/Set;IILapp/oreshkov/delva/Normalization;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (IZLjava/util/Set;Ljava/util/Set;IILapp/oreshkov/delva/Normalization;)Lapp/oreshkov/delva/CreationOptions;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/CreationOptions;IZLjava/util/Set;Ljava/util/Set;IILapp/oreshkov/delva/Normalization;ILjava/lang/Object;)Lapp/oreshkov/delva/CreationOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocumentKey ()Ljava/lang/String;
+	public final fun getExcludedKeys ()Ljava/util/Set;
+	public final fun getFragmentBytes ()I
+	public final fun getHashTerms ()Z
+	public final fun getIndexedKeys ()Ljava/util/Set;
+	public final fun getMaxIndexedStringBytes ()I
+	public final fun getMinIndexedStringBytes ()I
+	public final fun getNormalization ()Lapp/oreshkov/delva/Normalization;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withDocumentKey (Ljava/lang/String;)Lapp/oreshkov/delva/CreationOptions;
+}
+
+public final class app/oreshkov/delva/CreationOptions$Companion {
+}
+
+public final class app/oreshkov/delva/CreationOptionsMismatchException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/nio/file/Path;Lapp/oreshkov/delva/CreationOptions;Lapp/oreshkov/delva/CreationOptions;)V
+	public final fun getDirectory ()Ljava/nio/file/Path;
+	public final fun getRequested ()Lapp/oreshkov/delva/CreationOptions;
+	public final fun getStored ()Lapp/oreshkov/delva/CreationOptions;
+}
+
+public final class app/oreshkov/delva/Cursor {
+	public static final field Companion Lapp/oreshkov/delva/Cursor$Companion;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocId-kfl0ok0 ()J
+	public final fun getMayMissLateCommits ()Z
+	public final fun getNodePre ()J
+	public final fun getSnapshotLsn ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/Cursor$Companion {
+	public final fun parse (Ljava/lang/String;)Lapp/oreshkov/delva/Cursor;
+}
+
+public abstract class app/oreshkov/delva/DelvaException : java/lang/RuntimeException {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public abstract interface annotation class app/oreshkov/delva/DelvaImplementationApi : java/lang/annotation/Annotation {
+}
+
+public final class app/oreshkov/delva/DiffOptions {
+	public fun <init> ()V
+	public fun <init> (ZLjava/util/Set;Ljava/util/Set;IIZ)V
+	public synthetic fun <init> (ZLjava/util/Set;Ljava/util/Set;IIZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (ZLjava/util/Set;Ljava/util/Set;IIZ)Lapp/oreshkov/delva/DiffOptions;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/DiffOptions;ZLjava/util/Set;Ljava/util/Set;IIZILjava/lang/Object;)Lapp/oreshkov/delva/DiffOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIgnoreKeys ()Ljava/util/Set;
+	public final fun getIgnorePaths ()Ljava/util/Set;
+	public final fun getIncludeTypes ()Z
+	public final fun getMaxDifferences ()I
+	public final fun getMaxValueBytes ()I
+	public final fun getVerifySkippedSubtrees ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/DiffValue {
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getJson ()Ljava/lang/String;
+	public final fun getNode ()Lapp/oreshkov/delva/NodeRef;
+	public final fun getTruncated ()Z
+	public final fun getType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/Difference {
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKind ()Lapp/oreshkov/delva/DifferenceKind;
+	public final fun getLeft ()Lapp/oreshkov/delva/DiffValue;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getRight ()Lapp/oreshkov/delva/DiffValue;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/DifferenceKind : java/lang/Enum {
+	public static final field ADDED Lapp/oreshkov/delva/DifferenceKind;
+	public static final field ASSIGNED_TYPE_CHANGED Lapp/oreshkov/delva/DifferenceKind;
+	public static final field CHANGED Lapp/oreshkov/delva/DifferenceKind;
+	public static final field REMOVED Lapp/oreshkov/delva/DifferenceKind;
+	public static final field VALUE_TYPE_CHANGED Lapp/oreshkov/delva/DifferenceKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/DifferenceKind;
+	public static fun values ()[Lapp/oreshkov/delva/DifferenceKind;
+}
+
+public final class app/oreshkov/delva/DocId {
+	public static final synthetic fun box-impl (J)Lapp/oreshkov/delva/DocId;
+	public static fun constructor-impl (J)J
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (JLjava/lang/Object;)Z
+	public static final fun equals-impl0 (JJ)Z
+	public final fun getRaw ()J
+	public fun hashCode ()I
+	public static fun hashCode-impl (J)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (J)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()J
+}
+
+public final class app/oreshkov/delva/DocumentFilter {
+	public static final field Companion Lapp/oreshkov/delva/DocumentFilter$Companion;
+	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/DocumentFilter;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/DocumentFilter$Companion {
+	public final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/DocumentFilter;
+}
+
+public final class app/oreshkov/delva/DocumentFilterTemplate {
+	public static final field Companion Lapp/oreshkov/delva/DocumentFilterTemplate$Companion;
+	public final fun bind (Ljava/util/Map;)Lapp/oreshkov/delva/DocumentFilter;
+	public final fun bind ([Lkotlin/Pair;)Lapp/oreshkov/delva/DocumentFilter;
+	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/DocumentFilterTemplate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getParameters ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/DocumentFilterTemplate$Companion {
+	public final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/DocumentFilterTemplate;
+}
+
+public final class app/oreshkov/delva/DocumentKeyQuery {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;IJLapp/oreshkov/delva/Cursor;Lapp/oreshkov/delva/SearchOrder;)V
+	public synthetic fun <init> (Ljava/lang/String;IJLapp/oreshkov/delva/Cursor;Lapp/oreshkov/delva/SearchOrder;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (Ljava/lang/String;IJLapp/oreshkov/delva/Cursor;Lapp/oreshkov/delva/SearchOrder;)Lapp/oreshkov/delva/DocumentKeyQuery;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/DocumentKeyQuery;Ljava/lang/String;IJLapp/oreshkov/delva/Cursor;Lapp/oreshkov/delva/SearchOrder;ILjava/lang/Object;)Lapp/oreshkov/delva/DocumentKeyQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAfter ()Lapp/oreshkov/delva/Cursor;
+	public final fun getLimit ()I
+	public final fun getMaxBytes ()J
+	public final fun getOrder ()Lapp/oreshkov/delva/SearchOrder;
+	public final fun getPrefix ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/DocumentNotFoundException : app/oreshkov/delva/DelvaException {
+	public synthetic fun <init> (JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDocId ()J
+}
+
+public final class app/oreshkov/delva/DocumentRejectedException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Lapp/oreshkov/delva/RejectReason;JLjava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lapp/oreshkov/delva/RejectReason;JLjava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getByteOffset ()J
+	public final fun getJsonPath ()Ljava/lang/String;
+	public final fun getReason ()Lapp/oreshkov/delva/RejectReason;
+}
+
+public abstract interface class app/oreshkov/delva/Durability {
+	public static final field Companion Lapp/oreshkov/delva/Durability$Companion;
+	public static fun periodic (Ljava/time/Duration;)Lapp/oreshkov/delva/Durability$Periodic;
+}
+
+public final class app/oreshkov/delva/Durability$Companion {
+	public final fun periodic (Ljava/time/Duration;)Lapp/oreshkov/delva/Durability$Periodic;
+}
+
+public final class app/oreshkov/delva/Durability$None : app/oreshkov/delva/Durability {
+	public static final field INSTANCE Lapp/oreshkov/delva/Durability$None;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/Durability$Periodic : app/oreshkov/delva/Durability {
+	public synthetic fun <init> (JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getInterval-UwyO8pc ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/Durability$SyncEachBatch : app/oreshkov/delva/Durability {
+	public static final field INSTANCE Lapp/oreshkov/delva/Durability$SyncEachBatch;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/EngineFailedException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public abstract interface annotation class app/oreshkov/delva/ExperimentalDelvaApi : java/lang/annotation/Annotation {
+}
+
+public abstract interface class app/oreshkov/delva/InsertOutcome {
+}
+
+public final class app/oreshkov/delva/InsertOutcome$Conflicted : app/oreshkov/delva/InsertOutcome {
+	public fun <init> (Lapp/oreshkov/delva/WriteConflictException;)V
+	public final fun getException ()Lapp/oreshkov/delva/WriteConflictException;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/InsertOutcome$Inserted : app/oreshkov/delva/InsertOutcome {
+	public synthetic fun <init> (JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDocId ()J
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/InsertOutcome$Rejected : app/oreshkov/delva/InsertOutcome {
+	public fun <init> (Lapp/oreshkov/delva/DocumentRejectedException;)V
+	public final fun getException ()Lapp/oreshkov/delva/DocumentRejectedException;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/InsertSource {
+	public fun <init> (Ljava/io/InputStream;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/io/InputStream;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/io/InputStream;Ljava/util/Map;Ljava/util/Collection;Lapp/oreshkov/delva/KeyConflict;)V
+	public synthetic fun <init> (Ljava/io/InputStream;Ljava/util/Map;Ljava/util/Collection;Lapp/oreshkov/delva/KeyConflict;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getOnExistingKey ()Lapp/oreshkov/delva/KeyConflict;
+	public final fun getReplaces ()Ljava/util/List;
+	public final fun getSource ()Ljava/io/InputStream;
+	public final fun getTypes ()Ljava/util/Map;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/InvalidCursorException : java/lang/IllegalArgumentException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class app/oreshkov/delva/InvalidJsonPathException : java/lang/IllegalArgumentException {
+	public fun <init> (Ljava/lang/String;ILjava/lang/String;)V
+	public final fun getOffset ()I
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getText ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/InvalidTypeNameException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class app/oreshkov/delva/JsonFormat {
+	public static final field COMPACT Lapp/oreshkov/delva/JsonFormat;
+	public static final field Companion Lapp/oreshkov/delva/JsonFormat$Companion;
+	public static final field MAX_INDENT_SPACES I
+	public static final field MAX_LINE_WIDTH I
+	public static final field PRETTY Lapp/oreshkov/delva/JsonFormat;
+	public static final field TAB_COLUMNS I
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;I)V
+	public fun <init> (Ljava/lang/String;II)V
+	public fun <init> (Ljava/lang/String;III)V
+	public fun <init> (Ljava/lang/String;IIII)V
+	public synthetic fun <init> (Ljava/lang/String;IIIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIndent ()Ljava/lang/String;
+	public final fun getIndentColumns ()I
+	public final fun getLineWidth ()I
+	public final fun getMaxInlineDepth ()I
+	public final fun getMaxInlineElements ()I
+	public final fun getMaxLevels ()I
+	public fun hashCode ()I
+	public final fun isCompact ()Z
+	public final fun isOutline ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonFormat$Companion {
+}
+
+public final class app/oreshkov/delva/JsonPath {
+	public static final field Companion Lapp/oreshkov/delva/JsonPath$Companion;
+	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/JsonPath;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonPath$Companion {
+	public final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/JsonPath;
+}
+
+public final class app/oreshkov/delva/JsonPathQuery {
+	public fun <init> (Lapp/oreshkov/delva/JsonPath;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/ScanPolicy;Lapp/oreshkov/delva/SearchOrder;)V
+	public synthetic fun <init> (Lapp/oreshkov/delva/JsonPath;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/ScanPolicy;Lapp/oreshkov/delva/SearchOrder;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lapp/oreshkov/delva/JsonPath;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/ScanPolicy;Lapp/oreshkov/delva/SearchOrder;Lapp/oreshkov/delva/DocumentFilter;)V
+	public synthetic fun <init> (Lapp/oreshkov/delva/JsonPath;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/ScanPolicy;Lapp/oreshkov/delva/SearchOrder;Lapp/oreshkov/delva/DocumentFilter;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (Lapp/oreshkov/delva/JsonPath;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/ScanPolicy;Lapp/oreshkov/delva/SearchOrder;)Lapp/oreshkov/delva/JsonPathQuery;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/JsonPathQuery;Lapp/oreshkov/delva/JsonPath;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/ScanPolicy;Lapp/oreshkov/delva/SearchOrder;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonPathQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAfter ()Lapp/oreshkov/delva/Cursor;
+	public final fun getDocumentFilter ()Lapp/oreshkov/delva/DocumentFilter;
+	public final fun getLimit ()I
+	public final fun getMaxBytes ()J
+	public final fun getMode ()Lapp/oreshkov/delva/ResultMode;
+	public final fun getNested ()Lapp/oreshkov/delva/NestedHits;
+	public final fun getOrder ()Lapp/oreshkov/delva/SearchOrder;
+	public final fun getPath ()Lapp/oreshkov/delva/JsonPath;
+	public final fun getScan ()Lapp/oreshkov/delva/ScanPolicy;
+	public final fun getType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withDocumentFilter (Lapp/oreshkov/delva/DocumentFilter;)Lapp/oreshkov/delva/JsonPathQuery;
+}
+
+public final class app/oreshkov/delva/JsonPathTemplate {
+	public static final field Companion Lapp/oreshkov/delva/JsonPathTemplate$Companion;
+	public final fun bind (Ljava/util/Map;)Lapp/oreshkov/delva/JsonPath;
+	public final fun bind ([Lkotlin/Pair;)Lapp/oreshkov/delva/JsonPath;
+	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/JsonPathTemplate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getParameters ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonPathTemplate$Companion {
+	public final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/JsonPathTemplate;
+}
+
+public abstract interface class app/oreshkov/delva/JsonQueryValue {
+}
+
+public final class app/oreshkov/delva/JsonQueryValue$Bool : app/oreshkov/delva/JsonQueryValue {
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lapp/oreshkov/delva/JsonQueryValue$Bool;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/JsonQueryValue$Bool;ZILjava/lang/Object;)Lapp/oreshkov/delva/JsonQueryValue$Bool;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonQueryValue$Json : app/oreshkov/delva/JsonQueryValue {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lapp/oreshkov/delva/JsonQueryValue$Json;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/JsonQueryValue$Json;Ljava/lang/String;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonQueryValue$Json;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLiteral ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonQueryValue$Null : app/oreshkov/delva/JsonQueryValue {
+	public static final field INSTANCE Lapp/oreshkov/delva/JsonQueryValue$Null;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonQueryValue$Num : app/oreshkov/delva/JsonQueryValue {
+	public fun <init> (J)V
+	public fun <init> (Ljava/math/BigDecimal;)V
+	public final fun component1 ()Ljava/math/BigDecimal;
+	public final fun copy (Ljava/math/BigDecimal;)Lapp/oreshkov/delva/JsonQueryValue$Num;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/JsonQueryValue$Num;Ljava/math/BigDecimal;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonQueryValue$Num;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Ljava/math/BigDecimal;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/JsonQueryValue$Str : app/oreshkov/delva/JsonQueryValue {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lapp/oreshkov/delva/JsonQueryValue$Str;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/JsonQueryValue$Str;Ljava/lang/String;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonQueryValue$Str;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class app/oreshkov/delva/JsonStore : app/oreshkov/delva/ReadableJsonStore {
+	public static final field Companion Lapp/oreshkov/delva/JsonStore$Companion;
+	public abstract fun assignType (Lapp/oreshkov/delva/NodeRef;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun assignTypes (Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun blocking ()Lapp/oreshkov/delva/BlockingJsonStore;
+	public synthetic fun blocking ()Lapp/oreshkov/delva/BlockingReadableJsonStore;
+	public abstract fun clearType (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun delete-78qXfzY (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun deleteAll (Ljava/util/Collection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun insert-6-oG2IA (Ljava/io/InputStream;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun insert-6-oG2IA (Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun insert-6-oG2IA (Ljava/nio/file/Path;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun insert-6-oG2IA$default (Lapp/oreshkov/delva/JsonStore;Ljava/io/InputStream;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun insert-6-oG2IA$default (Lapp/oreshkov/delva/JsonStore;Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun insert-6-oG2IA$default (Lapp/oreshkov/delva/JsonStore;Ljava/nio/file/Path;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun insertAll (Ljava/lang/Iterable;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun replace-aHR5gnw (Ljava/util/Collection;Ljava/io/InputStream;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun replace-aHR5gnw (Ljava/util/Collection;Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun replace-aHR5gnw (Ljava/util/Collection;Ljava/nio/file/Path;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun replace-aHR5gnw$default (Lapp/oreshkov/delva/JsonStore;Ljava/util/Collection;Ljava/io/InputStream;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun replace-aHR5gnw$default (Lapp/oreshkov/delva/JsonStore;Ljava/util/Collection;Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun replace-aHR5gnw$default (Lapp/oreshkov/delva/JsonStore;Ljava/util/Collection;Ljava/nio/file/Path;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun upsert-6-oG2IA (Ljava/io/InputStream;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun upsert-6-oG2IA (Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun upsert-6-oG2IA (Ljava/nio/file/Path;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun upsert-6-oG2IA$default (Lapp/oreshkov/delva/JsonStore;Ljava/io/InputStream;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun upsert-6-oG2IA$default (Lapp/oreshkov/delva/JsonStore;Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun upsert-6-oG2IA$default (Lapp/oreshkov/delva/JsonStore;Ljava/nio/file/Path;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class app/oreshkov/delva/JsonStore$Companion {
+	public final fun create (Ljava/nio/file/Path;Lapp/oreshkov/delva/CreationOptions;Lapp/oreshkov/delva/StoreOptions;)Lapp/oreshkov/delva/JsonStore;
+	public static synthetic fun create$default (Lapp/oreshkov/delva/JsonStore$Companion;Ljava/nio/file/Path;Lapp/oreshkov/delva/CreationOptions;Lapp/oreshkov/delva/StoreOptions;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonStore;
+	public final fun open (Ljava/nio/file/Path;Lapp/oreshkov/delva/StoreOptions;)Lapp/oreshkov/delva/JsonStore;
+	public static synthetic fun open$default (Lapp/oreshkov/delva/JsonStore$Companion;Ljava/nio/file/Path;Lapp/oreshkov/delva/StoreOptions;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonStore;
+	public final fun openOrCreate (Ljava/nio/file/Path;Lapp/oreshkov/delva/CreationOptions;Lapp/oreshkov/delva/StoreOptions;)Lapp/oreshkov/delva/JsonStore;
+	public static synthetic fun openOrCreate$default (Lapp/oreshkov/delva/JsonStore$Companion;Ljava/nio/file/Path;Lapp/oreshkov/delva/CreationOptions;Lapp/oreshkov/delva/StoreOptions;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonStore;
+	public final fun openSecondary (Ljava/nio/file/Path;Lapp/oreshkov/delva/StoreOptions;)Lapp/oreshkov/delva/SecondaryJsonStore;
+	public static synthetic fun openSecondary$default (Lapp/oreshkov/delva/JsonStore$Companion;Ljava/nio/file/Path;Lapp/oreshkov/delva/StoreOptions;ILjava/lang/Object;)Lapp/oreshkov/delva/SecondaryJsonStore;
+	public final fun reset (Ljava/nio/file/Path;)Lapp/oreshkov/delva/CreationOptions;
+}
+
+public final class app/oreshkov/delva/KeyConflict : java/lang/Enum {
+	public static final field FAIL Lapp/oreshkov/delva/KeyConflict;
+	public static final field REPLACE Lapp/oreshkov/delva/KeyConflict;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/KeyConflict;
+	public static fun values ()[Lapp/oreshkov/delva/KeyConflict;
+}
+
+public final class app/oreshkov/delva/KeyValueQuery {
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/delva/JsonQueryValue;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/SearchOrder;)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/delva/JsonQueryValue;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/SearchOrder;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (Ljava/lang/String;Lapp/oreshkov/delva/JsonQueryValue;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/SearchOrder;)Lapp/oreshkov/delva/KeyValueQuery;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/KeyValueQuery;Ljava/lang/String;Lapp/oreshkov/delva/JsonQueryValue;Lapp/oreshkov/delva/ResultMode;Lapp/oreshkov/delva/NestedHits;IJLapp/oreshkov/delva/Cursor;Ljava/lang/String;Lapp/oreshkov/delva/SearchOrder;ILjava/lang/Object;)Lapp/oreshkov/delva/KeyValueQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAfter ()Lapp/oreshkov/delva/Cursor;
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getLimit ()I
+	public final fun getMaxBytes ()J
+	public final fun getMode ()Lapp/oreshkov/delva/ResultMode;
+	public final fun getNested ()Lapp/oreshkov/delva/NestedHits;
+	public final fun getOrder ()Lapp/oreshkov/delva/SearchOrder;
+	public final fun getType ()Ljava/lang/String;
+	public final fun getValue ()Lapp/oreshkov/delva/JsonQueryValue;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/LockHolder {
+	public fun <init> (JLjava/time/Instant;Ljava/lang/String;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getPid ()J
+	public final fun getStartedAt ()Ljava/time/Instant;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/NestedHits : java/lang/Enum {
+	public static final field ALL Lapp/oreshkov/delva/NestedHits;
+	public static final field OUTERMOST_ONLY Lapp/oreshkov/delva/NestedHits;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/NestedHits;
+	public static fun values ()[Lapp/oreshkov/delva/NestedHits;
+}
+
+public final class app/oreshkov/delva/NodeRef : java/lang/Comparable {
+	public synthetic fun <init> (JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun compareTo (Lapp/oreshkov/delva/NodeRef;)I
+	public synthetic fun compareTo (Ljava/lang/Object;)I
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDocId-kfl0ok0 ()J
+	public final fun getNodePre ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/Normalization : java/lang/Enum {
+	public static final field NFC Lapp/oreshkov/delva/Normalization;
+	public static final field NONE Lapp/oreshkov/delva/Normalization;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/Normalization;
+	public static fun values ()[Lapp/oreshkov/delva/Normalization;
+}
+
+public final class app/oreshkov/delva/QueryLimitException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class app/oreshkov/delva/QueryPlan {
+	public final fun getFullScan ()Z
+	public final fun getTerms ()Ljava/lang/String;
+	public final fun getWithin ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/QueryRejectedException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Lapp/oreshkov/delva/QueryRejectedException$Reason;Ljava/lang/String;)V
+	public final fun getReason ()Lapp/oreshkov/delva/QueryRejectedException$Reason;
+}
+
+public final class app/oreshkov/delva/QueryRejectedException$Reason : java/lang/Enum {
+	public static final field NEEDS_SCAN Lapp/oreshkov/delva/QueryRejectedException$Reason;
+	public static final field NOT_INDEXED Lapp/oreshkov/delva/QueryRejectedException$Reason;
+	public static final field RANGE_TOO_WIDE Lapp/oreshkov/delva/QueryRejectedException$Reason;
+	public static final field TOO_MANY_SEGMENTS Lapp/oreshkov/delva/QueryRejectedException$Reason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/QueryRejectedException$Reason;
+	public static fun values ()[Lapp/oreshkov/delva/QueryRejectedException$Reason;
+}
+
+public abstract interface class app/oreshkov/delva/ReadableJsonStore : java/lang/AutoCloseable {
+	public abstract fun blocking ()Lapp/oreshkov/delva/BlockingReadableJsonStore;
+	public abstract fun count (Lapp/oreshkov/delva/DocumentKeyQuery;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun count (Lapp/oreshkov/delva/JsonPathQuery;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun count (Lapp/oreshkov/delva/KeyValueQuery;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun count$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/DocumentKeyQuery;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun count$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/JsonPathQuery;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun count$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/KeyValueQuery;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun countOfType (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun diff (Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun diff$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public abstract fun explain (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/QueryPlan;
+	public abstract fun get-y2eXV-M (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getCreationOptions ()Lapp/oreshkov/delva/CreationOptions;
+	public abstract fun info ()Lapp/oreshkov/delva/StoreInfo;
+	public abstract fun isEqual (Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOptions;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun isEqual$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOptions;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun listTypes ()Ljava/util/List;
+	public abstract fun objectsOfType (Ljava/lang/String;Lapp/oreshkov/delva/NodeRef;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun objectsOfType$default (Lapp/oreshkov/delva/ReadableJsonStore;Ljava/lang/String;Lapp/oreshkov/delva/NodeRef;ILkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun objectsOfTypeFlow (Ljava/lang/String;Lapp/oreshkov/delva/NodeRef;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun objectsOfTypeFlow$default (Lapp/oreshkov/delva/ReadableJsonStore;Ljava/lang/String;Lapp/oreshkov/delva/NodeRef;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public abstract fun objectsOfTypePage (Ljava/lang/String;Lapp/oreshkov/delva/Cursor;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun objectsOfTypePage$default (Lapp/oreshkov/delva/ReadableJsonStore;Ljava/lang/String;Lapp/oreshkov/delva/Cursor;ILkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun pathOf (Lapp/oreshkov/delva/NodeRef;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun search (Lapp/oreshkov/delva/DocumentKeyQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun search (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun search (Lapp/oreshkov/delva/KeyValueQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun select (Lapp/oreshkov/delva/NodeRef;Lapp/oreshkov/delva/JsonPath;)Lapp/oreshkov/delva/SelectResult;
+	public abstract fun typeOf (Lapp/oreshkov/delva/NodeRef;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun verify (Lapp/oreshkov/delva/VerifyProgress;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun verify$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/VerifyProgress;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class app/oreshkov/delva/RejectReason : java/lang/Enum {
+	public static final field DUPLICATE_KEY Lapp/oreshkov/delva/RejectReason;
+	public static final field INVALID_STRING Lapp/oreshkov/delva/RejectReason;
+	public static final field INVALID_UTF8 Lapp/oreshkov/delva/RejectReason;
+	public static final field KEY_MISSING Lapp/oreshkov/delva/RejectReason;
+	public static final field LIMIT_EXCEEDED Lapp/oreshkov/delva/RejectReason;
+	public static final field MALFORMED_JSON Lapp/oreshkov/delva/RejectReason;
+	public static final field NUMBER_OUT_OF_RANGE Lapp/oreshkov/delva/RejectReason;
+	public static final field TYPE_PATH_UNMATCHED Lapp/oreshkov/delva/RejectReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/RejectReason;
+	public static fun values ()[Lapp/oreshkov/delva/RejectReason;
+}
+
+public final class app/oreshkov/delva/ResultMode : java/lang/Enum {
+	public static final field CONTAINING_ELEMENT Lapp/oreshkov/delva/ResultMode;
+	public static final field WHOLE_DOCUMENT Lapp/oreshkov/delva/ResultMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/ResultMode;
+	public static fun values ()[Lapp/oreshkov/delva/ResultMode;
+}
+
+public final class app/oreshkov/delva/ResultTooLargeException : app/oreshkov/delva/DelvaException {
+	public fun <init> (I)V
+	public final fun getMaxChars ()I
+}
+
+public final class app/oreshkov/delva/ScanPolicy : java/lang/Enum {
+	public static final field ALLOW_SCAN Lapp/oreshkov/delva/ScanPolicy;
+	public static final field REJECT Lapp/oreshkov/delva/ScanPolicy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/ScanPolicy;
+	public static fun values ()[Lapp/oreshkov/delva/ScanPolicy;
+}
+
+public abstract interface class app/oreshkov/delva/SearchHit {
+	public abstract fun getCursor ()Lapp/oreshkov/delva/Cursor;
+	public fun getDocId-kfl0ok0 ()J
+	public abstract fun getDocumentKey ()Ljava/lang/String;
+	public abstract fun getEncodedSize ()J
+	public abstract fun getNode ()Lapp/oreshkov/delva/NodeRef;
+	public abstract fun getPath ()Ljava/lang/String;
+	public abstract fun getType ()Ljava/lang/String;
+	public fun readJsonAsString (I)Ljava/lang/String;
+	public abstract fun readJsonAsString (Lapp/oreshkov/delva/JsonFormat;I)Ljava/lang/String;
+	public static synthetic fun readJsonAsString$default (Lapp/oreshkov/delva/SearchHit;IILjava/lang/Object;)Ljava/lang/String;
+	public static synthetic fun readJsonAsString$default (Lapp/oreshkov/delva/SearchHit;Lapp/oreshkov/delva/JsonFormat;IILjava/lang/Object;)Ljava/lang/String;
+	public fun writeJsonTo (Ljava/io/OutputStream;)V
+	public abstract fun writeJsonTo (Ljava/io/OutputStream;Lapp/oreshkov/delva/JsonFormat;)V
+}
+
+public final class app/oreshkov/delva/SearchOrder : java/lang/Enum {
+	public static final field ASCENDING Lapp/oreshkov/delva/SearchOrder;
+	public static final field DESCENDING Lapp/oreshkov/delva/SearchOrder;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/SearchOrder;
+	public static fun values ()[Lapp/oreshkov/delva/SearchOrder;
+}
+
+public final class app/oreshkov/delva/SearchPage {
+	public final fun getCursor ()Lapp/oreshkov/delva/Cursor;
+	public final fun getHits ()Ljava/util/List;
+}
+
+public abstract interface class app/oreshkov/delva/SearchResult : java/lang/AutoCloseable {
+	public abstract fun getHits ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun getSnapshotLsn ()J
+	public abstract fun iterator ()Ljava/util/Iterator;
+	public abstract fun nextPage ()Lapp/oreshkov/delva/SearchPage;
+}
+
+public abstract interface class app/oreshkov/delva/SecondaryJsonStore : app/oreshkov/delva/ReadableJsonStore {
+	public synthetic fun blocking ()Lapp/oreshkov/delva/BlockingReadableJsonStore;
+	public abstract fun blocking ()Lapp/oreshkov/delva/BlockingSecondaryJsonStore;
+	public abstract fun refresh (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun writer ()Lapp/oreshkov/delva/LockHolder;
+}
+
+public abstract interface class app/oreshkov/delva/SelectResult : java/lang/AutoCloseable {
+	public abstract fun getNodes ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun getSnapshotLsn ()J
+	public abstract fun iterator ()Ljava/util/Iterator;
+}
+
+public abstract interface class app/oreshkov/delva/SelectedNode {
+	public abstract fun getNode ()Lapp/oreshkov/delva/NodeRef;
+	public abstract fun getPath ()Ljava/lang/String;
+	public fun readJsonAsString (I)Ljava/lang/String;
+	public abstract fun readJsonAsString (Lapp/oreshkov/delva/JsonFormat;I)Ljava/lang/String;
+	public static synthetic fun readJsonAsString$default (Lapp/oreshkov/delva/SelectedNode;IILjava/lang/Object;)Ljava/lang/String;
+	public static synthetic fun readJsonAsString$default (Lapp/oreshkov/delva/SelectedNode;Lapp/oreshkov/delva/JsonFormat;IILjava/lang/Object;)Ljava/lang/String;
+	public fun writeJsonTo (Ljava/io/OutputStream;)V
+	public abstract fun writeJsonTo (Ljava/io/OutputStream;Lapp/oreshkov/delva/JsonFormat;)V
+}
+
+public final class app/oreshkov/delva/StoreClosedException : app/oreshkov/delva/DelvaException {
+	public fun <init> ()V
+}
+
+public final class app/oreshkov/delva/StoreExistsException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/nio/file/Path;)V
+	public final fun getDirectory ()Ljava/nio/file/Path;
+}
+
+public final class app/oreshkov/delva/StoreInfo {
+	public final fun getApproximateDocumentCount ()J
+	public final fun getDeletedDocumentCount ()J
+	public final fun getSecondary ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/StoreLockedException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/nio/file/Path;Lapp/oreshkov/delva/LockHolder;)V
+	public synthetic fun <init> (Ljava/nio/file/Path;Lapp/oreshkov/delva/LockHolder;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDirectory ()Ljava/nio/file/Path;
+	public final fun getHolder ()Lapp/oreshkov/delva/LockHolder;
+}
+
+public final class app/oreshkov/delva/StoreNotFoundException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/nio/file/Path;)V
+	public final fun getDirectory ()Ljava/nio/file/Path;
+}
+
+public final class app/oreshkov/delva/StoreOptions {
+	public static final field Companion Lapp/oreshkov/delva/StoreOptions$Companion;
+	public static final field DEFAULT_ENCODER_BUDGET_BYTES I
+	public static final field MAX_DEPTH_LIMIT I
+	public static final field MAX_ENCODER_BUDGET_BYTES I
+	public static final field MAX_IO_PARALLELISM I
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/Integer;IJJILapp/oreshkov/delva/Durability;ZZ)V
+	public synthetic fun <init> (Ljava/lang/Integer;IJJILapp/oreshkov/delva/Durability;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy (Ljava/lang/Integer;IJJILapp/oreshkov/delva/Durability;ZZ)Lapp/oreshkov/delva/StoreOptions;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/StoreOptions;Ljava/lang/Integer;IJJILapp/oreshkov/delva/Durability;ZZILjava/lang/Object;)Lapp/oreshkov/delva/StoreOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCompression ()Z
+	public final fun getDurability ()Lapp/oreshkov/delva/Durability;
+	public final fun getEncoderBudgetBytes ()Ljava/lang/Integer;
+	public final fun getIoParallelism ()I
+	public final fun getMaxDepth ()I
+	public final fun getMaxDocumentBytes ()J
+	public final fun getMaxStringBytes ()J
+	public final fun getMmapReads ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/StoreOptions$Companion {
+}
+
+public final class app/oreshkov/delva/TypeInfo {
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getApproximateCount ()J
+	public final fun getName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/TypePage {
+	public final fun getCursor ()Lapp/oreshkov/delva/Cursor;
+	public final fun getNodes ()Ljava/util/List;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/VerifyIssue {
+	public final fun getDamagedBytes ()J
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getDocument-ieZfSvA ()Lapp/oreshkov/delva/DocId;
+	public final fun getKind ()Lapp/oreshkov/delva/VerifyIssueKind;
+	public final fun getLocation ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/VerifyIssueKind : java/lang/Enum {
+	public static final field COMMIT Lapp/oreshkov/delva/VerifyIssueKind;
+	public static final field FILE Lapp/oreshkov/delva/VerifyIssueKind;
+	public static final field FRAGMENT_INDEX Lapp/oreshkov/delva/VerifyIssueKind;
+	public static final field KEY_INDEX Lapp/oreshkov/delva/VerifyIssueKind;
+	public static final field LOG_RECORD Lapp/oreshkov/delva/VerifyIssueKind;
+	public static final field SEGMENT Lapp/oreshkov/delva/VerifyIssueKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/VerifyIssueKind;
+	public static fun values ()[Lapp/oreshkov/delva/VerifyIssueKind;
+}
+
+public final class app/oreshkov/delva/VerifyPhase : java/lang/Enum {
+	public static final field FRAGMENTS Lapp/oreshkov/delva/VerifyPhase;
+	public static final field INDEX Lapp/oreshkov/delva/VerifyPhase;
+	public static final field LOG Lapp/oreshkov/delva/VerifyPhase;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/VerifyPhase;
+	public static fun values ()[Lapp/oreshkov/delva/VerifyPhase;
+}
+
+public abstract interface class app/oreshkov/delva/VerifyProgress {
+	public abstract fun onProgress (Lapp/oreshkov/delva/VerifyPhase;JJ)V
+}
+
+public final class app/oreshkov/delva/VerifyReport {
+	public final fun getBytesChecked ()J
+	public final fun getDamagedBytes ()J
+	public final fun getDamagedDocuments ()Ljava/util/List;
+	public final fun getFilesChecked ()I
+	public final fun getFragmentsChecked ()J
+	public final fun getIntact ()Z
+	public final fun getIssues ()Ljava/util/List;
+	public final fun getLogRecordsChecked ()J
+	public final fun getSegmentBlocksChecked ()J
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/WriteConflictException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getConflicting ()Ljava/util/List;
+	public final fun getKey ()Ljava/lang/String;
+}
+

@@ -1,0 +1,112 @@
+name: Long tests
+
+# The suites `check` leaves out because they take too long for every push (project/DEVELOPMENT.md): weekly on Linux
+# and Windows, and the benchmark report and long simulations on demand.
+
+on:
+  schedule:
+    # Mondays, 03:17 UTC: off the hour, where the runner queue is shortest.
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: 'long = heap-capped and crash; report = benchmark report and long simulation'
+        type: choice
+        options: [long, report, both]
+        default: long
+      report-megabytes:
+        description: 'Benchmark report loads in MiB, comma-separated (5000 adds the 5 GB row)'
+        type: string
+        default: '50,500'
+
+permissions:
+  contents: read
+
+jobs:
+  long:
+    if: ${{ github.event_name == 'schedule' || inputs.suites != 'report' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+
+      - name: Heap-capped
+        run: ./gradlew heapCappedTest --console=plain
+
+      # Runs even when the heap-capped suite fails, so one red suite can't hide the other.
+      - name: Crash
+        if: ${{ !cancelled() }}
+        run: ./gradlew crashTest --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: long-test-reports-${{ matrix.os }}
+          path: '**/build/reports/tests/'
+
+      # As in ci.yml: the cache can't be saved on Windows while the daemon holds its lock files.
+      - name: Stop Gradle
+        if: ${{ !cancelled() }}
+        run: ./gradlew --stop
+
+  report:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.suites != 'long' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+
+      - name: Long simulation
+        run: ./gradlew simTest -Pdelva.testProfile=long --console=plain
+
+      # The loads come in through the environment, never spliced into the script.
+      - name: Benchmark report
+        if: ${{ !cancelled() }}
+        env:
+          MEGABYTES: ${{ inputs.report-megabytes }}
+        run: ./gradlew reportTest "-Ddelva.report.megabytes=$MEGABYTES" --console=plain
+
+      # The report test prints its table to standard output, which the test result XML keeps verbatim.
+      - name: Summarize the report
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo '## Runner'
+            echo
+            echo '```'
+            uname -srm
+            echo "$(nproc) CPUs"
+            free -h | sed -n 2p
+            df -h "$RUNNER_TEMP" | tail -n 1
+            echo '```'
+            echo
+            result=$(ls delva/build/test-results/reportTest/TEST-*PerformanceReportTest.xml 2>/dev/null | head -n 1)
+            if [ -n "$result" ]; then
+              awk '/^Benchmark report/ { p = 1 } p && /^]]>/ { exit } p' "$result" \
+                | sed 's/^Benchmark report/## Benchmark report/'
+            else
+              echo 'No report was produced.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-and-long-simulation
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/

@@ -1,0 +1,36 @@
+name: Dependency submission
+
+# GitHub doesn't read Gradle builds by itself: this submits the resolved dependency graph, which is what the
+# dependency graph, Dependabot alerts and dependency review see.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # the dependency submission API
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: corretto
+          java-version: 25
+
+      - uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          # The cache key depends only on the build files, so this job's entry would take the key CI's fuller entry
+          # needs; it reads CI's instead.
+          cache-read-only: true
+          dependency-graph: generate-and-submit
