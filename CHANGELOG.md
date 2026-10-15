@@ -7,7 +7,7 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-14
+## [0.1.0] - 2026-10-15
 
 First public release.
 
