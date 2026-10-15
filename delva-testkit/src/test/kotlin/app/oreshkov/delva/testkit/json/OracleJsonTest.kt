@@ -79,6 +79,16 @@ class OracleJsonTest {
     }
 
     @Test
+    fun `allowing duplicate keys shows whether the document has another problem`() {
+        fun allowing(json: String) = OracleJson.parse(json, allowDuplicateKeys = true)
+        assertEquals(OObj("a" to ONum("1")), assertIs<ParseResult.Accepted>(allowing("""{"a":1,"a":2}""")).value)
+        // A repeated key with no ':' after it: the duplicate is first in document order, the syntax error is behind it.
+        val both = """{"":1,""a":2}"""
+        assertEquals(RejectReason.DUPLICATE_KEY, rejected(both))
+        assertEquals(RejectReason.MALFORMED_JSON, assertIs<ParseResult.Rejected>(allowing(both)).reason)
+    }
+
+    @Test
     fun `numbers keep their spelling and the exponent range is checked`() {
         assertEquals(OArr(ONum("-0.0e+00"), ONum("1E5"), ONum("0.1e2147483647")), accepted("[-0.0e+00,1E5,0.1e2147483647]"))
         assertEquals(RejectReason.NUMBER_OUT_OF_RANGE, rejected("[0.1e2147483648]"))
