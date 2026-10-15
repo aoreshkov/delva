@@ -67,7 +67,7 @@ completion scripts are pinned the same way, in `delva-cli/src/test/resources/gol
 | [`long-tests.yml`](../.github/workflows/long-tests.yml) | Mondays, or by hand | `heapCappedTest` and `crashTest` on Linux and Windows; by hand, also the benchmark report and the long simulations on Linux |
 | [`codeql.yml`](../.github/workflows/codeql.yml) | pushes to `main`, pull requests, Wednesdays | CodeQL code scanning of the Kotlin and Java sources, from a build, and of the workflows |
 | [`release.yml`](../.github/workflows/release.yml) | a `v*` tag | see [RELEASING.md](RELEASING.md) |
-| [`dependency-submission.yml`](../.github/workflows/dependency-submission.yml) | pushes to `main` | submits the Gradle dependency graph, which GitHub can't read by itself, for Dependabot alerts |
+| [`dependency-submission.yml`](../.github/workflows/dependency-submission.yml) | pushes to `main` | submits the Gradle dependency graph, which GitHub can't read by itself, for Dependabot alerts: the runtime classpaths only, not the build's tooling |
 
 The long suites run on both operating systems because every durability and memory claim was first measured on one
 Windows machine, and a claim proven on one operating system is a claim about that operating system. The benchmark
