@@ -35,23 +35,25 @@ sealed interface ParseResult {
  * - A number whose normalized decimal exponent doesn't fit an `Int` is [RejectReason.NUMBER_OUT_OF_RANGE].
  * - Exceeding a [JsonLimits] value is [RejectReason.LIMIT_EXCEEDED]; depth counts open containers.
  *
- * The first problem in document order is reported.
+ * The first problem in document order is reported. With `allowDuplicateKeys`, a repeated key is not a problem and its
+ * first value is kept, which tells whether a document rejected for one has another problem too.
  */
 object OracleJson {
-    fun parse(bytes: ByteArray, limits: JsonLimits = JsonLimits()): ParseResult {
+    fun parse(bytes: ByteArray, limits: JsonLimits = JsonLimits(), allowDuplicateKeys: Boolean = false): ParseResult {
         if (bytes.size > limits.maxDocumentBytes) {
             return ParseResult.Rejected(RejectReason.LIMIT_EXCEEDED, "document has ${bytes.size} bytes")
         }
         val codePoints = decode(bytes)
         val start = if (codePoints.isNotEmpty() && codePoints[0] == BOM) 1 else 0
         return try {
-            ParseResult.Accepted(Parser(codePoints, start, limits).document())
+            ParseResult.Accepted(Parser(codePoints, start, limits, allowDuplicateKeys).document())
         } catch (e: Reject) {
             ParseResult.Rejected(e.reason, e.message ?: "")
         }
     }
 
-    fun parse(text: String, limits: JsonLimits = JsonLimits()): ParseResult = parse(text.toByteArray(), limits)
+    fun parse(text: String, limits: JsonLimits = JsonLimits(), allowDuplicateKeys: Boolean = false): ParseResult =
+        parse(text.toByteArray(), limits, allowDuplicateKeys)
 
     /** Parses or throws [DocumentRejectedException] (byte offset unknown: -1). */
     fun parseOrThrow(bytes: ByteArray, limits: JsonLimits = JsonLimits()): OValue =
@@ -103,7 +105,12 @@ object OracleJson {
 
     private class Reject(val reason: RejectReason, detail: String) : Exception(detail, null, false, false)
 
-    private class Parser(private val cp: IntArray, private var i: Int, private val limits: JsonLimits) {
+    private class Parser(
+        private val cp: IntArray,
+        private var i: Int,
+        private val limits: JsonLimits,
+        private val allowDuplicateKeys: Boolean,
+    ) {
         fun document(): OValue {
             skipWhitespace()
             val value = value(0)
@@ -139,12 +146,14 @@ object OracleJson {
                 skipWhitespace()
                 if (peek() != '"'.code) fail(RejectReason.MALFORMED_JSON, "expected a key")
                 val key = string(maxBytes = limits.maxKeyBytes.toLong())
-                if (!keys.add(key)) fail(RejectReason.DUPLICATE_KEY, "duplicate key")
+                val repeated = !keys.add(key)
+                if (repeated && !allowDuplicateKeys) fail(RejectReason.DUPLICATE_KEY, "duplicate key")
                 skipWhitespace()
                 if (peek() != ':'.code) fail(RejectReason.MALFORMED_JSON, "expected ':'")
                 i++
                 skipWhitespace()
-                members += key to value(depth)
+                val member = value(depth)
+                if (!repeated) members += key to member
                 skipWhitespace()
                 when (peek()) {
                     ','.code -> i++

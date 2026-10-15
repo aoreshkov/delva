@@ -34,6 +34,8 @@ import app.oreshkov.delva.testkit.json.ONum
 import app.oreshkov.delva.testkit.json.OObj
 import app.oreshkov.delva.testkit.json.OStr
 import app.oreshkov.delva.testkit.json.OValue
+import app.oreshkov.delva.testkit.json.OracleJson
+import app.oreshkov.delva.testkit.json.ParseResult
 import app.oreshkov.delva.testkit.oracle.JsonPath
 import app.oreshkov.delva.testkit.oracle.JsonPathOracle
 import app.oreshkov.delva.testkit.oracle.OCompareOptions
@@ -728,7 +730,8 @@ class ModelRunner(private var store: BlockingJsonStore, private val oracle: Orac
             expectedError == null && actualError == null -> check(expected.getOrThrow() == actual.getOrThrow(), "docId ${actual.getOrThrow()}, oracle ${expected.getOrThrow()}")
             expectedError is DocumentRejectedException && actualError is DocumentRejectedException ->
                 check(
-                    expectedError.reason == actualError.reason || keyBeforeParseError(expectedError, actualError),
+                    expectedError.reason == actualError.reason || keyBeforeParseError(expectedError, actualError) ||
+                        duplicateFoundLate(expectedError, actualError, bytes),
                     "rejected with ${actualError.reason}, oracle ${expectedError.reason} (${String(bytes)})",
                 )
             expectedError is WriteConflictException && actualError is WriteConflictException ->
@@ -749,6 +752,16 @@ class ModelRunner(private var store: BlockingJsonStore, private val oracle: Orac
     private fun keyBeforeParseError(expected: DocumentRejectedException, actual: DocumentRejectedException): Boolean =
         expected.jsonPath == null && actual.jsonPath != null && actual.jsonPath == store.creationOptions.documentKey &&
             (actual.reason == RejectReason.KEY_MISSING || actual.reason == RejectReason.LIMIT_EXCEEDED)
+
+    /**
+     * Whether the engine rejected a malformed document whose repeated key the oracle found first: once an object's
+     * keys have spilled, the engine compares a key with the spilled ones only when the object closes, so a syntax error
+     * before the close comes first. A document with both problems may be rejected for either; this holds only if the
+     * document, with repeated keys allowed, is still malformed.
+     */
+    private fun duplicateFoundLate(expected: DocumentRejectedException, actual: DocumentRejectedException, bytes: ByteArray): Boolean =
+        expected.reason == RejectReason.DUPLICATE_KEY && actual.reason == RejectReason.MALFORMED_JSON &&
+            (OracleJson.parse(bytes, allowDuplicateKeys = true) as? ParseResult.Rejected)?.reason == RejectReason.MALFORMED_JSON
 
     private fun search(op: ModelOp.Search) {
         val (key, value) = pickTerm(op.pick) ?: return
