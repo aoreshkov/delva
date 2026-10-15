@@ -36,13 +36,15 @@ fun main(args: Array<String>) {
 ```
 
 It is a Kotlin Multiplatform module with one target, the JVM (22 or newer); the Windows console call goes through the
-FFM API, so a program using it runs with `--enable-native-access=ALL-UNNAMED`.
+FFM API, so a program using it runs with `--enable-native-access=ALL-UNNAMED`. Its KDoc is on
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.delva/cli-kit).
 
 ## cli-kit-testing
 
 The companion `cli-kit-testing` (`app.oreshkov.delva:cli-kit-testing`, a test dependency) runs a program in-process
 against a recording terminal — with typed answers to prompts, standard input and interrupts — and pins every help
-page and completion script of a command tree with golden files in one call:
+page and completion script of a command tree with golden files in one call (its KDoc is on
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.delva/cli-kit-testing)):
 
 ```kotlin
 @Test

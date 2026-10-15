@@ -1,6 +1,8 @@
 # Delva
 
 [![CI](https://github.com/aoreshkov/delva/actions/workflows/ci.yml/badge.svg)](https://github.com/aoreshkov/delva/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/app.oreshkov.delva/delva)](https://central.sonatype.com/artifact/app.oreshkov.delva/delva)
+[![KDoc](https://img.shields.io/badge/KDoc-latest-blue.svg)](https://aoreshkov.github.io/delva/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 An embedded JSON document database engine for the JVM, written in Kotlin.
@@ -50,7 +52,8 @@ JsonStore.openOrCreate(Path.of("data/store")).use { store ->
 }
 ```
 
-The [guide](project/GUIDE.md) covers the suspending functions that `blocking()` wraps, and everything else.
+The [guide](project/GUIDE.md) covers the suspending functions that `blocking()` wraps, and everything else; the
+[KDoc](https://aoreshkov.github.io/delva/) documents every public declaration.
 
 ## Features
 
