@@ -1,5 +1,7 @@
 # Weekly updates, grouped so a week's worth arrives as one pull request per ecosystem. A version update waits out a
 # cooldown after its release, so one that is pulled soon after it ships never arrives; security updates don't wait.
+# Security updates are grouped too, apart from version updates: a group applies to one kind only, and without its
+# own group each security update would arrive as a pull request of its own.
 version: 2
 updates:
   # The SHA pins in the workflows and the setup action, with their version comments.
@@ -12,6 +14,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   # gradle/libs.versions.toml, the build-logic plugins and the Gradle wrapper.
   - package-ecosystem: gradle
@@ -23,4 +28,7 @@ updates:
       semver-major-days: 14
     groups:
       gradle:
+        patterns: ["*"]
+      gradle-security:
+        applies-to: security-updates
         patterns: ["*"]
