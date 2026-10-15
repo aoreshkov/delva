@@ -10,7 +10,8 @@ dependencies {
 ```
 
 It adds `kotlinx-serialization-json` to your dependencies; the core `delva` artifact doesn't depend on it. Its JPMS
-module name is `app.oreshkov.delva.serialization`.
+module name is `app.oreshkov.delva.serialization`, and its KDoc is on
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.delva/delva-kotlinx-serialization).
 
 ```kotlin
 @Serializable
