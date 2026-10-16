@@ -4,6 +4,8 @@ plugins {
 
 description = "cli-kit-testing: test doubles, a run harness and golden files for programs built on cli-kit"
 
+group = "app.oreshkov.clikit"
+
 // Published beside cli-kit, same group and version, for a program's tests: a program's own copy of a test double
 // drifts from the kit it doubles. Test-only in spirit, so it depends on cli-kit and kotlin-test and nothing else;
 // `checkPublishedDependencies` asserts that of the published module metadata rather than trusting this comment.
@@ -26,7 +28,7 @@ tasks.named<Jar>("jvmJar") {
 }
 
 val allowedPublishedModules = setOf(
-    "app.oreshkov.delva:cli-kit",
+    "app.oreshkov.clikit:cli-kit",
     "org.jetbrains.kotlin:kotlin-stdlib",
     "org.jetbrains.kotlin:kotlin-test",
     "org.jetbrains.kotlin:kotlin-test-junit5",
@@ -50,7 +52,7 @@ val checkPublishedDependencies = tasks.register("checkPublishedDependencies") {
             .toSortedSet()
         val unexpected = found - allowed
         check(unexpected.isEmpty()) { "cli-kit-testing would publish unexpected dependencies: $unexpected (all: $found)" }
-        check("app.oreshkov.delva:cli-kit" in found) { "cli-kit-testing must publish its dependency on cli-kit (all: $found)" }
+        check("app.oreshkov.clikit:cli-kit" in found) { "cli-kit-testing must publish its dependency on cli-kit (all: $found)" }
     }
 }
 

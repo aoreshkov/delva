@@ -1,6 +1,6 @@
 # cli-kit
 
-`cli-kit` (`app.oreshkov.delva:cli-kit`, package `app.oreshkov.clikit`) is a separate library that shares this
+`cli-kit` (`app.oreshkov.clikit:cli-kit`, package `app.oreshkov.clikit`) is a separate library that shares this
 repository: the machinery of a command-line program. It depends on the Kotlin standard library and nothing else, not
 even Delva, and knows no command of any program's: a program declares its own tree and its handlers.
 
@@ -37,14 +37,15 @@ fun main(args: Array<String>) {
 
 It is a Kotlin Multiplatform module with one target, the JVM (22 or newer); the Windows console call goes through the
 FFM API, so a program using it runs with `--enable-native-access=ALL-UNNAMED`. Its KDoc is on
-[javadoc.io](https://javadoc.io/doc/app.oreshkov.delva/cli-kit).
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit). Both modules were published under the group
+`app.oreshkov.delva` up to 0.1.0 ([changelog](../CHANGELOG.md)).
 
 ## cli-kit-testing
 
-The companion `cli-kit-testing` (`app.oreshkov.delva:cli-kit-testing`, a test dependency) runs a program in-process
+The companion `cli-kit-testing` (`app.oreshkov.clikit:cli-kit-testing`, a test dependency) runs a program in-process
 against a recording terminal — with typed answers to prompts, standard input and interrupts — and pins every help
 page and completion script of a command tree with golden files in one call (its KDoc is on
-[javadoc.io](https://javadoc.io/doc/app.oreshkov.delva/cli-kit-testing)):
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit-testing)):
 
 ```kotlin
 @Test
