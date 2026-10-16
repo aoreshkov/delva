@@ -77,6 +77,14 @@ public class SystemTerminalIo(
     @Volatile
     private var finished = false
 
+    /** Whether this terminal wrote to stdout at all; see [stdoutState]. */
+    @Volatile
+    private var wroteStdout = false
+
+    private fun markWritten() {
+        if (!wroteStdout) wroteStdout = true
+    }
+
     /**
      * Registers [action] to run if the JVM shuts down while it is registered: on Ctrl-C or SIGTERM, which end the JVM
      * through its shutdown hooks rather than through the command. The first call installs this instance's shutdown
@@ -131,6 +139,7 @@ public class SystemTerminalIo(
     }
 
     override fun out(text: String) {
+        markWritten()
         stdout.print(text)
         if (interactive) stdout.flush()
     }
@@ -144,9 +153,13 @@ public class SystemTerminalIo(
         stdout.flush()
     }
 
-    /** `PrintStream` swallows a failed write, and only [PrintStream.checkError] tells of it. */
+    /**
+     * `PrintStream` swallows a failed write, and only [PrintStream.checkError] tells of it. That flag belongs to the
+     * stream, not to this terminal: on a stream the caller shares, such as `System.out` under a protocol's own writer,
+     * another writer's failure sets it too. A terminal that wrote nothing has no payload to lose, so it ignores the flag.
+     */
     override fun stdoutState(): StdoutState = when {
-        !stdout.checkError() -> StdoutState.Written
+        !wroteStdout || !stdout.checkError() -> StdoutState.Written
         stdoutIsPipe() -> StdoutState.ReaderGone
         else -> StdoutState.Failed
     }
@@ -155,10 +168,12 @@ public class SystemTerminalIo(
         if (!interactive || stdout.charset() == Charsets.UTF_8) {
             object : OutputStream() {
                 override fun write(b: Int) {
+                    markWritten()
                     stdout.write(b)
                 }
 
                 override fun write(b: ByteArray, off: Int, len: Int) {
+                    markWritten()
                     stdout.write(b, off, len)
                 }
 

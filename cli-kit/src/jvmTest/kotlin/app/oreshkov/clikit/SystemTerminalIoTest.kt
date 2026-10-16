@@ -90,6 +90,40 @@ class SystemTerminalIoTest {
         assertEquals(StdoutState.Written, written.stdoutState())
     }
 
+    /** `System.out` after a protocol's own writer on it failed, such as when its client hung up. */
+    private fun sharedFailedStream() = object : PrintStream(ByteArrayOutputStream(), false, Charsets.UTF_8) {
+        override fun checkError() = true
+    }
+
+    @Test
+    fun `a terminal that wrote nothing is not blamed for another writer's failure`() {
+        fun io() = SystemTerminalIo(interactive = false, stdout = sharedFailedStream(), stderr = Capture(Charsets.UTF_8).stream)
+
+        val silent = io()
+        silent.flush()
+        assertEquals(StdoutState.Written, silent.stdoutState())
+
+        val text = io()
+        text.out("x")
+        assertEquals(StdoutState.Failed, text.stdoutState(), "what it wrote may be lost")
+
+        val bytes = io()
+        bytes.payload.write(byteArrayOf(1), 0, 1)
+        assertEquals(StdoutState.Failed, bytes.stdoutState(), "the payload counts as written")
+    }
+
+    @Test
+    fun `a command that writes nothing exits 0 on a stream another writer broke`() {
+        val serve = CommandSpec("serve", "Run until stopped")
+        val program = Program(serve, "serve 1", mapOf(serve to CommandHandler { ExitStatus.OK }))
+        val err = Capture(Charsets.UTF_8)
+
+        val status = program.run(emptyArray(), SystemTerminalIo(interactive = false, stdout = sharedFailedStream(), stderr = err.stream))
+
+        assertEquals(ExitStatus.OK, status)
+        assertEquals("", err.bytes.toString(Charsets.UTF_8))
+    }
+
     @Test
     fun `the failure this guards against, spelled out`() {
         // Not a test of this module — a test of the platform behaviour the charset decision exists for, so

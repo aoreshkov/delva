@@ -12,6 +12,10 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `cli-kit` and `cli-kit-testing` are published under the Maven group `app.oreshkov.clikit`, matching their package
   and module names. 0.1.0 was their last release under `app.oreshkov.delva`, so change the group when updating.
 
+### Fixed
+
+- `cli-kit`: a run that wrote nothing to stdout no longer exits 74 when another writer on the same stream failed.
+
 ## [0.1.0] - 2026-10-15
 
 First public release.
