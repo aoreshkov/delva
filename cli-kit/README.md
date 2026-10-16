@@ -35,10 +35,52 @@ fun main(args: Array<String>) {
 }
 ```
 
-It is a Kotlin Multiplatform module with one target, the JVM (22 or newer); the Windows console call goes through the
-FFM API, so a program using it runs with `--enable-native-access=ALL-UNNAMED`. Its KDoc is on
+It is a Kotlin Multiplatform module with one target, the JVM (22 or newer). Its KDoc is on
 [javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit). Both modules were published under the group
 `app.oreshkov.delva` up to 0.1.0 ([changelog](../CHANGELOG.md)).
+
+## Native access
+
+The kit calls native code only on Windows, through the FFM API: at a console, to turn on escape sequences, and after
+a write to stdout failed, to tell a pipe whose reader left from a real failure. A program whose stdio is piped or
+redirected makes no native call while its writes succeed. Grant the access in the start script:
+
+```kotlin
+application {
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
+}
+```
+
+On the module path, name the module instead: `--enable-native-access=app.oreshkov.clikit`. A JAR run with `java -jar`
+can carry `Enable-Native-Access: ALL-UNNAMED` in its manifest.
+
+Without the grant, the JDK prints a warning on stderr the first time, and nothing else changes. If the JDK denies the
+call, as [JEP 472](https://openjdk.org/jeps/472) plans to make the default, the kit carries on without it. Output at a
+Windows console is then monochrome, and a reader that leaves a pipe is reported as a failed write (exit status 74).
+
+## A command that runs until it's stopped
+
+A server, or anything else that runs until Ctrl-C or SIGTERM, keeps `runAndExit`. Its handler registers what stopping
+takes with `onInterrupt`, and with an action registered nothing prints `interrupted`. The action runs on a shutdown
+hook while the handler is still running, and the process ends once the hook returns, so the action bounds its own
+wait. With kotlinx-coroutines:
+
+```kotlin
+val serve = CommandHandler { context ->
+    runBlocking {
+        val server = launch { serveUntilCancelled() }
+        context.onInterrupt {
+            server.cancel()
+            runBlocking { withTimeoutOrNull(5.seconds) { server.join() } }
+        }.use { server.join() }   // a server that stops by itself unregisters the action
+    }
+    ExitStatus.OK
+}
+```
+
+The program's stdout can carry a protocol, as an MCP server's does on stdio. The kit writes to it only for help, `--version` and
+`completion`; usage errors, failures and notices go to stderr. A terminal that wrote nothing to stdout isn't blamed for
+another writer's failed write, so a client hanging up doesn't turn exit status 0 into 74.
 
 ## cli-kit-testing
 

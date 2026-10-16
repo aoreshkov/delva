@@ -71,7 +71,8 @@ public interface TerminalIo {
     /**
      * Whether stdout took everything written to it, asked once [flush] has run. A stream that failed — a full disk, a
      * closed pipe — must not end in exit status 0 over a truncated payload, so [Program.run] turns anything but
-     * [StdoutState.Written] into [ExitStatus.IO_ERR].
+     * [StdoutState.Written] into [ExitStatus.IO_ERR]. Only what this terminal wrote counts: one that wrote nothing
+     * answers [StdoutState.Written], whatever another writer sharing the stream ran into.
      */
     public fun stdoutState(): StdoutState = StdoutState.Written
 }
