@@ -82,7 +82,7 @@ public object StandardOptions {
     public val width: Option.Single<Int> = Option.Single(
         "--width",
         Converters.positiveInt,
-        help = "Table width",
+        help = "Columns to fit output to",
         valueName = "n",
         defaultDisplay = "\$COLUMNS or 80",
     )
@@ -96,7 +96,7 @@ public object StandardOptions {
      * where nothing has been configured.
      *
      * The help text deliberately does not spell the `eval "$(prog completion zsh)"` line, tempting
-     * as that is: help strings are embedded verbatim into the fish and zsh scripts as descriptions,
+     * as that is: the first line of a help string is embedded into the fish and zsh scripts as a description,
      * and a generated completion script that appears to shell back into the program is exactly what
      * the "no dynamic values" test looks for.
      */
@@ -312,7 +312,8 @@ public class Program(
     }
 
     private fun dispatch(args: Array<String>, io: TerminalIo): Int {
-        val help = HelpRenderer(io.styler)
+        // Prose past 100 columns is hard to read, however wide the terminal.
+        val help = HelpRenderer(io.styler, null, minOf(io.width, MAX_HELP_WIDTH))
         return when (val parsed = Parser(root, environment).parse(args)) {
             is ParseResult.Help -> {
                 // Help is the payload when it was asked for, and noise when it follows an error —
@@ -373,6 +374,9 @@ public class Program(
         return failure.status
     }
 }
+
+/** The widest a help page [Program] prints is wrapped to. */
+private const val MAX_HELP_WIDTH = 100
 
 /**
  * Reports [error], which the program didn't expect, as a bug in [program]: one line, then the stack trace when

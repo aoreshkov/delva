@@ -2,6 +2,7 @@ package app.oreshkov.clikit
 
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** The four generators over the fixture tree: their shape pinned, and their coverage asserted. */
@@ -45,6 +46,20 @@ class CompletionGeneratorTest {
             names.forEach { name ->
                 assertContains(script, name, message = "${shell.id} script omits '$name'")
             }
+        }
+    }
+
+    @Test
+    fun `a help of several lines gives the scripts its first line alone gives`() {
+        // A zsh description or a fish `-d` can't hold a line break, so the scripts take the summary.
+        fun tree(help: String) = CommandSpec(
+            "demo",
+            options = listOf(Option.Flag("--fast", help = help)),
+            subcommands = listOf(CommandSpec("run", help = help), CommandSpec("stop")),
+        )
+        val long = "Runs it now.\nThen waits for it to finish.\n\nA paragraph that says more."
+        Shell.entries.forEach { shell ->
+            assertEquals(generator.generate(shell, tree("Runs it now.")), generator.generate(shell, tree(long)), shell.id)
         }
     }
 

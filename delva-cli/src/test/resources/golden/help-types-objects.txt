@@ -8,7 +8,8 @@ Arguments:
 
 Options:
       --after <node>  Resume after this object, as doc:node
-  -n, --limit <n>     At most n results; a notice says how to get the rest [default: all]
+  -n, --limit <n>     At most n results; a notice says how to get the rest
+                      [default: all]
   -e, --exit-status   Exit 1 when nothing was found
 
 Global options:
@@ -17,4 +18,4 @@ Global options:
   -v, --verbose      More detail on stderr
   -q, --quiet        Nothing on stderr but errors
       --no-color     Never emit colour
-      --width <n>    Table width [default: $COLUMNS or 80]
+      --width <n>    Columns to fit output to [default: $COLUMNS or 80]

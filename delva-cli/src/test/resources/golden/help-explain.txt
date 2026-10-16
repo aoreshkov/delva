@@ -7,7 +7,8 @@ Arguments:
   query  An RFC 9535 JSONPath query
 
 Options:
-      --where <filter>  Only the documents whose root passes this filter, such as "@.kind == 'order'"
+      --where <filter>  Only the documents whose root passes this filter, such
+                        as "@.kind == 'order'"
 
 Global options:
   -s, --store <dir>  The store directory [env: DELVA_STORE]
@@ -15,4 +16,4 @@ Global options:
   -v, --verbose      More detail on stderr
   -q, --quiet        Nothing on stderr but errors
       --no-color     Never emit colour
-      --width <n>    Table width [default: $COLUMNS or 80]
+      --width <n>    Columns to fit output to [default: $COLUMNS or 80]

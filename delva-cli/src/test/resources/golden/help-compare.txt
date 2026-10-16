@@ -15,9 +15,11 @@ Arguments:
   b  The same, for the other side
 
 Options:
-  -d, --diff                 List the differences, not just whether there are any
+  -d, --diff                 List the differences, not just whether there are
+                             any
       --ignore-key <key>     Leave out members with this key, at any depth
-      --ignore-path <path>   Leave out the value at this path, such as $.updatedAt
+      --ignore-path <path>   Leave out the value at this path, such as
+                             $.updatedAt
       --types                Objects differ when their assigned types do
       --max-differences <n>  Stop after n differences [default: 1000]
 
@@ -27,4 +29,4 @@ Global options:
   -v, --verbose      More detail on stderr
   -q, --quiet        Nothing on stderr but errors
       --no-color     Never emit colour
-      --width <n>    Table width [default: $COLUMNS or 80]
+      --width <n>    Columns to fit output to [default: $COLUMNS or 80]

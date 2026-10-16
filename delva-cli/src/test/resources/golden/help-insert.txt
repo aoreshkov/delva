@@ -20,9 +20,12 @@ Arguments:
   file  JSON documents, or - for one from standard input
 
 Options:
-  -t, --type <path=Type>  Give the objects a path names a type, as <jsonpath>=<Type>; repeat for more
-      --replace <doc>     Delete this document in the same change, if it still exists (one file only); repeat for more
-  -u, --upsert            Replace the document that has the same key, in the same change (a store created with --document-key)
+  -t, --type <path=Type>  Give the objects a path names a type, as
+                          <jsonpath>=<Type>; repeat for more
+      --replace <doc>     Delete this document in the same change, if it still
+                          exists (one file only); repeat for more
+  -u, --upsert            Replace the document that has the same key, in the
+                          same change (a store created with --document-key)
 
 Global options:
   -s, --store <dir>  The store directory [env: DELVA_STORE]
@@ -30,4 +33,4 @@ Global options:
   -v, --verbose      More detail on stderr
   -q, --quiet        Nothing on stderr but errors
       --no-color     Never emit colour
-      --width <n>    Table width [default: $COLUMNS or 80]
+      --width <n>    Columns to fit output to [default: $COLUMNS or 80]

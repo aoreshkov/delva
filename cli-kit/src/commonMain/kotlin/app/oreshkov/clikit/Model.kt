@@ -63,7 +63,10 @@ public sealed class Option(
     public val long: String,
     /** The short name, with its dash, such as `-n`, or `null`. */
     public val short: String?,
-    /** One line for help; empty for none. */
+    /**
+     * What help says about it, wrapped as [HelpRenderer] describes, so it can run to paragraphs; empty for none. The
+     * completion scripts show its first line.
+     */
     public val help: String,
     /** Kept out of `--help` and completions, for a debug flag. */
     public val hidden: Boolean,
@@ -163,7 +166,7 @@ public sealed class Option(
 public sealed class Argument(
     /** The name help shows, as `<name>`. */
     public val name: String,
-    /** One line for help; empty for none. */
+    /** What help says about it, wrapped as [HelpRenderer] describes; empty for none. */
     public val help: String,
     /** Whether the command line must give it. */
     public val required: Boolean,
@@ -196,7 +199,10 @@ public sealed class Argument(
     ) : Argument(name, help, required)
 }
 
-/** A command line as help shows it, [commandLine], with a line saying what it does, [description]. */
+/**
+ * A command line as help shows it, [commandLine], never wrapped, with a comment saying what it does, [description],
+ * wrapped as [HelpRenderer] describes.
+ */
 public class Example(public val commandLine: String, public val description: String) {
     init {
         require(commandLine.isNotBlank() && '\n' !in commandLine) { "an example is one command line" }
@@ -216,7 +222,10 @@ public class Example(public val commandLine: String, public val description: Str
 public class CommandSpec(
     /** The word that selects the command; the program's name for the root. */
     public val name: String,
-    /** What the command does, for help. */
+    /**
+     * What the command does, at the top of its help page, wrapped as [HelpRenderer] describes. Its first line is the
+     * summary that the command list of the command above it and the completion scripts show.
+     */
     public val help: String = "",
     /** Its own options; those of the commands above it apply too. */
     public val options: List<Option> = emptyList(),
@@ -228,7 +237,7 @@ public class CommandSpec(
     public val runnable: Boolean = subcommands.isEmpty(),
     /** Shown in help right after the usage line: most readers want an example before a list of options. */
     public val examples: List<Example> = emptyList(),
-    /** A closing paragraph of the help page, such as where the documentation and issue tracker are. */
+    /** The close of the help page, such as where the documentation and issue tracker are; wrapped as [help] is. */
     public val epilogue: String? = null,
     /**
      * Rules between options and arguments — "not both", "exactly one of", "this needs that" — that the parser checks
