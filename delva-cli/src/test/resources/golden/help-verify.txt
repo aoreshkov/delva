@@ -1,4 +1,5 @@
-Read the whole store and report any damage, changing nothing; exits 1 when there is some
+Read the whole store and report any damage, changing nothing; exits 1 when there
+is some
 
 Usage:
   delva verify [options]
@@ -9,4 +10,4 @@ Global options:
   -v, --verbose      More detail on stderr
   -q, --quiet        Nothing on stderr but errors
       --no-color     Never emit colour
-      --width <n>    Table width [default: $COLUMNS or 80]
+      --width <n>    Columns to fit output to [default: $COLUMNS or 80]

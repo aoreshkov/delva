@@ -42,7 +42,8 @@ Micro-benchmarks of internals: `./gradlew :delva:jmhBenchmark`.
 
 ## Reproducing a failure
 
-Property and simulation tests print the seed of a failing case. Rerun just that case with:
+Property and simulation tests print the seed of a failing case. Rerun just that case with the command below. cli-kit's
+own property tests run under `:cli-kit:jvmTest` and take only the seed.
 
 ```shell
 ./gradlew test --tests <Class> -Ddelva.seed=<seed> -Ddelva.size=<size>

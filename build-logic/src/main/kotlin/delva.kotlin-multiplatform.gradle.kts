@@ -5,6 +5,7 @@
 //
 // Tests run on the JVM target as `jvmTest`, part of `check`, with none of delva.kotlin-jvm's special suites.
 // Rewrite golden files: ./gradlew <module>:jvmTest -Ddelva.updateGolden=true
+// Reproduce a property failure: ./gradlew <module>:jvmTest --tests <Class> -Ddelva.seed=<seed>
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
@@ -45,12 +46,13 @@ tasks.withType<JavaCompile>().configureEach {
     options.release = 22
 }
 
-val updateGolden = providers.systemProperty("delva.updateGolden")
+val forwardedSystemProperties = listOf("delva.updateGolden", "delva.seed")
+    .associateWith { providers.systemProperty(it) }
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     // Forwarded from the Gradle command line to the test JVM.
-    updateGolden.orNull?.let { systemProperty("delva.updateGolden", it) }
+    forwardedSystemProperties.forEach { (name, value) -> value.orNull?.let { systemProperty(name, it) } }
     testLogging {
         events("failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

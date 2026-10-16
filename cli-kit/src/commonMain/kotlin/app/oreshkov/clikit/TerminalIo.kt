@@ -30,7 +30,7 @@ public interface TerminalIo {
     /** Whether stdout is an interactive terminal — the one question colour and progress turn on. */
     public val interactive: Boolean
 
-    /** Columns to render tables at. */
+    /** Columns to fit output to: tables, and help pages up to 100. */
     public val width: Int
 
     /** Applies the colours and bold the output uses; [Styler.Plain] when colour is off. */

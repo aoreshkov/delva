@@ -7,10 +7,17 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
+### Added
+
+- `cli-kit`: `HelpRenderer(styler, programName, width)`, a renderer that wraps to a given width.
+
 ### Changed
 
 - `cli-kit` and `cli-kit-testing` are published under the Maven group `app.oreshkov.clikit`, matching their package
   and module names. 0.1.0 was their last release under `app.oreshkov.delva`, so change the group when updating.
+- `cli-kit`: help pages wrap to the terminal width, at most 100 columns. A `help` text can hold paragraphs and line
+  breaks; command lists and completion scripts show its first line.
+- `delva-cli`: help fits 80 columns by default, and `--width` sets the width of help as well as tables.
 
 ### Fixed
 

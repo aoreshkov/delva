@@ -211,6 +211,7 @@ public final class app/oreshkov/clikit/Format {
 public final class app/oreshkov/clikit/HelpRenderer {
 	public fun <init> ()V
 	public fun <init> (Lapp/oreshkov/clikit/Styler;Ljava/lang/String;)V
+	public fun <init> (Lapp/oreshkov/clikit/Styler;Ljava/lang/String;I)V
 	public synthetic fun <init> (Lapp/oreshkov/clikit/Styler;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun render (Ljava/util/List;)Ljava/lang/String;
 	public final fun usageLine (Ljava/util/List;)Ljava/lang/String;

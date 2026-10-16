@@ -169,9 +169,9 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("  case \"\$cmdpath\" in")
         for (path in tree.paths) {
             val entries = (
-                path.last().subcommands.map { "${it.name.escapeForZsh()}:${it.help.escapeForZsh()}" } +
+                path.last().subcommands.map { "${it.name.escapeForZsh()}:${HelpText.summary(it.help).escapeForZsh()}" } +
                     tree.argumentChoices(path).map { it.escapeForZsh() } +
-                    tree.options(path).map { "${it.long}:${it.help.escapeForZsh()}" }
+                    tree.options(path).map { "${it.long}:${HelpText.summary(it.help).escapeForZsh()}" }
                 ).joinToString(" ") { "'$it'" }
             appendLine("    \"${tree.words(path)}\") candidates=($entries) ;;")
         }
@@ -212,7 +212,7 @@ public class CompletionGenerator(private val programName: String? = null) {
         for (path in tree.paths) {
             val condition = "'$at${tree.words(path).let { if (it.isEmpty()) "" else " $it" }}'"
             path.last().subcommands.forEach {
-                appendLine("complete -c $program -n $condition -a '${it.name}' -d '${it.help.escapeForShell()}'")
+                appendLine("complete -c $program -n $condition -a '${it.name}' -d '${HelpText.summary(it.help).escapeForShell()}'")
             }
             val argumentChoices = tree.argumentChoices(path)
             if (argumentChoices.isNotEmpty()) {
@@ -229,7 +229,7 @@ public class CompletionGenerator(private val programName: String? = null) {
                 }
                 appendLine(
                     "complete -c $program -n $condition -l ${option.long.removePrefix("--")}" +
-                        "$short$value -d '${option.help.escapeForShell()}'",
+                        "$short$value -d '${HelpText.summary(option.help).escapeForShell()}'",
                 )
             }
         }

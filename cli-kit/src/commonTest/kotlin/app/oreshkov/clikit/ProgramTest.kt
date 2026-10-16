@@ -64,6 +64,16 @@ class ProgramTest {
     }
 
     @Test
+    fun `help is wrapped to the terminal's width, but never past 100 columns`() {
+        val wordy = CommandSpec("wordy", List(60) { "word" }.joinToString(" "))
+        val program = Program(wordy, "wordy 1.0", mapOf(wordy to CommandHandler { 0 }))
+        fun widest(width: Int) = program.record("--help", io = RecordingTerminalIo(width = width)).stdout.lines().maxOf { it.length }
+        assertEquals(59, widest(60))
+        assertEquals(99, widest(100))
+        assertEquals(99, widest(200))
+    }
+
+    @Test
     fun `completion is answered without a handler`() {
         val result = run("completion", "bash") { error("dispatched") }
         assertEquals(ExitStatus.OK, result.status)
