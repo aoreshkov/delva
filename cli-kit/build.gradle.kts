@@ -4,6 +4,10 @@ plugins {
 
 description = "cli-kit: parser, help, completions, tables, terminal I/O and a program runner for command-line tools"
 
+// Its own Maven group, matching its package and JPMS name, rather than the root's `app.oreshkov.delva`: the kit is a
+// library in its own right, and a program using it shouldn't depend on coordinates named after a database.
+group = "app.oreshkov.clikit"
+
 // No dependencies, deliberately: cli-kit depends on the Kotlin standard library and nothing else, not even delva, and
 // knows no command of any program's; a program declares its own tree of `CommandSpec`s. That is what keeps it reusable
 // as it stands, and what makes its `commonMain` compile for Kotlin/Native the day a native target appears.

@@ -27,7 +27,7 @@ distributions {
 // accident would ship in every release zip, so the resolved runtime classpath is checked rather than trusted.
 val allowedRuntimeModules = setOf(
     "app.oreshkov.delva:delva",
-    "app.oreshkov.delva:cli-kit",
+    "app.oreshkov.clikit:cli-kit",
     "org.jetbrains.kotlin:kotlin-stdlib",
     "org.jetbrains:annotations",
     "org.jetbrains.kotlinx:kotlinx-coroutines-core",

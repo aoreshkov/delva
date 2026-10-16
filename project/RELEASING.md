@@ -7,7 +7,9 @@ release; nothing in the repository holds keys or credentials.
 ## One-time setup
 
 1. **Namespace**: the `app.oreshkov` namespace has to be verified in the Central Portal (it is verified by proving
-   control of `oreshkov.app`). Until it is, uploads fail with an authorization error.
+   control of `oreshkov.app`). Until it is, uploads fail with an authorization error. It covers both groups a release
+   publishes: `app.oreshkov.delva` for delva and delva-kotlinx-serialization, and `app.oreshkov.clikit` for cli-kit
+   and cli-kit-testing.
 2. **Signing key**: a PGP key used only to sign Delva releases, with an expiry date. It signs with its primary key and has
    no signing subkey, because Maven Central checks signatures against primary keys. Its public half is on
    `keyserver.ubuntu.com`, and also on `keys.openpgp.org` with its e-mail address confirmed, since that server leaves
