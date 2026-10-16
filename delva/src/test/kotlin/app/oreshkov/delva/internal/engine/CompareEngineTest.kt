@@ -303,7 +303,8 @@ class CompareEngineTest {
         val oracleOptions = OracleOptions(limits = JsonLimits(maxDepth = 512, maxKeyBytes = atom, maxNumberLength = minOf(4096, atom)))
         var differences = 0L
         var equal = 0L
-        var caseCount = 0
+        var storeCases = 0
+        var storeChars = 0L
         var store: Engine? = null
         lateinit var oracle: OracleStore
 
@@ -320,15 +321,21 @@ class CompareEngineTest {
 
         try {
             forAll("compare T=$t" + if (flushes) " with flushes" else "", cases(t), iterations = iterations, maxSize = maxSize) { case ->
-                // A new store and oracle now and then: the oracle keeps every document with its postings in memory.
-                if (caseCount++ % STORE_CASES == 0) {
+                val aText = JsonText.minified(case.a)
+                val bText = JsonText.minified(case.b)
+                // A new store and oracle every few cases, and sooner when their documents add up: the oracle keeps every
+                // document with its postings in memory, and the simulated file system keeps the store's files there
+                // too. At T = 64 KiB the largest cases run to megabytes each, and a few of them in one store overflowed
+                // the test JVM's heap.
+                storeChars += aText.length + bText.length
+                if (store == null || ++storeCases > STORE_CASES || storeChars > STORE_CHARS) {
                     store?.close()
                     store = TestEngines.open(options(t, literalMemoryBytes = 2048, compareCacheBytes = 16L shl 10, flushes = flushes))
                     oracle = OracleStore(oracleOptions.copy(firstDocId = store.registry.peekNextDocId()))
+                    storeCases = 1
+                    storeChars = (aText.length + bText.length).toLong()
                 }
-                val store = store!!
-                val aText = JsonText.minified(case.a)
-                val bText = JsonText.minified(case.b)
+                val store: Engine = store
                 val aId = insert(aText) ?: return@forAll
                 val bId = insert(bText) ?: return@forAll
                 val engineDiffOptions = engineOptions(case.options)
@@ -385,5 +392,6 @@ class CompareEngineTest {
     private companion object {
         val ITERATIONS = System.getProperty("delva.compare.iterations")?.toInt() ?: 200
         const val STORE_CASES = 20
+        const val STORE_CHARS = 2L shl 20
     }
 }
