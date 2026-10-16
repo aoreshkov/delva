@@ -41,7 +41,7 @@ enum class JsonProfile {
 
 /**
  * Sized JSON generators. `size` bounds the number of values roughly; [fragmentSize] sets the long-string edge for
- * [JsonProfile.STRING_EDGES].
+ * [JsonProfile.STRING_EDGES], where a string of that length counts as one value per 64 characters.
  */
 class JsonGen(val profile: JsonProfile = JsonProfile.MIXED, val fragmentSize: Int = 64 * 1024) {
     fun value(): Gen<OValue> = Gen { random, size -> Builder(random, maxOf(size, 1)).document() }
@@ -148,7 +148,12 @@ class JsonGen(val profile: JsonProfile = JsonProfile.MIXED, val fragmentSize: In
                 JsonProfile.HOT_KEYS, JsonProfile.ARRAYS_OF_OBJECTS -> HOT_VALUES[random.nextInt(HOT_VALUES.size)]
                 JsonProfile.STRING_EDGES -> when (random.nextInt(3)) {
                     0 -> string(random.nextInt(60, 70), unicode = false)
-                    1 -> string(fragmentSize + random.nextInt(-4, 5), unicode = random.nextBoolean())
+                    1 -> {
+                        // Charged by length, so the size bounds the document's bytes too: counted as one value
+                        // each, these strings made T = 64 KiB documents of tens of megabytes.
+                        budget -= fragmentSize / CHARS_PER_VALUE
+                        string(fragmentSize + random.nextInt(-4, 5), unicode = random.nextBoolean())
+                    }
                     else -> string(random.nextInt(0, 20), unicode = false)
                 }
                 JsonProfile.UNICODE -> string(random.nextInt(0, 30), unicode = true)
@@ -222,5 +227,7 @@ class JsonGen(val profile: JsonProfile = JsonProfile.MIXED, val fragmentSize: In
 
         /** Values as (significand, power of ten). */
         private val NUMBER_POOL = listOf(0L to 0, 1L to 0, -1L to 0, 15L to -1, 7L to 2, -25L to -3, 1L to 20)
+
+        private const val CHARS_PER_VALUE = 64
     }
 }
