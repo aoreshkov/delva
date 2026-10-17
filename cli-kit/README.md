@@ -40,8 +40,29 @@ fun main(args: Array<String>) {
 ```
 
 It is a Kotlin Multiplatform module with one target, the JVM (22 or newer). Its KDoc is on
-[javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit). Both modules were published under the group
-`app.oreshkov.delva` up to 0.1.0 ([changelog](../CHANGELOG.md)).
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit).
+
+## Installation
+
+cli-kit is published to Maven Central. A build depends on the root coordinates, and Gradle picks the JVM variant:
+
+```kotlin
+dependencies {
+    implementation("app.oreshkov.clikit:cli-kit:0.2.0")
+    testImplementation("app.oreshkov.clikit:cli-kit-testing:0.2.0")
+}
+```
+
+Their JPMS module names are `app.oreshkov.clikit` and `app.oreshkov.clikit.testing`. Both modules were published
+under the group `app.oreshkov.delva` up to 0.1.0 ([changelog](../CHANGELOG.md#010---2026-10-15)).
+
+## Versioning
+
+cli-kit is released on its own, with [its own changelog](CHANGELOG.md), and its versions follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) independently of Delva's: a cli-kit version says nothing
+about a Delva version. cli-kit-testing always has the version of the cli-kit it tests. Until 1.0, a minor version can
+change the API incompatibly, and the changelog says what to change when updating; what is marked
+[experimental](#experimental-api) may change in any minor version.
 
 ## Native access
 
@@ -120,7 +141,7 @@ required option is left unset, the error says what was given: `missing required 
 ## Experimental API
 
 `@ExperimentalCliKitApi` marks what is new and may still change, in signature or behaviour, in a minor release. Using
-it needs `@OptIn(ExperimentalCliKitApi::class)`, and the CHANGELOG says when a mark is lifted. It marks
+it needs `@OptIn(ExperimentalCliKitApi::class)`, and the [changelog](CHANGELOG.md) says when a mark is lifted. It marks
 `Constraint.RequiresValue`, a rule that one operand needs an option to have one of some values:
 
 ```kotlin

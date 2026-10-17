@@ -5,4 +5,4 @@
 - [ ] `./gradlew check` passes
 - [ ] Public API changed: KDoc written and `./gradlew updateKotlinAbi` committed
 - [ ] Observable behavior changed: `project/SPEC.md` (and the guide or module README) updated
-- [ ] `CHANGELOG.md` entry under `Unreleased`
+- [ ] `CHANGELOG.md` entry under `Unreleased`, in `cli-kit/CHANGELOG.md` for a change to cli-kit

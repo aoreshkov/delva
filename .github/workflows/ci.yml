@@ -36,11 +36,7 @@ jobs:
       # or command-line archive before release time.
       - name: Publication
         if: matrix.os == 'ubuntu-latest'
-        run: >-
-          ./gradlew :delva:publishMavenPublicationToStagingRepository
-          :delva-kotlinx-serialization:publishMavenPublicationToStagingRepository
-          :cli-kit:publishAllPublicationsToStagingRepository :cli-kit-testing:publishAllPublicationsToStagingRepository
-          :delva-cli:distZip :delva-cli:distTar --console=plain
+        run: ./gradlew stageDelva stageCliKit :delva-cli:distZip :delva-cli:distTar --console=plain
 
       - name: Upload test reports
         if: failure()

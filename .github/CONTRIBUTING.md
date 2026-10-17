@@ -37,10 +37,12 @@ from its seed, golden files and CI.
   | [`project/DEVELOPMENT.md`](../project/DEVELOPMENT.md) | building, the test suites, CI |
   | this file | what to send and the rules for it |
   | [`project/RELEASING.md`](../project/RELEASING.md) | the release procedure |
-  | [`CHANGELOG.md`](../CHANGELOG.md) | one line per notable change; each version's section becomes its release notes |
+  | [`CHANGELOG.md`](../CHANGELOG.md) | one line per notable change to Delva; each version's section becomes its release notes |
+  | [`cli-kit/CHANGELOG.md`](../cli-kit/CHANGELOG.md) | the same for cli-kit and cli-kit-testing |
 
 - **CHANGELOG.md**: for a change users can notice, add one line under `Unreleased`, in its group (`Added`,
-  `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`). The details belong in the guide, `SPEC.md` or the
+  `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`), in `cli-kit/CHANGELOG.md` for a change to cli-kit or
+  cli-kit-testing and in the root `CHANGELOG.md` for anything else. The details belong in the guide, `SPEC.md` or the
   module's README.
 - **Dependencies**: the library depends only on the JDK, the Kotlin standard library and kotlinx-coroutines, and the
   optional `delva-kotlinx-serialization` module also on kotlinx-serialization-json. Tests use kotlin-test, with JUnit

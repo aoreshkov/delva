@@ -1,7 +1,7 @@
 // Published library modules: explicit API mode, ABI validation, signed Maven publication with sources and KDoc.
 //
-// Publishing (see project/RELEASING.md): `publishToMavenLocal` for a local try-out,
-// `publishMavenPublicationToStagingRepository` for the signed bundle that goes to Maven Central's Portal. Signing is
+// Publishing (see project/RELEASING.md): `publishToMavenLocal` for a local try-out, and the root's stage task of the
+// module's release train (ReleaseTrain.kt) for the signed bundle that goes to Maven Central's Portal. Signing is
 // required only when signing properties are set, so an unsigned local publication needs no keys.
 //
 // A module other than delva names itself in its gradle.properties: `delva.moduleName`, its JPMS module name (its root
@@ -28,8 +28,11 @@ java {
     withSourcesJar()
 }
 
-// Source links point at the release tag, so the KDoc matches the released source; snapshots link to main.
-val sourceRef = version.toString().let { if (it.endsWith("-SNAPSHOT")) "main" else "v$it" }
+requirePublishedByATrain()
+
+// Source links point at the release tag of the module's train, so the KDoc matches the released source; snapshots
+// link to main.
+val sourceRef = version.toString().let { if (it.endsWith("-SNAPSHOT")) "main" else "${releaseTrain.tagPrefix}$it" }
 dokka {
     moduleName = findProperty("delva.dokkaName")?.toString() ?: "Delva"
     dokkaSourceSets.configureEach {
