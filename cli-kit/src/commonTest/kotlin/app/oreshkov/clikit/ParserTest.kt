@@ -316,6 +316,118 @@ class ParserTest {
         assertIs<ConversionResult.Ok<Pair<String, String>>>(Converters.keyValue.convert("k="))
     }
 
+    // ------------------------------------------------------------------------------- unset values
+
+    /** A template nobody filled in, `${name}`, means "not given", and says so; a blank value too, silently. */
+    private fun <T> ValueConverter<T>.configured() = unsetWhen(
+        { it.isBlank() || it.startsWith("\${") },
+        notice = { if (it.isBlank()) null else "ignoring '$it'" },
+    )
+
+    private val dir = Option.Single("--dir", Converters.string.configured(), env = "DEMO_DIR")
+    private val tags = Option.Repeated("--tag", Converters.string.configured(), short = "-t")
+    private val first = Argument.Single("first", Converters.string.configured(), required = false)
+    private val rest = Argument.Variadic("rest", Converters.string.configured(), required = false)
+    private val unsetting = CommandSpec("demo", options = listOf(dir, tags), arguments = listOf(first, rest))
+
+    private fun unsetting(vararg args: String, environment: Map<String, String> = emptyMap()): ParseResult =
+        Parser(unsetting, environment::get).parse(args.toList())
+
+    private fun unsetInvocation(vararg args: String, environment: Map<String, String> = emptyMap()): ParseResult.Invocation {
+        val result = unsetting(*args, environment = environment)
+        assertIs<ParseResult.Invocation>(result, "expected an invocation, got $result")
+        return result
+    }
+
+    @Test
+    fun `an unset value of a single option counts as not given, and overrides an earlier value`() {
+        val parsed = unsetInvocation("--dir", "\${user.dir}")
+        assertNull(parsed.values[dir])
+        assertEquals(listOf("--dir: ignoring '\${user.dir}'"), parsed.notices)
+        assertNull(unsetInvocation("--dir", "/a", "--dir=").values[dir])
+        assertEquals("/b", unsetInvocation("--dir", "\${x}", "--dir", "/b").values[dir])
+        assertEquals(emptyList(), unsetInvocation("--dir", " ").notices)
+    }
+
+    @Test
+    fun `after an unset value on the command line, the option's variable applies`() {
+        val environment = mapOf("DEMO_DIR" to "/from/env")
+        assertEquals("/from/env", unsetInvocation("--dir", "\${x}", environment = environment).values[dir])
+        assertEquals("/typed", unsetInvocation("--dir", "/typed", environment = environment).values[dir])
+    }
+
+    @Test
+    fun `an unset variable counts as not set, and its notice names the variable`() {
+        val parsed = unsetInvocation(environment = mapOf("DEMO_DIR" to "\${dir}"))
+        assertNull(parsed.values[dir])
+        assertEquals(listOf("DEMO_DIR: ignoring '\${dir}'"), parsed.notices)
+    }
+
+    @Test
+    fun `an unset value of a repeated option or a variadic argument drops just that value`() {
+        val parsed = unsetInvocation("-t", "a", "--tag", "\${t}", "-t\${u}", "--tag=b", "x", "y", "\${z}", "w")
+        assertEquals(listOf("a", "b"), parsed.values[tags])
+        assertEquals(listOf("y", "w"), parsed.values[rest])
+        assertEquals(listOf("--tag: ignoring '\${t}'", "--tag: ignoring '\${u}'", "<rest>: ignoring '\${z}'"), parsed.notices)
+    }
+
+    @Test
+    fun `an unset argument is not given, but keeps its place`() {
+        val parsed = unsetInvocation("\${a}", "b", "c")
+        assertNull(parsed.values[first])
+        assertEquals(listOf("b", "c"), parsed.values[rest])
+        assertEquals(emptyList(), unsetInvocation("--", "", "").values[rest])
+    }
+
+    @Test
+    fun `notices keep command-line order, and the variables' come last`() {
+        val parsed = unsetInvocation("\${a}", "--tag", "\${b}", "\${c}", environment = mapOf("DEMO_DIR" to "\${d}"))
+        assertEquals(
+            listOf("<first>: ignoring '\${a}'", "--tag: ignoring '\${b}'", "<rest>: ignoring '\${c}'", "DEMO_DIR: ignoring '\${d}'"),
+            parsed.notices,
+        )
+    }
+
+    @Test
+    fun `a required option or argument given only unset values is missing, and the message says what was given`() {
+        val required = Option.Single("--dir", Converters.string.configured(), required = true, env = "DEMO_DIR")
+        val needed = Argument.Single("name", Converters.string.configured())
+        val many = Option.Repeated("--tag", Converters.string.configured(), required = true)
+        val root = CommandSpec("demo", options = listOf(required), arguments = listOf(needed))
+        fun refused(vararg args: String, environment: Map<String, String> = emptyMap()): String {
+            val result = Parser(root, environment::get).parse(args.toList())
+            assertIs<ParseResult.UsageError>(result, args.joinToString(" "))
+            return result.message
+        }
+        assertEquals("missing required option --dir (given '\${d}', which counts as not set)", refused("--dir", "\${d}", "n"))
+        assertEquals(
+            "missing required option --dir (given '\${e}' from DEMO_DIR, which counts as not set)",
+            refused("n", environment = mapOf("DEMO_DIR" to "\${e}")),
+        )
+        // What was typed is named rather than the variable read after it.
+        assertEquals(
+            "missing required option --dir (given '', which counts as not set)",
+            refused("--dir=", "n", environment = mapOf("DEMO_DIR" to "\${e}")),
+        )
+        assertEquals("missing required option --dir", refused("n"))
+        assertEquals(
+            "missing argument; expected <name> (<name> given '\${n}', which counts as not set)",
+            refused("--dir", "/d", "\${n}"),
+        )
+        val tagged = Parser(CommandSpec("demo", options = listOf(many))).parse(listOf("--tag", "\${a}", "--tag", ""))
+        assertIs<ParseResult.UsageError>(tagged)
+        assertEquals("missing required option --tag (given '', which counts as not set)", tagged.message)
+    }
+
+    @Test
+    fun `an unset-aware converter keeps the choices of the one it wraps`() {
+        val method = Converters.choice("GET", "POST").configured()
+        assertEquals(listOf("GET", "POST"), method.choices)
+        assertEquals(ConversionResult.Ok("GET"), method.convert("GET"))
+        assertIs<ConversionResult.Invalid>(method.convert("PUT"))
+        assertEquals(ConversionResult.Unset(), method.convert(""))
+    }
+
     @Test
     fun `edit distance is symmetric and zero for equal strings`() {
         assertEquals(0, editDistance("account", "account"))

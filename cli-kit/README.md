@@ -5,7 +5,8 @@ repository: the machinery of a command-line program. It depends on the Kotlin st
 even Delva, and knows no command of any program's: a program declares its own tree and its handlers.
 
 - A command-tree parser whose options and arguments are typed handles (`values[limit]` is an `Int?`), declared once
-  for parsing, help and completion, with environment-variable fallbacks.
+  for parsing, help and completion, with environment-variable fallbacks, and values that converters can call "not
+  given", such as an unfilled template.
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
   (`Constraint.Requires`) — and a single reader of standard input, checked while parsing.
 - Converters for durations, times (`-30d`, ISO-8601, epoch milliseconds) and `@file` values.
@@ -82,6 +83,37 @@ val serve = CommandHandler { context ->
 The program's stdout can carry a protocol, as an MCP server's does on stdio. The kit writes to it only for help, `--version` and
 `completion`; usage errors, failures and notices go to stderr. A terminal that wrote nothing to stdout isn't blamed for
 another writer's failed write, so a client hanging up doesn't turn exit status 0 into 74.
+
+## Values that mean "not given"
+
+A launcher may pass a value through even when nobody filled it in: an empty string, or a template such as
+`${user_config.forms_dir}`. `unsetWhen` makes a converter call such a value unset, and the option, argument or variable
+then counts as not given: for `required`, for constraints, for the environment fallback, and in `values`. Nothing is
+unset unless a converter says so, since `--prefix ""` can mean something.
+
+```kotlin
+val unfilled = Regex("""\$\{[^}]*}""")
+fun <T> ValueConverter<T>.configured() = unsetWhen(
+    { it.isBlank() || unfilled.matches(it.trim()) },
+    notice = { if (it.isBlank()) null else "ignoring '$it': an unfilled template" },
+)
+
+val formsDir = Option.Single("--forms-dir", Converters.path.configured(), valueName = "path", env = "FORMS_DIR")
+val formsDirArgument = Argument.Single("forms-dir", Converters.path.configured(), required = false)
+val serve = CommandSpec(
+    "serve",
+    options = listOf(formsDir),
+    arguments = listOf(formsDirArgument),
+    constraints = listOf(Constraint.ExactlyOne(formsDir, formsDirArgument)),
+)
+```
+
+`serve --forms-dir '${user_config.forms_dir}' /srv/forms` then runs with the argument, after printing
+`warning: --forms-dir: ignoring '${user_config.forms_dir}': an unfilled template` on stderr (`--quiet` silences it).
+An unset value on the command line overrides an earlier one and lets the option's variable apply. A repeated option or
+a variadic argument drops just that value, and an argument keeps its place, so the ones after it don't shift. When a
+required option is left unset, the error says what was given: `missing required option --forms-dir (given
+'${user_config.forms_dir}', which counts as not set)`.
 
 ## cli-kit-testing
 
