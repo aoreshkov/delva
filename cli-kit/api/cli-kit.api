@@ -77,10 +77,13 @@ public abstract interface class app/oreshkov/clikit/CommandHandler {
 }
 
 public final class app/oreshkov/clikit/CommandSpec {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getArguments ()Ljava/util/List;
 	public final fun getConstraints ()Ljava/util/List;
+	public final fun getEnvironment ()Ljava/util/List;
 	public final fun getEpilogue ()Ljava/lang/String;
 	public final fun getExamples ()Ljava/util/List;
 	public final fun getHelp ()Ljava/lang/String;
@@ -184,6 +187,13 @@ public final class app/oreshkov/clikit/Converters {
 
 public final class app/oreshkov/clikit/ConvertersKt {
 	public static final fun uniqueKeys (Lapp/oreshkov/clikit/OptionValues;Lapp/oreshkov/clikit/Option$Repeated;Lkotlin/jvm/functions/Function1;)Ljava/util/Map;
+}
+
+public final class app/oreshkov/clikit/EnvironmentVariable {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getHelp ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class app/oreshkov/clikit/Example {

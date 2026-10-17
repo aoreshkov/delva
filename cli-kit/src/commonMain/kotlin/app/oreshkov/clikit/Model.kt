@@ -180,7 +180,7 @@ public sealed class Option(
          * An environment variable that gives the value when the command line doesn't: the command line wins, then
          * the variable, then the handler's default. Read through [Program]'s environment, so a test controls it.
          * A variable set to an empty string counts as not set, and so does one [converter] calls
-         * [ConversionResult.Unset].
+         * [ConversionResult.Unset]. Help shows it in the option's `[env: …]` tag and in the Environment section.
          */
         public val env: String? = null,
     ) : Option(long, short, help, hidden) {
@@ -188,11 +188,7 @@ public sealed class Option(
         override val choices: List<String> get() = converter.choices
 
         init {
-            require(env == null || ENV_NAME.matches(env)) { "environment variable '$env' must be upper case, digits and '_'" }
-        }
-
-        private companion object {
-            val ENV_NAME = Regex("[A-Z_][A-Z0-9_]*")
+            require(env == null || isEnvironmentName(env)) { "environment variable '$env' must be upper case, digits and '_'" }
         }
     }
 
@@ -257,6 +253,29 @@ public sealed class Argument(
 }
 
 /**
+ * An environment variable a command reads for itself rather than as an option's [Option.Single.env], such as
+ * `ORACLE_HOME`. Declared on a [CommandSpec] so help lists it in the Environment section; reading it is the
+ * handler's business, through [CommandContext.environment].
+ */
+public class EnvironmentVariable(
+    /** The name, upper case, digits and `_`, as for [Option.Single.env]. */
+    public val name: String,
+    /** What help says about it, wrapped as [HelpRenderer] describes. */
+    public val help: String,
+) {
+    init {
+        require(isEnvironmentName(name)) { "environment variable '$name' must be upper case, digits and '_'" }
+    }
+
+    override fun toString(): String = name
+}
+
+/** The portable spelling of a variable's name, which every shell can export: no lower case, no leading digit. */
+private fun isEnvironmentName(name: String): Boolean = ENVIRONMENT_NAME.matches(name)
+
+private val ENVIRONMENT_NAME = Regex("[A-Z_][A-Z0-9_]*")
+
+/**
  * A command line as help shows it, [commandLine], never wrapped, with a comment saying what it does, [description],
  * wrapped as [HelpRenderer] describes.
  */
@@ -301,13 +320,39 @@ public class CommandSpec(
      * for this command and every command below it. See [Constraint].
      */
     public val constraints: List<Constraint> = emptyList(),
+    /**
+     * The environment variables it reads that aren't an option's [Option.Single.env], for help's Environment section,
+     * which lists the options' variables too. Like options, they apply to the commands below it, and one of those may
+     * redeclare a variable to describe it differently.
+     */
+    public val environment: List<EnvironmentVariable> = emptyList(),
 ) {
+    /** The constructor of 0.1.0, before [environment], kept so code compiled against it still links. */
+    @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        name: String,
+        help: String = "",
+        options: List<Option> = emptyList(),
+        arguments: List<Argument> = emptyList(),
+        subcommands: List<CommandSpec> = emptyList(),
+        runnable: Boolean = subcommands.isEmpty(),
+        examples: List<Example> = emptyList(),
+        epilogue: String? = null,
+        constraints: List<Constraint> = emptyList(),
+    ) : this(name, help, options, arguments, subcommands, runnable, examples, epilogue, constraints, emptyList())
+
     init {
         require(name.isNotBlank()) { "a command needs a name" }
         val duplicateOptions = options.groupBy { it.long }.filterValues { it.size > 1 }.keys
         require(duplicateOptions.isEmpty()) { "command '$name' declares $duplicateOptions twice" }
         val duplicateShorts = options.mapNotNull { it.short }.groupBy { it }.filterValues { it.size > 1 }.keys
         require(duplicateShorts.isEmpty()) { "command '$name' declares $duplicateShorts twice" }
+        // An option's variable is listed for it already: declaring it again would describe one variable twice.
+        val optionVariables = options.mapNotNull { (it as? Option.Single<*>)?.env }.toSet()
+        val duplicateVariables = environment.groupBy { it.name }.filter { (name, declared) ->
+            declared.size > 1 || name in optionVariables
+        }.keys
+        require(duplicateVariables.isEmpty()) { "command '$name' declares environment variables $duplicateVariables twice" }
         val duplicateArguments = arguments.groupBy { it.name }.filterValues { it.size > 1 }.keys
         require(duplicateArguments.isEmpty()) { "command '$name' declares arguments $duplicateArguments twice" }
         require(arguments.dropLast(1).none { it is Argument.Variadic<*> }) {
