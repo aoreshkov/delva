@@ -14,6 +14,12 @@ public sealed interface ParseResult {
         public val path: List<CommandSpec>,
         /** The option and argument values, converted. */
         public val values: OptionValues,
+        /**
+         * What the converters said about values they called [ConversionResult.Unset], each after the option,
+         * argument or variable it came from, in command-line order and then the variables'. [Program] prints them
+         * as warnings; the parser itself never prints.
+         */
+        public val notices: List<String> = emptyList(),
     ) : ParseResult {
         /** The command resolved: the last of [path]. */
         public val command: CommandSpec get() = path.last()
@@ -21,9 +27,10 @@ public sealed interface ParseResult {
         /** `demo store index create` — the invocation as the user typed it, for messages. */
         public fun commandLine(): String = commandLine(path)
 
-        override fun equals(other: Any?): Boolean = other is Invocation && other.path == path && other.values == values
+        override fun equals(other: Any?): Boolean =
+            other is Invocation && other.path == path && other.values == values && other.notices == notices
 
-        override fun hashCode(): Int = 31 * path.hashCode() + values.hashCode()
+        override fun hashCode(): Int = (31 * path.hashCode() + values.hashCode()) * 31 + notices.hashCode()
 
         override fun toString(): String = "Invocation(${commandLine()})"
     }
@@ -118,6 +125,8 @@ public class OptionValues internal constructor(
  * An option that is not on the command line takes its [Option.Single.env] variable from [environment],
  * converted and checked like a value typed on the command line.
  *
+ * A value its converter calls [ConversionResult.Unset] counts as not given, as that type describes.
+ *
  * Once every value is converted, the command line must keep each [Constraint] on its path, and may read standard
  * input through at most one value (see [ReadsStandardInput]); either failure is a usage error like any other.
  */
@@ -193,16 +202,42 @@ public class Parser(
         val flags = mutableSetOf<Option.Flag>()
         val singles = mutableMapOf<Option.Single<*>, Any?>()
         val repeated = mutableMapOf<Option.Repeated<*>, MutableList<Any?>>()
-        val positionals = mutableListOf<String>()
+
+        /** Each positional token, indexed by its place among the tokens, so its notice keeps command-line order. */
+        val positionals = mutableListOf<IndexedValue<String>>()
 
         /** The values that came from an environment variable rather than the command line, for messages to name. */
         val fromEnvironment = mutableSetOf<Option.Single<*>>()
+
+        /**
+         * For each operand a converter called [ConversionResult.Unset], what was given for it: `given 'x'`, or
+         * `given 'x' from VAR`. An operand left absent names this in its "missing" message, which would otherwise
+         * contradict a command line that plainly holds it.
+         */
+        val unset = mutableMapOf<Operand, String>()
+
+        /** The converters' notices, each with the place of its token; a variable's sorts after every token. */
+        val notices = mutableListOf<IndexedValue<String>>()
 
         fun given(option: Option): Boolean = when (option) {
             is Option.Flag -> option in flags
             is Option.Single<*> -> option in singles
             is Option.Repeated<*> -> option in repeated
         }
+
+        /**
+         * Notes that [operand] was given [what], which its converter called unset, and keeps the converter's [notice]
+         * with the name of its [source] in front. The token at [at] is [FROM_ENVIRONMENT] for a variable.
+         */
+        fun unset(operand: Operand, what: String, source: String, notice: String?, at: Int) {
+            // A variable is read only after the command line gave nothing usable, and what was typed is what the
+            // reader is looking at, so it's the better thing to name.
+            if (at == FROM_ENVIRONMENT) unset.getOrPut(operand) { what } else unset[operand] = what
+            notice?.let { notices += IndexedValue(at, "$source: $it") }
+        }
+
+        /** `given 'x', which counts as not set` for an [operand] given only unset values; `null` otherwise. */
+        fun whyAbsent(operand: Operand): String? = unset[operand]?.let { "$it, which counts as not set" }
     }
 
     @Suppress("ReturnCount")
@@ -217,7 +252,7 @@ public class Parser(
         while (index < tokens.size) {
             val token = tokens[index]
             when {
-                optionsEnded -> collected.positionals += token
+                optionsEnded -> collected.positionals += IndexedValue(index, token)
 
                 token == "--" -> optionsEnded = true
 
@@ -239,14 +274,15 @@ public class Parser(
                         }
                         collected.flags += spec
                     } else {
+                        val at = index
                         val value = inlineValue ?: tokens.getOrNull(++index)
                             ?: return ParseResult.UsageError("option '$name' requires a value", path)
-                        record(spec, value, collected)?.let { return ParseResult.UsageError(it, path) }
+                        record(spec, value, collected, at)?.let { return ParseResult.UsageError(it, path) }
                     }
                 }
 
                 token.startsWith("-") && token != "-" -> {
-                    val outcome = parseShortCluster(token, known, collected) { tokens.getOrNull(++index) }
+                    val outcome = parseShortCluster(token, index, known, collected) { tokens.getOrNull(++index) }
                     when (outcome) {
                         is ShortOutcome.Ok -> Unit
                         is ShortOutcome.Help -> return ParseResult.Help(path)
@@ -259,14 +295,14 @@ public class Parser(
                     }
                 }
 
-                else -> collected.positionals += token
+                else -> collected.positionals += IndexedValue(index, token)
             }
             index++
         }
 
         if (!command.runnable) return ParseResult.Help(path)
 
-        // The command line wins; a variable fills in only what it left out.
+        // The command line wins; a variable fills in only what it left out, or gave only an unset value for.
         for (option in known) {
             if (option !is Option.Single<*> || option.env == null || collected.given(option)) continue
             val value = environment(option.env)?.takeIf { it.isNotEmpty() } ?: continue
@@ -277,13 +313,17 @@ public class Parser(
                 }
                 is ConversionResult.Invalid ->
                     return ParseResult.UsageError("invalid value for ${option.env}: ${conversion.reason}", path)
+                is ConversionResult.Unset ->
+                    collected.unset(option, "given '$value' from ${option.env}", option.env, conversion.notice, FROM_ENVIRONMENT)
             }
         }
 
-        known.firstOrNull { it.required && !collected.given(it) }
-            ?.let { return ParseResult.UsageError("missing required option ${it.long}", path) }
+        known.firstOrNull { it.required && !collected.given(it) }?.let { option ->
+            val why = collected.whyAbsent(option)?.let { " ($it)" }.orEmpty()
+            return ParseResult.UsageError("missing required option ${option.long}$why", path)
+        }
 
-        val bound = when (val binding = bindPositionals(command, collected.positionals)) {
+        val bound = when (val binding = bindPositionals(command, collected)) {
             is Binding.Bound -> binding.values
             is Binding.Failed -> return ParseResult.UsageError(binding.message, path)
         }
@@ -297,6 +337,7 @@ public class Parser(
         return ParseResult.Invocation(
             path,
             OptionValues(collected.flags, collected.singles, collected.repeated, bound),
+            collected.notices.sortedBy { it.index }.map { it.value },
         )
     }
 
@@ -310,7 +351,8 @@ public class Parser(
         fun spell(operand: Operand): String =
             if (operand is Option.Single<*> && operand in collected.fromEnvironment) "$operand (from ${operand.env})" else "$operand"
 
-        return path.asSequence().flatMap { it.constraints }.firstNotNullOfOrNull { it.violation(::given, ::spell) }
+        return path.asSequence().flatMap { it.constraints }
+            .firstNotNullOfOrNull { it.violation(::given, ::spell, collected::whyAbsent) }
     }
 
     private sealed interface ShortOutcome {
@@ -329,6 +371,7 @@ public class Parser(
      */
     private inline fun parseShortCluster(
         token: String,
+        at: Int,
         known: List<Option>,
         collected: Collected,
         nextToken: () -> String?,
@@ -353,14 +396,14 @@ public class Parser(
             val rest = token.substring(position + 1)
             val value = rest.ifEmpty { nextToken() }
                 ?: return ShortOutcome.Error("option '$short' requires a value")
-            record(spec, value, collected)?.let { return ShortOutcome.Error(it) }
+            record(spec, value, collected, at)?.let { return ShortOutcome.Error(it) }
             return ShortOutcome.Ok
         }
         return ShortOutcome.Ok
     }
 
-    /** Converts and stores one option value, or returns why it could not. */
-    private fun record(spec: Option, value: String, collected: Collected): String? {
+    /** Converts and stores one option value, whose option is the token at [at], or returns why it could not. */
+    private fun record(spec: Option, value: String, collected: Collected, at: Int): String? {
         val converter = when (spec) {
             is Option.Single<*> -> spec.converter
             is Option.Repeated<*> -> spec.converter
@@ -369,6 +412,12 @@ public class Parser(
         val converted = when (val conversion = converter.convert(value)) {
             is ConversionResult.Ok -> conversion.value
             is ConversionResult.Invalid -> return "invalid value for ${spec.long}: ${conversion.reason}"
+            is ConversionResult.Unset -> {
+                // As if this occurrence weren't there; for a single value, the earlier ones are overridden all the same.
+                if (spec is Option.Single<*>) collected.singles -= spec
+                collected.unset(spec, "given '$value'", spec.long, conversion.notice, at)
+                return null
+            }
         }
         when (spec) {
             is Option.Single<*> -> collected.singles[spec] = converted
@@ -383,7 +432,8 @@ public class Parser(
         class Failed(val message: String) : Binding
     }
 
-    private fun bindPositionals(command: CommandSpec, given: List<String>): Binding {
+    private fun bindPositionals(command: CommandSpec, collected: Collected): Binding {
+        val given = collected.positionals
         val bound = mutableMapOf<Argument, List<Any?>>()
         var index = 0
         for (spec in command.arguments) {
@@ -396,22 +446,29 @@ public class Parser(
                 if (spec.required) return Binding.Failed(missingArguments(command))
                 continue
             }
-            val converted = raw.map { value ->
+            // An unset value still takes its place, so the arguments after it don't shift.
+            index += raw.size
+            val converted = ArrayList<Any?>(raw.size)
+            for ((at, value) in raw) {
                 when (val conversion = spec.converter.convert(value)) {
-                    is ConversionResult.Ok -> conversion.value
+                    is ConversionResult.Ok -> converted += conversion.value
                     is ConversionResult.Invalid ->
-                        return Binding.Failed("invalid value for <${spec.name}>: ${conversion.reason}")
+                        return Binding.Failed("invalid value for $spec: ${conversion.reason}")
+                    is ConversionResult.Unset -> collected.unset(spec, "given '$value'", "$spec", conversion.notice, at)
                 }
             }
+            if (converted.isEmpty()) {
+                if (spec.required) return Binding.Failed("${missingArguments(command)} ($spec ${collected.whyAbsent(spec)})")
+                continue
+            }
             bound[spec] = converted
-            index += raw.size
         }
         // Extra positionals are an error, not something to ignore: silently dropping one is how a
         // typo'd flag becomes a command that ran against the wrong thing.
         if (index < given.size) {
             val expected = expectedArguments(command)
             return Binding.Failed(
-                "unexpected argument '${given[index]}'" + if (expected.isEmpty()) "" else "; expected $expected",
+                "unexpected argument '${given[index].value}'" + if (expected.isEmpty()) "" else "; expected $expected",
             )
         }
         return Binding.Bound(bound)
@@ -429,6 +486,9 @@ public class Parser(
 
     private fun String.looksNumeric(): Boolean = drop(1).let { it.isNotEmpty() && it.toDoubleOrNull() != null }
 }
+
+/** The place of a value read from an environment variable, which comes after every token of the command line. */
+private const val FROM_ENVIRONMENT = Int.MAX_VALUE
 
 /**
  * Every option legal at this point in the tree: the command's own, plus everything inherited from

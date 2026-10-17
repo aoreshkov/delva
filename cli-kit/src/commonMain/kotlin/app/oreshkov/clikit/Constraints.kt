@@ -16,6 +16,9 @@ public sealed interface Operand
  * - a repeated option, or a variadic argument, has at least one value;
  * - an argument has a value.
  *
+ * A value its converter calls [ConversionResult.Unset] isn't one, and a message about the constraint says what was
+ * given for it.
+ *
  * A value from the environment counts, and the message names the variable: a variable that silently lost to a
  * conflicting option would be worse than a refusal.
  *
@@ -57,20 +60,36 @@ public sealed class Constraint(public val operands: List<Operand>) {
 
     /**
      * Why the command line breaks this constraint, or `null` when it keeps it. [given] answers whether an operand was
-     * given; [spell] names one in a message, with the variable its value came from.
+     * given; [spell] names one in a message, with the variable its value came from; [whyAbsent] says why an operand
+     * that was on the command line counts as absent, or answers `null`.
      */
-    internal fun violation(given: (Operand) -> Boolean, spell: (Operand) -> String): String? {
+    internal fun violation(
+        given: (Operand) -> Boolean,
+        spell: (Operand) -> String,
+        whyAbsent: (Operand) -> String?,
+    ): String? {
         val present = operands.filter(given)
         return when (this) {
             is Exclusive -> if (present.size > 1) combined(present, spell) else null
             is ExactlyOne -> when (present.size) {
-                0 -> "exactly one of ${list(operands)} is required"
+                0 -> "exactly one of ${list(operands)} is required" + absent(operands, whyAbsent)
                 1 -> null
                 else -> combined(present, spell)
             }
-            is Requires -> if (given(subject) && !given(requirement)) "${spell(subject)} requires $requirement" else null
+            is Requires -> if (given(subject) && !given(requirement)) {
+                "${spell(subject)} requires $requirement" + absent(listOf(requirement), whyAbsent)
+            } else {
+                null
+            }
         }
     }
+
+    /** ` (<x> given '…', which counts as not set)` for those of [missing] that were given only unset values. */
+    private fun absent(missing: List<Operand>, whyAbsent: (Operand) -> String?): String =
+        missing.mapNotNull { operand -> whyAbsent(operand)?.let { "$operand $it" } }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("; ", " (", ")")
+            .orEmpty()
 
     override fun toString(): String = "${this::class.simpleName}(${note()})"
 

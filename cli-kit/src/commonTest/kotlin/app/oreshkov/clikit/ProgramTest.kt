@@ -133,6 +133,31 @@ class ProgramTest {
     }
 
     @Test
+    fun `a value its converter calls unset is a warning before the command runs, which --quiet silences`() {
+        val target = Option.Single(
+            "--target",
+            Converters.string.unsetWhen({ it.startsWith("\${") }, notice = { "ignoring '$it', an unfilled template" }),
+            required = true,
+        )
+        val serve = CommandSpec("serve", options = listOf(target, StandardOptions.quiet))
+        val program = Program(serve, "serve 1.0", mapOf(serve to CommandHandler { context -> context.io.errLine("ran"); 0 }))
+
+        val warned = program.record("--target", "\${t}", "--target", "x")
+        assertEquals(ExitStatus.OK, warned.status)
+        assertEquals("warning: --target: ignoring '\${t}', an unfilled template\nran\n", warned.stderr)
+        assertEquals("", warned.stdout)
+
+        assertEquals("ran\n", program.record("--target", "\${t}", "--target", "x", "--quiet").stderr)
+
+        val missing = program.record("--target", "\${t}")
+        assertEquals(ExitStatus.USAGE, missing.status)
+        assertEquals(
+            "error: missing required option --target (given '\${t}', which counts as not set)\nusage: serve [options]\n",
+            missing.stderr,
+        )
+    }
+
+    @Test
     fun `a handler reads the environment the program was given`() {
         var seen: String? = "unset"
         val program = Program(

@@ -16,7 +16,10 @@ package app.oreshkov.clikit
 
 /** A value converter: `String` to `T`, or a message explaining what was wrong with the input. */
 public fun interface ValueConverter<out T> {
-    /** [raw], the text as given, converted; or [ConversionResult.Invalid] with what is wrong with it. */
+    /**
+     * [raw], the text as given, converted; or [ConversionResult.Invalid] with what is wrong with it; or
+     * [ConversionResult.Unset] when the text means "not given".
+     */
     public fun convert(raw: String): ConversionResult<T>
 
     /**
@@ -33,12 +36,65 @@ public sealed interface ConversionResult<out T> {
 
     /** Why the text was refused, [reason]: a message, not an exception, since a bad `--limit foo` is a usage error. */
     public data class Invalid(val reason: String) : ConversionResult<Nothing>
+
+    /**
+     * The text means "not given", such as a configuration template nobody filled in: the parser treats the option or
+     * argument as absent, for `required`, for [Constraint]s, for the [Option.Single.env] fallback and for
+     * [OptionValues]. A single-valued option given such a value loses any value given before it; a repeated option or
+     * a variadic argument drops just that one value; an argument still takes its position, so the ones after it
+     * don't shift.
+     *
+     * [notice], when not `null`, is printed by [Program] as a warning before the command runs, and silenced by
+     * [StandardOptions.quiet]; the parser puts the option, argument or variable it came from in front of it. Make
+     * converters that answer this with [unsetWhen].
+     */
+    public class Unset(
+        /** What to tell the user about the value, such as `ignoring '${user.dir}': an unfilled template`. */
+        public val notice: String? = null,
+    ) : ConversionResult<Nothing> {
+        override fun equals(other: Any?): Boolean = other is Unset && other.notice == notice
+
+        override fun hashCode(): Int = notice.hashCode()
+
+        override fun toString(): String = "Unset(notice=$notice)"
+    }
 }
 
-/** The converted value passed through [transform], or the same [ConversionResult.Invalid]: a converter built on another. */
+/**
+ * The converted value passed through [transform], or the same [ConversionResult.Invalid] or [ConversionResult.Unset]:
+ * a converter built on another.
+ */
 public inline fun <T, R> ConversionResult<T>.map(transform: (T) -> R): ConversionResult<R> = when (this) {
     is ConversionResult.Ok -> ConversionResult.Ok(transform(value))
     is ConversionResult.Invalid -> this
+    is ConversionResult.Unset -> this
+}
+
+/**
+ * This converter, except that a value matching [predicate] is [ConversionResult.Unset], with [notice]'s text for it;
+ * `null`, the default, says nothing. The [ValueConverter.choices] stay this converter's.
+ *
+ * Nothing counts as unset unless a converter says so, since an empty `--prefix ""` can mean something:
+ *
+ * ```kotlin
+ * val unfilled = Regex("""\$\{[^}]*}""")
+ * val formsDir = Converters.path.unsetWhen(
+ *     { it.isBlank() || unfilled.matches(it.trim()) },
+ *     notice = { if (it.isBlank()) null else "ignoring '$it': an unfilled template" },
+ * )
+ * ```
+ */
+public fun <T> ValueConverter<T>.unsetWhen(
+    predicate: (String) -> Boolean,
+    notice: (String) -> String? = { null },
+): ValueConverter<T> {
+    val converter = this
+    return object : ValueConverter<T> {
+        override fun convert(raw: String): ConversionResult<T> =
+            if (predicate(raw)) ConversionResult.Unset(notice(raw)) else converter.convert(raw)
+
+        override val choices: List<String> get() = converter.choices
+    }
 }
 
 /**
@@ -123,7 +179,8 @@ public sealed class Option(
         /**
          * An environment variable that gives the value when the command line doesn't: the command line wins, then
          * the variable, then the handler's default. Read through [Program]'s environment, so a test controls it.
-         * A variable set to an empty string counts as not set.
+         * A variable set to an empty string counts as not set, and so does one [converter] calls
+         * [ConversionResult.Unset].
          */
         public val env: String? = null,
     ) : Option(long, short, help, hidden) {

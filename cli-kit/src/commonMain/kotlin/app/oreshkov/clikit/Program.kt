@@ -245,7 +245,8 @@ public class CommandFailure(
  *
  * Help, `--version` and usage errors are answered here, and so is [StandardOptions.completion] when
  * the tree includes it. Every other runnable command has a handler in [handlers], which is checked
- * when the program is built rather than when somebody first runs the command without one.
+ * when the program is built rather than when somebody first runs the command without one. The parser's
+ * [ParseResult.Invocation.notices] are printed as warnings before the command runs.
  *
  * A handler reports an expected failure by throwing [CommandFailure], or by letting an exception
  * escape that [translate] turns into one — the place a program maps the exceptions of the libraries
@@ -339,12 +340,15 @@ public class Program(
     }
 
     private fun invoke(invocation: ParseResult.Invocation, io: TerminalIo): Int = try {
+        val context = CommandContext(invocation, io, environment)
+        // Before the command runs, so a warning about a value it ignored isn't lost among its own output.
+        invocation.notices.forEach(context.output::warn)
         // The one command with no dependency on anything: it walks the same tree the parser does.
         if (invocation.command === StandardOptions.completion) {
             io.out(CompletionGenerator().generate(invocation.values.required(StandardOptions.shell), root))
             ExitStatus.OK
         } else {
-            handlers.getValue(invocation.command).run(CommandContext(invocation, io, environment))
+            handlers.getValue(invocation.command).run(context)
         }
     } catch (failure: CommandFailure) {
         report(failure, invocation, io)

@@ -151,6 +151,16 @@ public final class app/oreshkov/clikit/ConversionResult$Ok : app/oreshkov/clikit
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class app/oreshkov/clikit/ConversionResult$Unset : app/oreshkov/clikit/ConversionResult {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNotice ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class app/oreshkov/clikit/Converters {
 	public static final field INSTANCE Lapp/oreshkov/clikit/Converters;
 	public final fun choice ([Ljava/lang/String;)Lapp/oreshkov/clikit/ValueConverter;
@@ -333,6 +343,8 @@ public final class app/oreshkov/clikit/LogLevel : java/lang/Enum {
 
 public final class app/oreshkov/clikit/ModelKt {
 	public static final fun map (Lapp/oreshkov/clikit/ConversionResult;Lkotlin/jvm/functions/Function1;)Lapp/oreshkov/clikit/ConversionResult;
+	public static final fun unsetWhen (Lapp/oreshkov/clikit/ValueConverter;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Lapp/oreshkov/clikit/ValueConverter;
+	public static synthetic fun unsetWhen$default (Lapp/oreshkov/clikit/ValueConverter;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lapp/oreshkov/clikit/ValueConverter;
 }
 
 public abstract interface class app/oreshkov/clikit/Operand {
@@ -427,6 +439,7 @@ public final class app/oreshkov/clikit/ParseResult$Invocation : app/oreshkov/cli
 	public final fun commandLine ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCommand ()Lapp/oreshkov/clikit/CommandSpec;
+	public final fun getNotices ()Ljava/util/List;
 	public final fun getPath ()Ljava/util/List;
 	public final fun getValues ()Lapp/oreshkov/clikit/OptionValues;
 	public fun hashCode ()I

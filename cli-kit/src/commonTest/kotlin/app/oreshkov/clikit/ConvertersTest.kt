@@ -31,6 +31,17 @@ class ConvertersTest {
     private enum class Order { ASCENDING, DESCENDING, NEWEST_FIRST }
 
     @Test
+    fun `map passes an unset value through, notice and all`() {
+        val unset = ConversionResult.Unset("ignoring it")
+        val text: ConversionResult<String> = unset
+        assertEquals(unset, text.map { it.length })
+        val lengths = ValueConverter { raw -> Converters.string.unsetWhen({ it == "-" }, { "dash" }).convert(raw).map { it.length } }
+        assertEquals(ConversionResult.Ok(3), lengths.convert("abc"))
+        assertEquals(ConversionResult.Unset("dash"), lengths.convert("-"))
+        assertEquals("Unset(notice=null)", ConversionResult.Unset().toString())
+    }
+
+    @Test
     fun `integers, longs and ranges`() {
         assertEquals(-3, ok(Converters.int, "-3"))
         assertEquals(5_000_000_000L, ok(Converters.long, "5000000000"))

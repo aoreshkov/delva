@@ -92,6 +92,38 @@ class ConstraintTest {
     }
 
     @Test
+    fun `an unset value doesn't count as given, and the message says what was given for it`() {
+        val configured = Converters.string.unsetWhen({ it.startsWith("\${") })
+        val formsDir = Option.Single("--forms-dir", configured, env = "DEMO_FORMS_DIR")
+        val formsDirArgument = Argument.Single("forms-dir", configured, required = false)
+        val strict = Option.Flag("--strict")
+        val serve = CommandSpec(
+            "serve",
+            options = listOf(formsDir, strict),
+            arguments = listOf(formsDirArgument),
+            constraints = listOf(Constraint.ExactlyOne(formsDir, formsDirArgument), Constraint.Requires(strict, formsDir)),
+        )
+        fun parse(vararg args: String, environment: Map<String, String> = emptyMap()) =
+            Parser(serve, environment::get).parse(args.toList())
+
+        assertIs<ParseResult.Invocation>(parse("--forms-dir", "\${dir}", "/forms"))
+        assertIs<ParseResult.Invocation>(parse("--forms-dir", "/forms", "\${dir}"))
+        val neither = parse("--forms-dir", "\${a}", "\${b}")
+        assertIs<ParseResult.UsageError>(neither)
+        assertEquals(
+            "exactly one of --forms-dir and <forms-dir> is required " +
+                "(--forms-dir given '\${a}', which counts as not set; <forms-dir> given '\${b}', which counts as not set)",
+            neither.message,
+        )
+        val strictWithout = parse("--strict", "/forms", environment = mapOf("DEMO_FORMS_DIR" to "\${c}"))
+        assertIs<ParseResult.UsageError>(strictWithout)
+        assertEquals(
+            "--strict requires --forms-dir (--forms-dir given '\${c}' from DEMO_FORMS_DIR, which counts as not set)",
+            strictWithout.message,
+        )
+    }
+
+    @Test
     fun `a broken constraint is a usage error with the usage line, and the handler never runs`() {
         val program = Program(root, "demo 1.0", mapOf(show to CommandHandler { error("ran") }, diff to CommandHandler { 0 }))
         val result = program.record("show", "--pretty", "--compact")

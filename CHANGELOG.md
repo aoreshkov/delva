@@ -10,6 +10,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 ### Added
 
 - `cli-kit`: `HelpRenderer(styler, programName, width)`, a renderer that wraps to a given width.
+- `cli-kit`: `ConversionResult.Unset` and `unsetWhen`, for values that mean "not given", such as an unfilled template.
+  The parser treats them as absent and `Program` prints the converter's notice as a warning.
 
 ### Changed
 
@@ -18,6 +20,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `cli-kit`: help pages wrap to the terminal width, at most 100 columns. A `help` text can hold paragraphs and line
   breaks; command lists and completion scripts show its first line.
 - `delva-cli`: help fits 80 columns by default, and `--width` sets the width of help as well as tables.
+- `cli-kit`: `ConversionResult` has a new subtype, `Unset`, so an exhaustive `when` over it needs a branch for it.
+  Recompile code that inlined `ConversionResult.map`.
 
 ### Fixed
 
