@@ -15,6 +15,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `cli-kit`: an Environment section in help, listing each option's variable and those a command declares with
   `CommandSpec(environment = …)` and `EnvironmentVariable`.
 - `delva-cli`: help lists `DELVA_STORE` under Environment.
+- `cli-kit`: experimental API, which needs `@OptIn(ExperimentalCliKitApi::class)` and may change in a minor release:
+  `Constraint.RequiresValue`, for "this option needs that one to have one of these values".
 
 ### Changed
 
@@ -25,6 +27,7 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva-cli`: help fits 80 columns by default, and `--width` sets the width of help as well as tables.
 - `cli-kit`: `ConversionResult` has a new subtype, `Unset`, so an exhaustive `when` over it needs a branch for it.
   Recompile code that inlined `ConversionResult.map`.
+- `cli-kit`: `Constraint` has a new subtype, `RequiresValue`, so an exhaustive `when` over it needs a branch for it.
 
 ### Fixed
 

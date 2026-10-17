@@ -13,6 +13,10 @@ group = "app.oreshkov.clikit"
 // as it stands, and what makes its `commonMain` compile for Kotlin/Native the day a native target appears.
 // `IsolationTest` asserts it rather than trusting this comment. The tests use cli-kit-testing, which is test-only.
 kotlin {
+    compilerOptions {
+        // The kit uses its own new API; the marker is for its users.
+        optIn.add("app.oreshkov.clikit.ExperimentalCliKitApi")
+    }
     sourceSets {
         commonTest {
             dependencies {

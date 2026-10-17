@@ -8,7 +8,8 @@ even Delva, and knows no command of any program's: a program declares its own tr
   for parsing, help and completion, with environment-variable fallbacks, and values that converters can call "not
   given", such as an unfilled template.
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
-  (`Constraint.Requires`) — and a single reader of standard input, checked while parsing.
+  (`Constraint.Requires`), needs a value (`Constraint.RequiresValue`, [experimental](#experimental-api)) — and a single
+  reader of standard input, checked while parsing.
 - Converters for durations, times (`-30d`, ISO-8601, epoch milliseconds) and `@file` values.
 - Help pages wrapped to the terminal, at most 100 columns, from `help` texts that can hold paragraphs, with an
   Environment section listing the options' variables and those a command reads for itself (`EnvironmentVariable`);
@@ -115,6 +116,29 @@ An unset value on the command line overrides an earlier one and lets the option'
 a variadic argument drops just that value, and an argument keeps its place, so the ones after it don't shift. When a
 required option is left unset, the error says what was given: `missing required option --forms-dir (given
 '${user_config.forms_dir}', which counts as not set)`.
+
+## Experimental API
+
+`@ExperimentalCliKitApi` marks what is new and may still change, in signature or behaviour, in a minor release. Using
+it needs `@OptIn(ExperimentalCliKitApi::class)`, and the CHANGELOG says when a mark is lifted. It marks
+`Constraint.RequiresValue`, a rule that one operand needs an option to have one of some values:
+
+```kotlin
+val transport = Option.Single("--transport", Converters.choice("stdio", "http"), env = "TRANSPORT")
+val port = Option.Single("--port", Converters.positiveInt)
+
+@OptIn(ExperimentalCliKitApi::class)
+val serve = CommandSpec(
+    "serve",
+    options = listOf(transport, port),
+    constraints = listOf(Constraint.RequiresValue(port, transport, "http")),
+)
+```
+
+Help notes `--port requires --transport http`, and `serve --port 8080 --transport stdio` is a usage error that says
+so: `--port requires --transport http, but --transport is 'stdio'`. The values are written as they would be typed and
+converted by the option's converter when the constraint is built, so a misspelt one fails then, not on a user's
+command line. An absent option never matches, because the parser can't see the handler's default.
 
 ## cli-kit-testing
 
