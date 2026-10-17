@@ -30,3 +30,6 @@ Global options:
   -q, --quiet        Nothing on stderr but errors
       --no-color     Never emit colour
       --width <n>    Columns to fit output to [default: $COLUMNS or 80]
+
+Environment:
+  DELVA_STORE  Same as --store

@@ -12,6 +12,9 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `cli-kit`: `HelpRenderer(styler, programName, width)`, a renderer that wraps to a given width.
 - `cli-kit`: `ConversionResult.Unset` and `unsetWhen`, for values that mean "not given", such as an unfilled template.
   The parser treats them as absent and `Program` prints the converter's notice as a warning.
+- `cli-kit`: an Environment section in help, listing each option's variable and those a command declares with
+  `CommandSpec(environment = …)` and `EnvironmentVariable`.
+- `delva-cli`: help lists `DELVA_STORE` under Environment.
 
 ### Changed
 

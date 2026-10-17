@@ -14,6 +14,10 @@ Options:
       --json            Machine-readable output on stdout
   -v, --verbose         More detail on stderr
 
+Environment:
+  DEMO_DATA_DIR  Same as --data-dir
+  DEMO_TOKEN     Token to send when no session is logged in
+
 Run 'demo <command> --help' for more on a command.
 
 Documentation: https://example.invalid/demo

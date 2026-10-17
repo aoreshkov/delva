@@ -39,6 +39,9 @@ Options:
       --no-color     Never emit colour
       --width <n>    Columns to fit output to [default: $COLUMNS or 80]
 
+Environment:
+  DELVA_STORE  Same as --store
+
 Run 'delva <command> --help' for more on a command.
 
 Documentation and issues: https://github.com/aoreshkov/delva

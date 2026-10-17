@@ -102,6 +102,13 @@ public class HelpRenderer(
                 appendTable(globalOptions.map(::entry))
             }
 
+            val environment = environmentFor(path, inherited)
+            if (environment.isNotEmpty()) {
+                appendLine()
+                appendLine(styler.bold("Environment:"))
+                appendTable(environment)
+            }
+
             // A constraint between two options belongs to neither, so it gets its own lines rather than a note on each.
             // One that names a hidden option stays hidden with it.
             val notes = path.flatMap { it.constraints }.filter { constraint ->
@@ -145,6 +152,19 @@ public class HelpRenderer(
             "(required)".takeIf { option.required },
         ),
     )
+
+    /**
+     * The variables of [path], the command's own first, as the option tables list options: for each command, the
+     * variables of its [visible] options, then those it declares. Derived from the same declarations the parser reads,
+     * so the section can't drift from them; a variable redeclared further down is listed once, as the deepest one says.
+     */
+    private fun environmentFor(path: List<CommandSpec>, visible: List<Option>): List<Entry> =
+        path.asReversed().flatMap { command ->
+            val fromOptions = command.options.filter { option -> visible.any { it === option } }.mapNotNull { option ->
+                (option as? Option.Single<*>)?.env?.let { Entry(it, "Same as ${option.long}") }
+            }
+            fromOptions + command.environment.map { Entry(it.name, it.help) }
+        }.distinctBy { it.name }
 
     private fun choices(choices: List<String>): String? = choices.takeIf { it.isNotEmpty() }?.joinToString("|", "(", ")")
 

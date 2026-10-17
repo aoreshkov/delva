@@ -10,8 +10,9 @@ even Delva, and knows no command of any program's: a program declares its own tr
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
   (`Constraint.Requires`) — and a single reader of standard input, checked while parsing.
 - Converters for durations, times (`-30d`, ISO-8601, epoch milliseconds) and `@file` values.
-- Help pages wrapped to the terminal, at most 100 columns, from `help` texts that can hold paragraphs; and bash,
-  zsh, fish and PowerShell completion scripts.
+- Help pages wrapped to the terminal, at most 100 columns, from `help` texts that can hold paragraphs, with an
+  Environment section listing the options' variables and those a command reads for itself (`EnvironmentVariable`);
+  and bash, zsh, fish and PowerShell completion scripts.
 - Tables, compact or indented JSON for `--json` output, and a byte-stream payload.
 - Terminal I/O that keeps the payload on stdout and everything decorative on stderr, with colour decided once and ANSI
   enabled on a legacy Windows console; prompts, confirmations, secrets, progress, log lines and `--quiet`. Control

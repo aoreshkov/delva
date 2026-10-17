@@ -139,7 +139,8 @@ public class CommandContext(
     public val io: TerminalIo,
     /**
      * The environment [Program] was given, the one [Option.Single.env] reads: `System::getenv` in a program, a map in
-     * a test, so a handler that reads a variable of its own is as easy to test as an option.
+     * a test, so a handler that reads a variable of its own is as easy to test as an option. Declare such a variable in
+     * [CommandSpec.environment], so help lists it.
      */
     public val environment: (String) -> String? = { null },
 ) {
@@ -276,6 +277,19 @@ public class Program(
             "handlers for ${strangers.joinToString { it.name }}, which the tree does not run"
         }
         root.runnablePaths().forEach(::checkConstraints)
+        root.paths().forEach(::checkEnvironment)
+    }
+
+    /**
+     * No command on [path] declares a variable that an option the command reads already takes its value from: help
+     * would describe the one variable twice, in two ways that can drift apart.
+     */
+    private fun checkEnvironment(path: List<CommandSpec>) {
+        val optionVariables = optionsFor(path).mapNotNull { (it as? Option.Single<*>)?.env }.toSet()
+        val twice = path.flatMap { it.environment }.map { it.name }.filter { it in optionVariables }.distinct()
+        require(twice.isEmpty()) {
+            "'${commandLine(path)}' declares the environment variables $twice, which its options already read"
+        }
     }
 
     /**
