@@ -129,6 +129,13 @@ public final class app/oreshkov/clikit/Constraint$Requires : app/oreshkov/clikit
 	public final fun getSubject ()Lapp/oreshkov/clikit/Operand;
 }
 
+public final class app/oreshkov/clikit/Constraint$RequiresValue : app/oreshkov/clikit/Constraint {
+	public fun <init> (Lapp/oreshkov/clikit/Operand;Lapp/oreshkov/clikit/Option$Single;[Ljava/lang/String;)V
+	public final fun getOption ()Lapp/oreshkov/clikit/Option$Single;
+	public final fun getSubject ()Lapp/oreshkov/clikit/Operand;
+	public final fun getValues ()Ljava/util/List;
+}
+
 public abstract interface class app/oreshkov/clikit/ConversionResult {
 }
 
@@ -216,6 +223,9 @@ public final class app/oreshkov/clikit/ExitStatus {
 	public static final field TEMP_FAIL I
 	public static final field UNAVAILABLE I
 	public static final field USAGE I
+}
+
+public abstract interface annotation class app/oreshkov/clikit/ExperimentalCliKitApi : java/lang/annotation/Annotation {
 }
 
 public final class app/oreshkov/clikit/Format {

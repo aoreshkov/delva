@@ -201,6 +201,9 @@ public class Parser(
     private class Collected {
         val flags = mutableSetOf<Option.Flag>()
         val singles = mutableMapOf<Option.Single<*>, Any?>()
+
+        /** The text each of [singles] was converted from, for a message to quote what was typed. */
+        val singleTexts = mutableMapOf<Option.Single<*>, String>()
         val repeated = mutableMapOf<Option.Repeated<*>, MutableList<Any?>>()
 
         /** Each positional token, indexed by its place among the tokens, so its notice keeps command-line order. */
@@ -309,6 +312,7 @@ public class Parser(
             when (val conversion = option.converter.convert(value)) {
                 is ConversionResult.Ok -> {
                     collected.singles[option] = conversion.value
+                    collected.singleTexts[option] = value
                     collected.fromEnvironment += option
                 }
                 is ConversionResult.Invalid ->
@@ -343,16 +347,22 @@ public class Parser(
 
     /** The first constraint on [path] the command line breaks, as its message; `null` when it keeps them all. */
     private fun violation(path: List<CommandSpec>, collected: Collected, bound: Map<Argument, List<Any?>>): String? {
-        fun given(operand: Operand): Boolean = when (operand) {
-            is Option -> collected.given(operand)
-            is Argument -> !bound[operand].isNullOrEmpty()
+        val parsed = object : ParsedOperands {
+            override fun given(operand: Operand): Boolean = when (operand) {
+                is Option -> collected.given(operand)
+                is Argument -> !bound[operand].isNullOrEmpty()
+            }
+
+            override fun spell(operand: Operand): String =
+                if (operand is Option.Single<*> && operand in collected.fromEnvironment) "$operand (from ${operand.env})" else "$operand"
+
+            override fun whyAbsent(operand: Operand): String? = collected.whyAbsent(operand)
+
+            override fun value(option: Option.Single<*>): Any? = collected.singles.getValue(option)
+
+            override fun text(option: Option.Single<*>): String = collected.singleTexts.getValue(option)
         }
-
-        fun spell(operand: Operand): String =
-            if (operand is Option.Single<*> && operand in collected.fromEnvironment) "$operand (from ${operand.env})" else "$operand"
-
-        return path.asSequence().flatMap { it.constraints }
-            .firstNotNullOfOrNull { it.violation(::given, ::spell, collected::whyAbsent) }
+        return path.asSequence().flatMap { it.constraints }.firstNotNullOfOrNull { it.violation(parsed) }
     }
 
     private sealed interface ShortOutcome {
@@ -414,13 +424,19 @@ public class Parser(
             is ConversionResult.Invalid -> return "invalid value for ${spec.long}: ${conversion.reason}"
             is ConversionResult.Unset -> {
                 // As if this occurrence weren't there; for a single value, the earlier ones are overridden all the same.
-                if (spec is Option.Single<*>) collected.singles -= spec
+                if (spec is Option.Single<*>) {
+                    collected.singles -= spec
+                    collected.singleTexts -= spec
+                }
                 collected.unset(spec, "given '$value'", spec.long, conversion.notice, at)
                 return null
             }
         }
         when (spec) {
-            is Option.Single<*> -> collected.singles[spec] = converted
+            is Option.Single<*> -> {
+                collected.singles[spec] = converted
+                collected.singleTexts[spec] = value
+            }
             is Option.Repeated<*> -> collected.repeated.getOrPut(spec) { mutableListOf() } += converted
             is Option.Flag -> Unit
         }

@@ -207,6 +207,130 @@ class ConstraintTest {
         assertContains(error.message.orEmpty(), "'demo group leaf' has no [--site]")
     }
 
+    // ------------------------------------------------------------------------------------------ a required value
+
+    private val transport = Option.Single(
+        "--transport",
+        Converters.choice("stdio", "http", "sse").unsetWhen({ it.startsWith("\${") }),
+        env = "DEMO_TRANSPORT",
+    )
+    private val port = Option.Single("--port", Converters.positiveInt)
+    private val serve = CommandSpec(
+        "serve",
+        options = listOf(transport, port),
+        constraints = listOf(Constraint.RequiresValue(port, transport, "http", "sse")),
+    )
+
+    private fun serve(vararg args: String, environment: Map<String, String> = emptyMap()): ParseResult =
+        Parser(serve, environment::get).parse(args.toList())
+
+    private fun serveRefused(vararg args: String, environment: Map<String, String> = emptyMap()): String {
+        val parsed = serve(*args, environment = environment)
+        assertIs<ParseResult.UsageError>(parsed, args.joinToString(" "))
+        return parsed.message
+    }
+
+    @Test
+    fun `requires a value, from the command line or the variable`() {
+        assertIs<ParseResult.Invocation>(serve("--port", "8080", "--transport", "http"))
+        assertIs<ParseResult.Invocation>(serve("--transport", "sse", "--port", "8080"))
+        assertIs<ParseResult.Invocation>(serve("--port", "8080", environment = mapOf("DEMO_TRANSPORT" to "http")))
+        assertIs<ParseResult.Invocation>(serve("--transport", "stdio"))
+        assertIs<ParseResult.Invocation>(serve())
+    }
+
+    @Test
+    fun `another value breaks it, and the message quotes the value and names its variable`() {
+        assertEquals("--port requires --transport http or sse, but --transport is 'stdio'", serveRefused("--port", "1", "--transport", "stdio"))
+        assertEquals(
+            "--port requires --transport http or sse, but --transport is 'stdio'",
+            serveRefused("--transport", "http", "--transport", "stdio", "--port", "1"),
+        )
+        assertEquals(
+            "--port requires --transport http or sse, but --transport (from DEMO_TRANSPORT) is 'stdio'",
+            serveRefused("--port", "1", environment = mapOf("DEMO_TRANSPORT" to "stdio")),
+        )
+        assertEquals(
+            "--port requires --transport http or sse, but --transport is 'stdio'",
+            serveRefused("--port", "1", "--transport", "stdio", environment = mapOf("DEMO_TRANSPORT" to "http")),
+        )
+    }
+
+    @Test
+    fun `an absent option doesn't match, and an unset one says what was given`() {
+        assertEquals("--port requires --transport http or sse", serveRefused("--port", "1"))
+        assertEquals(
+            "--port requires --transport http or sse (--transport given '\${t}', which counts as not set)",
+            serveRefused("--port", "1", "--transport", "http", "--transport", "\${t}"),
+        )
+    }
+
+    @Test
+    fun `the README's example`() {
+        val transport = Option.Single("--transport", Converters.choice("stdio", "http"), env = "TRANSPORT")
+        val port = Option.Single("--port", Converters.positiveInt)
+        val serve = CommandSpec(
+            "serve",
+            options = listOf(transport, port),
+            constraints = listOf(Constraint.RequiresValue(port, transport, "http")),
+        )
+        assertContains(HelpRenderer().render(listOf(serve)), "Notes:\n  --port requires --transport http\n")
+        val refused = Parser(serve).parse(listOf("--port", "8080", "--transport", "stdio"))
+        assertIs<ParseResult.UsageError>(refused)
+        assertEquals("--port requires --transport http, but --transport is 'stdio'", refused.message)
+    }
+
+    @Test
+    fun `values are compared converted, not as text`() {
+        val level = Option.Single("--level", Converters.nonNegativeInt)
+        val verbose = Option.Flag("--verbose")
+        val command = CommandSpec("x", options = listOf(level, verbose), constraints = listOf(Constraint.RequiresValue(verbose, level, "2")))
+        assertIs<ParseResult.Invocation>(Parser(command).parse(listOf("--verbose", "--level", "02")))
+        val refused = Parser(command).parse(listOf("--verbose", "--level", "3"))
+        assertIs<ParseResult.UsageError>(refused)
+        assertEquals("--verbose requires --level 2, but --level is '3'", refused.message)
+    }
+
+    @Test
+    fun `help notes a required value, quoting one that couldn't stand alone`() {
+        assertContains(HelpRenderer().render(listOf(serve)), "Notes:\n  --port requires --transport http or sse\n")
+        val name = Option.Single("--name", Converters.string)
+        val a = Option.Flag("--a")
+        val command = CommandSpec("x", options = listOf(name, a), constraints = listOf(Constraint.RequiresValue(a, name, "one", "two words", "")))
+        assertContains(HelpRenderer().render(listOf(command)), "  --a requires --name one, 'two words' or ''\n")
+    }
+
+    @Test
+    fun `a required value is declared with values the converter accepts, each once`() {
+        assertContains(
+            assertFailsWith<IllegalArgumentException> { Constraint.RequiresValue(port, transport, "ftp") }.message.orEmpty(),
+            "'ftp' is not a value of --transport",
+        )
+        assertContains(
+            assertFailsWith<IllegalArgumentException> { Constraint.RequiresValue(port, transport, "\${t}") }.message.orEmpty(),
+            "counts as not set",
+        )
+        assertContains(assertFailsWith<IllegalArgumentException> { Constraint.RequiresValue(port, transport) }.message.orEmpty(), "at least one")
+        assertContains(
+            assertFailsWith<IllegalArgumentException> { Constraint.RequiresValue(port, transport, "http", "http") }.message.orEmpty(),
+            "twice",
+        )
+    }
+
+    @Test
+    fun `the option whose value is required may be required, the subject may not`() {
+        val mode = Option.Single("--mode", Converters.choice("fast", "safe"), required = true)
+        val sync = Option.Flag("--sync")
+        val command = CommandSpec("x", options = listOf(mode, sync), constraints = listOf(Constraint.RequiresValue(sync, mode, "safe")))
+        assertEquals("--sync requires --mode safe, but --mode is 'fast'", (Parser(command).parse(listOf("--sync", "--mode", "fast")) as ParseResult.UsageError).message)
+        assertIs<ParseResult.Invocation>(Parser(command).parse(listOf("--mode", "fast")))
+        val required = Option.Single("--url", Converters.string, required = true)
+        assertContains(
+            assertFailsWith<IllegalArgumentException> { Constraint.RequiresValue(required, transport, "http") }.message.orEmpty(),
+            "--url",
+        )
+    }
+
     // ------------------------------------------------------------------------------------------ standard input
 
     private object Dash : ReadsStandardInput {
