@@ -237,6 +237,9 @@ either. A Java facade is on the [roadmap](ROADMAP.md) for after 0.1.0.
 
 ## Compatibility
 
+This covers Delva's modules: delva, delva-kotlinx-serialization and delva-cli, which share one version. cli-kit has
+versions of its own, under the [policy in its README](../cli-kit/README.md#versioning).
+
 Until 1.0, the public API and the on-disk format can change in incompatible ways between minor versions. A store
 written by one version is not guaranteed to be readable by another; the format version in the store's metadata makes
 such a mismatch an error rather than a misread.

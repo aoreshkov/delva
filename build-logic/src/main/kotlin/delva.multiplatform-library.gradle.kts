@@ -2,8 +2,8 @@
 // signed Maven publication per target plus the root one that carries the Gradle module metadata, each with sources
 // and KDoc. The module sets its own JPMS name on `jvmJar`, and a consumer depends on the root coordinate.
 //
-// Publishing (see project/RELEASING.md): `publishToMavenLocal` for a local try-out,
-// `publishAllPublicationsToStagingRepository` for the signed bundle that goes to Maven Central's Portal.
+// Publishing (see project/RELEASING.md): `publishToMavenLocal` for a local try-out, and the root's stage task of the
+// module's release train (ReleaseTrain.kt) for the signed bundle that goes to Maven Central's Portal.
 
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
@@ -21,8 +21,11 @@ extensions.configure<KotlinMultiplatformExtension> {
     abiValidation()
 }
 
-// Source links point at the release tag, so the KDoc matches the released source; snapshots link to main.
-val sourceRef = version.toString().let { if (it.endsWith("-SNAPSHOT")) "main" else "v$it" }
+requirePublishedByATrain()
+
+// Source links point at the release tag of the module's train, so the KDoc matches the released source; snapshots
+// link to main.
+val sourceRef = version.toString().let { if (it.endsWith("-SNAPSHOT")) "main" else "${releaseTrain.tagPrefix}$it" }
 dokka {
     moduleName = project.name
     dokkaSourceSets.configureEach {

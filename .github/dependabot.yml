@@ -26,6 +26,8 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
+      # Libraries released from this repository, such as cli-kit for delva-cli, are proposed as soon as they ship.
+      exclude: ["app.oreshkov.*"]
     groups:
       gradle:
         patterns: ["*"]

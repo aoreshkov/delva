@@ -77,14 +77,14 @@ The [guide](project/GUIDE.md) covers the suspending functions that `blocking()` 
 | `delva` | The engine; see the [guide](project/GUIDE.md). |
 | [`delva-kotlinx-serialization`](delva-kotlinx-serialization/README.md) | Stores and reads `@Serializable` values. |
 | [`delva-cli`](delva-cli/README.md) | The `delva` command line, shipped with each GitHub release. |
-| [`cli-kit`, `cli-kit-testing`](cli-kit/README.md) | A standalone library for command-line programs, and its test kit. |
+| [`cli-kit`, `cli-kit-testing`](cli-kit/README.md) | A standalone library for command-line programs, and its test kit, with versions of its own. |
 | [`delva-examples`](delva-examples/README.md) | Runnable programs that use only the public API. |
 
 ## Documentation
 
 - [Guide](project/GUIDE.md): every feature with examples, limits and sizing, use from Java, and compatibility.
 - [Specification](project/SPEC.md): the exact semantics and canonical byte forms, a draft until 1.0.
-- [Roadmap](project/ROADMAP.md) and [changelog](CHANGELOG.md).
+- [Roadmap](project/ROADMAP.md) and [changelog](CHANGELOG.md); cli-kit has [its own](cli-kit/CHANGELOG.md).
 - [Development](project/DEVELOPMENT.md): building, the test suites and CI; [releasing](project/RELEASING.md).
 
 ## Contributing

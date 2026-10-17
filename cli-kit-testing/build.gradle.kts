@@ -4,9 +4,7 @@ plugins {
 
 description = "cli-kit-testing: test doubles, a run harness and golden files for programs built on cli-kit"
 
-group = "app.oreshkov.clikit"
-
-// Published beside cli-kit, same group and version, for a program's tests: a program's own copy of a test double
+// Published beside cli-kit, in its release train, for a program's tests: a program's own copy of a test double
 // drifts from the kit it doubles. Test-only in spirit, so it depends on cli-kit and kotlin-test and nothing else;
 // `checkPublishedDependencies` asserts that of the published module metadata rather than trusting this comment.
 kotlin {

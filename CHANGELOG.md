@@ -1,7 +1,8 @@
 # Changelog
 
-All notable changes to Delva are documented in this file. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
+All notable changes to Delva — `delva`, `delva-kotlinx-serialization` and `delva-cli` — are documented in this file.
+cli-kit has versions of its own and [its own changelog](cli-kit/CHANGELOG.md) from 0.2.0 on; 0.1.0 below lists it
+too. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Until 1.0, a minor version can change the API and the
 on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility).
 
@@ -9,29 +10,13 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ### Added
 
-- `cli-kit`: `HelpRenderer(styler, programName, width)`, a renderer that wraps to a given width.
-- `cli-kit`: `ConversionResult.Unset` and `unsetWhen`, for values that mean "not given", such as an unfilled template.
-  The parser treats them as absent and `Program` prints the converter's notice as a warning.
-- `cli-kit`: an Environment section in help, listing each option's variable and those a command declares with
-  `CommandSpec(environment = …)` and `EnvironmentVariable`.
 - `delva-cli`: help lists `DELVA_STORE` under Environment.
-- `cli-kit`: experimental API, which needs `@OptIn(ExperimentalCliKitApi::class)` and may change in a minor release:
-  `Constraint.RequiresValue`, for "this option needs that one to have one of these values".
 
 ### Changed
 
-- `cli-kit` and `cli-kit-testing` are published under the Maven group `app.oreshkov.clikit`, matching their package
-  and module names. 0.1.0 was their last release under `app.oreshkov.delva`, so change the group when updating.
-- `cli-kit`: help pages wrap to the terminal width, at most 100 columns. A `help` text can hold paragraphs and line
-  breaks; command lists and completion scripts show its first line.
+- `cli-kit` and `cli-kit-testing` are released on their own, under the Maven group `app.oreshkov.clikit` and with
+  versions of their own, so their changes are in [their changelog](cli-kit/CHANGELOG.md).
 - `delva-cli`: help fits 80 columns by default, and `--width` sets the width of help as well as tables.
-- `cli-kit`: `ConversionResult` has a new subtype, `Unset`, so an exhaustive `when` over it needs a branch for it.
-  Recompile code that inlined `ConversionResult.map`.
-- `cli-kit`: `Constraint` has a new subtype, `RequiresValue`, so an exhaustive `when` over it needs a branch for it.
-
-### Fixed
-
-- `cli-kit`: a run that wrote nothing to stdout no longer exits 74 when another writer on the same stream failed.
 
 ## [0.1.0] - 2026-10-15
 

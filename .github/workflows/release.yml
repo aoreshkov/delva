@@ -1,11 +1,12 @@
 name: Release
 
-# A tag vX.Y.Z tests, signs, attests, uploads to the Central Portal and drafts the GitHub release; project/RELEASING.md
-# has the setup it needs and the manual steps after it.
+# A tag vX.Y.Z (the Delva release train) or cli-kit-vX.Y.Z (the cli-kit train) tests, signs, attests, uploads that
+# train to the Central Portal and drafts its GitHub release; project/RELEASING.md has the setup it needs and the
+# manual steps after it.
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', 'cli-kit-v*']
 
 permissions:
   contents: read
@@ -32,8 +33,15 @@ jobs:
         with:
           cache-disabled: true
 
+      # The cli-kit train runs all of `check` too, delva-cli's tests against this cli-kit among them, because its
+      # release is public before Delva's next run has tested it. The engine's long suites don't touch cli-kit.
       - name: All test suites
-        run: ./gradlew check heapCappedTest crashTest --console=plain
+        shell: bash
+        run: |
+          case "$GITHUB_REF_NAME" in
+            cli-kit-v*) ./gradlew check --console=plain;;
+            *) ./gradlew check heapCappedTest crashTest --console=plain;;
+          esac
 
       - name: Upload test reports
         if: failure()
@@ -65,21 +73,34 @@ jobs:
       # in the Portal, or a release once published, can't simply be undone.
       - name: Check the tag matches the version, and extract the release notes
         run: |
-          version=$(sed -n 's/^version=//p' gradle.properties)
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match version=$version in gradle.properties"
+          # The tag's prefix names the train, as build-logic/src/main/kotlin/ReleaseTrain.kt defines them.
+          case "$GITHUB_REF_NAME" in
+            cli-kit-v*) train=cli-kit title=cli-kit property=clikit.version prefix=cli-kit-v
+              changelog=cli-kit/CHANGELOG.md stage=stageCliKit;;
+            *) train=delva title=Delva property=delva.version prefix=v changelog=CHANGELOG.md stage=stageDelva;;
+          esac
+          version=$(awk -F= -v p="$property" '$1 == p { print $2 }' gradle.properties)
+          if [ "$prefix$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match $property=$version in gradle.properties"
             exit 1
           fi
           case "$version" in *-SNAPSHOT) echo "::error::Snapshots aren't released"; exit 1;; esac
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          # The notes are the version's CHANGELOG.md section, without its heading or the link references after it.
+          {
+            echo "TRAIN=$train"
+            echo "TITLE=$title"
+            echo "VERSION=$version"
+            echo "STAGE_TASK=$stage"
+            echo "STAGING=build/staging-repository/$train"
+          } >> "$GITHUB_ENV"
+          # The notes are the version's section of the train's changelog, without its heading or the link references
+          # after it.
           awk -v v="$version" '
             index($0, "## [" v "]") == 1 { found = 1; next }
             found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
             found { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          ' "$changelog" > "$RUNNER_TEMP/release-notes.md"
           if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
-            echo "::error::CHANGELOG.md has no section for $version"
+            echo "::error::$changelog has no section for $version"
             exit 1
           fi
 
@@ -88,21 +109,19 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          ./gradlew :delva:publishMavenPublicationToStagingRepository \
-            :delva-kotlinx-serialization:publishMavenPublicationToStagingRepository \
-            :cli-kit:publishAllPublicationsToStagingRepository \
-            :cli-kit-testing:publishAllPublicationsToStagingRepository --console=plain
+          ./gradlew "$STAGE_TASK" --console=plain
           # Every file the Portal gets must be signed; an unsigned bundle means the key wasn't configured.
-          unsigned=$(find build/staging-repository \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \) \
+          unsigned=$(find "$STAGING" \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \) \
             -exec sh -c '[ -f "$1.asc" ] || echo "$1"' _ {} \;)
           if [ -n "$unsigned" ]; then
             echo "::error::Unsigned files: $unsigned"
             exit 1
           fi
-          (cd build/staging-repository && zip -qr ../delva-bundle.zip .)
+          (cd "$STAGING" && zip -qr "$GITHUB_WORKSPACE/build/$TRAIN-bundle.zip" .)
 
-      # The command line ships as archives on the GitHub release, not on Maven Central.
+      # The command line rides the Delva train, and ships as archives on the GitHub release, not on Maven Central.
       - name: Build the command-line distribution
+        if: env.TRAIN == 'delva'
         run: |
           ./gradlew :delva-cli:distZip :delva-cli:distTar --console=plain
           cd delva-cli/build/distributions
@@ -119,9 +138,15 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            build/staging-repository/**/*.jar
-            build/staging-repository/**/*.pom
-            build/staging-repository/**/*.module
+            ${{ env.STAGING }}/**/*.jar
+            ${{ env.STAGING }}/**/*.pom
+            ${{ env.STAGING }}/**/*.module
+
+      - name: Attest the command-line distribution's provenance
+        if: env.TRAIN == 'delva'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
             delva-cli/build/distributions/delva-cli-*.zip
             delva-cli/build/distributions/delva-cli-*.tar
 
@@ -134,8 +159,8 @@ jobs:
         run: |
           id=$(curl --fail-with-body --silent --show-error --request POST \
             --header "Authorization: Bearer $CENTRAL_TOKEN" \
-            --form bundle=@build/delva-bundle.zip \
-            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=USER_MANAGED&name=delva-$VERSION")
+            --form bundle=@"build/$TRAIN-bundle.zip" \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=USER_MANAGED&name=$TRAIN-$VERSION")
           if ! [[ $id =~ ^[0-9a-f-]{36}$ ]]; then
             echo "::error::The Portal answered the upload with no deployment id: $id"
             exit 1
@@ -169,19 +194,21 @@ jobs:
           # A version with a hyphen, such as 0.1.0-rc.1, is a pre-release, so it never becomes the latest release.
           prerelease=()
           case "$VERSION" in *-*) prerelease=(--prerelease);; esac
+          # The train's jars, and for Delva the command line's archives.
+          mapfile -t assets < <(find "$STAGING" -name '*.jar' | sort)
+          if [ "$TRAIN" = delva ]; then
+            distributions=delva-cli/build/distributions
+            assets+=("$distributions/delva-cli-$VERSION.zip" "$distributions/delva-cli-$VERSION.tar" \
+              "$distributions/SHA256SUMS")
+          fi
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag "${prerelease[@]}" \
-            --title "Delva $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" \
-            build/staging-repository/app/oreshkov/delva/delva/"$VERSION"/*.jar \
-            build/staging-repository/app/oreshkov/delva/delva-kotlinx-serialization/"$VERSION"/*.jar \
-            delva-cli/build/distributions/delva-cli-"$VERSION".zip \
-            delva-cli/build/distributions/delva-cli-"$VERSION".tar \
-            delva-cli/build/distributions/SHA256SUMS
+            --title "$TITLE $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" "${assets[@]}"
 
-  # The KDoc on GitHub Pages. Pre-releases (any tag with a hyphen, such as -rc.1) are skipped, so the site always shows
-  # the newest release.
+  # Delva's KDoc on GitHub Pages. The cli-kit train and pre-releases (any tag with a hyphen, such as -rc.1) are skipped,
+  # so the site always shows the newest Delva release.
   pages:
     needs: release
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ startsWith(github.ref_name, 'v') && !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:

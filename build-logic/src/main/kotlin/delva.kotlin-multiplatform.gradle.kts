@@ -14,6 +14,10 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
 }
 
+// Group and version come from the module's release train (ReleaseTrain.kt), first, so every later read of `version`
+// sees them.
+joinReleaseTrain()
+
 val libs = the<VersionCatalogsExtension>().named("libs")
 
 extensions.configure<KotlinMultiplatformExtension> {

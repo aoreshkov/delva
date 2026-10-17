@@ -4,9 +4,12 @@ import org.gradle.api.publish.Publication
 import org.gradle.api.publish.maven.MavenPom
 import org.gradle.plugins.signing.SigningExtension
 
-/** Where a staging publish collects the files that make up a Central upload bundle. */
+/**
+ * Where a staging publish collects the files that make up a Central upload bundle: a directory per release train, so
+ * one train's bundle never picks up the other's files.
+ */
 val Project.stagingRepository
-    get() = rootProject.layout.buildDirectory.dir("staging-repository")
+    get() = rootProject.layout.buildDirectory.dir("staging-repository/${releaseTrain.id}")
 
 /** The POM Maven Central requires, the same for every published module; the description is the module's own. */
 fun MavenPom.delvaDefaults(project: Project) {
