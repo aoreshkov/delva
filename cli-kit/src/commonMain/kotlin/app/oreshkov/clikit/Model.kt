@@ -270,6 +270,14 @@ public class EnvironmentVariable(
     override fun toString(): String = name
 }
 
+/**
+ * The variables help lists for this option: its [Option.Single.env], and those the kit reads for a standard option,
+ * such as `NO_COLOR` for [StandardOptions.noColor]. A command may not declare any of them again.
+ */
+internal fun Option.variables(): List<EnvironmentVariable> =
+    listOfNotNull((this as? Option.Single<*>)?.env?.let { EnvironmentVariable(it, "Same as $long") }) +
+        StandardOptions.variablesOf(this)
+
 /** The portable spelling of a variable's name, which every shell can export: no lower case, no leading digit. */
 private fun isEnvironmentName(name: String): Boolean = ENVIRONMENT_NAME.matches(name)
 
@@ -322,7 +330,8 @@ public class CommandSpec(
     public val constraints: List<Constraint> = emptyList(),
     /**
      * The environment variables it reads that aren't an option's [Option.Single.env], for help's Environment section,
-     * which lists the options' variables too. Like options, they apply to the commands below it, and one of those may
+     * which lists the options' variables too, and those the kit reads for [StandardOptions.noColor] and
+     * [StandardOptions.width]. Like options, they apply to the commands below it, and one of those may
      * redeclare a variable to describe it differently.
      */
     public val environment: List<EnvironmentVariable> = emptyList(),
@@ -348,7 +357,7 @@ public class CommandSpec(
         val duplicateShorts = options.mapNotNull { it.short }.groupBy { it }.filterValues { it.size > 1 }.keys
         require(duplicateShorts.isEmpty()) { "command '$name' declares $duplicateShorts twice" }
         // An option's variable is listed for it already: declaring it again would describe one variable twice.
-        val optionVariables = options.mapNotNull { (it as? Option.Single<*>)?.env }.toSet()
+        val optionVariables = options.flatMap { it.variables() }.map { it.name }.toSet()
         val duplicateVariables = environment.groupBy { it.name }.filter { (name, declared) ->
             declared.size > 1 || name in optionVariables
         }.keys

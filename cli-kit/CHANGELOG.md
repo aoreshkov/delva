@@ -8,6 +8,11 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+### Added
+
+- Help's Environment section lists the variables the kit reads for `--no-color` and `--width`: `NO_COLOR`,
+  `FORCE_COLOR`, `CLICOLOR_FORCE` and `COLUMNS`. A command can't declare them itself.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

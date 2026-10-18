@@ -160,10 +160,8 @@ public class HelpRenderer(
      */
     private fun environmentFor(path: List<CommandSpec>, visible: List<Option>): List<Entry> =
         path.asReversed().flatMap { command ->
-            val fromOptions = command.options.filter { option -> visible.any { it === option } }.mapNotNull { option ->
-                (option as? Option.Single<*>)?.env?.let { Entry(it, "Same as ${option.long}") }
-            }
-            fromOptions + command.environment.map { Entry(it.name, it.help) }
+            val fromOptions = command.options.filter { option -> visible.any { it === option } }.flatMap { it.variables() }
+            (fromOptions + command.environment).map { Entry(it.name, it.help) }
         }.distinctBy { it.name }
 
     private fun choices(choices: List<String>): String? = choices.takeIf { it.isNotEmpty() }?.joinToString("|", "(", ")")
