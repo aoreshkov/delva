@@ -8,7 +8,7 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-17
+## [0.2.0] - 2026-10-18
 
 ### Added
 
