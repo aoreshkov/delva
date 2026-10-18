@@ -4,8 +4,12 @@ kotlinxCoroutines = "1.11.0"
 kotlinxSerialization = "1.11.0"
 kotlinxBenchmark = "0.5.0"
 dokka = "2.2.0"
+# The released cli-kit that delva-cli builds on and a Delva release ships; its own train's version is clikit.version.
+cliKit = "0.2.0"
 
 [libraries]
+cli-kit = { module = "app.oreshkov.clikit:cli-kit", version.ref = "cliKit" }
+cli-kit-testing = { module = "app.oreshkov.clikit:cli-kit-testing", version.ref = "cliKit" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
