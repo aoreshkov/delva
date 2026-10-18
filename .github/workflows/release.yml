@@ -33,8 +33,9 @@ jobs:
         with:
           cache-disabled: true
 
-      # The cli-kit train runs all of `check` too, delva-cli's tests against this cli-kit among them, because its
-      # release is public before Delva's next run has tested it. The engine's long suites don't touch cli-kit.
+      # The cli-kit train runs all of `check` too, so a cli-kit release comes from a commit whose whole build passes.
+      # delva-cli builds on the cli-kit pinned in the catalog, so its tests meet this cli-kit only in the pull request
+      # that moves the pin. The engine's long suites don't touch cli-kit.
       - name: All test suites
         shell: bash
         run: |

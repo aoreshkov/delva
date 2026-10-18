@@ -19,6 +19,12 @@ published module it doesn't list fails the build, and an unpublished one takes D
 task (`stageDelva`, `stageCliKit`) builds the train's bundle in `build/staging-repository/<train>`. Only Delva's
 releases update the KDoc on GitHub Pages and become the repository's *Latest* release.
 
+delva-cli builds on a released cli-kit, the `cliKit` version in
+[`libs.versions.toml`](../gradle/libs.versions.toml), never on the cli-kit source beside it, so a Delva release ships
+the cli-kit pinned there. `checkRuntimeDependencies` fails a build in which cli-kit doesn't come from a repository. A
+cli-kit release reaches delva-cli only through a pull request that moves the pin: Dependabot's weekly run proposes
+one once the release is on Maven Central, or open it yourself as the release's last step.
+
 ## One-time setup
 
 1. **Namespace**: the `app.oreshkov` namespace has to be verified in the Central Portal (it is verified by proving
@@ -76,8 +82,8 @@ releases update the KDoc on GitHub Pages and become the repository's *Latest* re
    ```
 
 5. `release.yml` runs `check` on Linux and Windows, and for Delva also `heapCappedTest` and `crashTest`. cli-kit's
-   release runs all of `check` too, delva-cli's tests among them, because it is public before Delva's next release
-   has tested it. The `release` job then waits for your approval. Once approved, it checks that the tag matches the
+   release runs all of `check` too, but delva-cli's tests there run against the pinned cli-kit, not the one being
+   released: they meet it in the pull request that moves the pin. The `release` job then waits for your approval. Once approved, it checks that the tag matches the
    train's version, and builds and checks the train's signed bundle with its `stage` task. For Delva it also builds
    the command line's archives (`delva-cli-X.Y.Z.zip` and `.tar`, checked to hold only the start scripts, jars,
    licences and README) with their `SHA256SUMS`. It attests the build provenance of the jars, POMs, module files and
@@ -96,6 +102,9 @@ releases update the KDoc on GitHub Pages and become the repository's *Latest* re
    ```
 
 8. In a second pull request, set the train's version to the next `-SNAPSHOT` in `gradle.properties`.
+9. For cli-kit, once its files resolve from `repo.maven.apache.org`, move delva-cli's pin if delva-cli should take the
+   release now: `cliKit` in `libs.versions.toml`, with delva-cli's golden files rewritten if the help rendering
+   changed, and a line in the root `CHANGELOG.md` if users of the command line can see the difference.
 
 Anyone can check a released jar against its provenance, and the command line's archives as its
 [README](../delva-cli/README.md#installation) shows. GitHub also attests every published immutable release, and its

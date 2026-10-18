@@ -16,7 +16,7 @@ Building needs JDK 25, which Gradle uses as a toolchain; the classes it produces
 | `checkSelfContainedComments` | source files, workflows, root build scripts and documents | comments must not cite documents outside the repository |
 | `checkPublicKDoc` | published modules' main sources | every public declaration has KDoc |
 | `processTest` | delva-cli's `*ProcessTest` | the installed start script, in a child process |
-| `checkRuntimeDependencies` | delva-cli's runtime classpath | only delva, cli-kit and what they need |
+| `checkRuntimeDependencies` | delva-cli's runtime classpath | only delva, cli-kit and what they need; cli-kit from a repository, or from source with the switch below |
 | `checkPublishedDependencies` | cli-kit-testing's published module metadata | only cli-kit, kotlin-test and the standard library |
 | `:build-logic:check` | the build logic's own tests | |
 
@@ -29,6 +29,17 @@ These are left out of `check` because they take long:
 | `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads |
 
 Micro-benchmarks of internals: `./gradlew :delva:jmhBenchmark`.
+
+delva-cli builds on the released cli-kit pinned in `gradle/libs.versions.toml`, not on the cli-kit source beside it
+([RELEASING.md](RELEASING.md#release-trains) says why). To try a cli-kit change in delva-cli before it is released,
+build on the source instead:
+
+```shell
+./gradlew :delva-cli:check -Pdelva.cliKitFromSource=true
+```
+
+delva-cli's golden files follow the pinned cli-kit, so a change to cli-kit's help rendering fails them under the
+switch until the pin moves.
 
 ## How the engine stores data
 
