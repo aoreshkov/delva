@@ -4,6 +4,7 @@ import app.oreshkov.clikit.Argument
 import app.oreshkov.clikit.CommandSpec
 import app.oreshkov.clikit.Constraint
 import app.oreshkov.clikit.Converters
+import app.oreshkov.clikit.EnvironmentVariable
 import app.oreshkov.clikit.Example
 import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.InputSource
@@ -523,5 +524,8 @@ internal object DelvaCommands {
             Example("delva search kv name ada --string --json | jq .doc", "Pipe the hits on as JSON Lines"),
         ),
         epilogue = "Documentation and issues: https://github.com/aoreshkov/delva",
+        // The start script reads it, not the program, and `java -jar` doesn't. JAVA_OPTS, which the script reads too,
+        // shares its row: a variable declared here is listed on every command's page.
+        environment = listOf(EnvironmentVariable("DELVA_OPTS", "JVM options for the start script, such as -Xmx4g (or JAVA_OPTS)")),
     )
 }

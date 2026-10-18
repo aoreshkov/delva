@@ -10,7 +10,7 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ### Added
 
-- `delva-cli`: help lists `DELVA_STORE` under Environment.
+- `delva-cli`: help lists `DELVA_STORE` and `DELVA_OPTS` under Environment.
 
 ### Changed
 

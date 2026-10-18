@@ -50,6 +50,7 @@ Global options:
 
 Environment:
   DELVA_STORE  Same as --store
+  DELVA_OPTS   JVM options for the start script, such as -Xmx4g (or JAVA_OPTS)
 
 Notes:
   --count and --max-bytes cannot be combined
