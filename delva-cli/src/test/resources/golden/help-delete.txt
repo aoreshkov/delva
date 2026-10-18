@@ -1,4 +1,6 @@
-Delete documents; asks first at a terminal, and needs --force without one
+Delete documents
+
+Asks first at a terminal, and needs --force without one.
 
 Usage:
   delva delete [options] <doc>...
@@ -28,3 +30,4 @@ Global options:
 
 Environment:
   DELVA_STORE  Same as --store
+  DELVA_OPTS   JVM options for the start script, such as -Xmx4g (or JAVA_OPTS)

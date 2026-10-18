@@ -73,6 +73,14 @@ class ReadCommandsTest {
     }
 
     @Test
+    fun `--line-width indents down a pipe, as --pretty does`() {
+        val result = run("get", "2", "--line-width", "0")
+        assertEquals(ExitStatus.OK, result.status, result.stderr)
+        assertContains(result.stdout, "{\n  \"order\": 2,")
+        assertContains(result.stdout, "  \"customer\": {\n    \"name\": \"bob\"\n  },")
+    }
+
+    @Test
     fun `--max-levels outlines a document`() {
         assertEquals("""{"order": 1, "status": "open", "customer": {...}, "items": [...]}""" + "\n", run("get", "1", "--max-levels", "0", "--line-width", "200").stdout)
     }
@@ -93,6 +101,8 @@ class ReadCommandsTest {
             arrayOf("get", "1", "--pretty", "--compact") to "--pretty cannot be combined with --compact",
             arrayOf("get", "1", "--json", "--pretty") to "--json cannot be combined with --pretty",
             arrayOf("--json", "get", "1", "--max-levels", "2") to "--json cannot be combined with --max-levels",
+            arrayOf("get", "1", "--compact", "--line-width", "60") to "--compact cannot be combined with --line-width",
+            arrayOf("get", "1", "--line-width", "60", "--json") to "--json cannot be combined with --line-width",
         )) {
             val result = program.record(*args)
             assertEquals(ExitStatus.USAGE, result.status, args.joinToString(" "))
@@ -133,6 +143,23 @@ class ReadCommandsTest {
         assertContains(records[0], """"path":"${'$'}['items'][0]","type":null,""")
         assertContains(records[0], """"value":{"sku":"A1","qty":2}}""")
         assertContains(records[0], """"cursor":"""")
+    }
+
+    @Test
+    fun `--nested needs --mode element, which has hits inside hits`() {
+        for ((args, message) in listOf(
+            arrayOf("search", "kv", "sku", "\"A1\"", "--nested", "outermost") to "--nested requires --mode element",
+            arrayOf("search", "kv", "sku", "\"A1\"", "--nested", "all", "--mode", "document") to
+                "--nested requires --mode element, but --mode is 'document'",
+        )) {
+            val result = program.record(*args)
+            assertEquals(ExitStatus.USAGE, result.status, args.joinToString(" "))
+            assertEquals("error: $message\nusage: delva search kv [options] <key> <value>\n", result.stderr)
+        }
+        assertEquals(ExitStatus.USAGE, program.record("search", "path", "$..sku", "--nested", "outermost").status)
+        val element = run("search", "kv", "sku", "\"A1\"", "--mode", "element", "--nested", "outermost", "--json")
+        assertEquals(ExitStatus.OK, element.status, element.stderr)
+        assertEquals(2, element.stdout.lines().count { it.isNotEmpty() }, element.stdout)
     }
 
     @Test

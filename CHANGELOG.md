@@ -10,7 +10,7 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ### Added
 
-- `delva-cli`: help lists `DELVA_STORE` under Environment.
+- `delva-cli`: help lists `DELVA_STORE` and `DELVA_OPTS` under Environment.
 
 ### Changed
 
@@ -18,6 +18,9 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   versions of their own, so their changes are in [their changelog](cli-kit/CHANGELOG.md).
 - `delva-cli`: built on cli-kit 0.2.0 as released on Maven Central, rather than on cli-kit's source.
 - `delva-cli`: help fits 80 columns by default, and `--width` sets the width of help as well as tables.
+- `delva-cli`: `--nested` requires `--mode element`, and `--max-differences` requires `--diff`, instead of being
+  ignored.
+- `delva-cli`: `--line-width` implies `--pretty`, and can't be combined with `--compact` or `--json`.
 
 ## [0.1.0] - 2026-10-15
 

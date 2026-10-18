@@ -4,7 +4,9 @@ import app.oreshkov.clikit.Argument
 import app.oreshkov.clikit.CommandSpec
 import app.oreshkov.clikit.Constraint
 import app.oreshkov.clikit.Converters
+import app.oreshkov.clikit.EnvironmentVariable
 import app.oreshkov.clikit.Example
+import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.InputSource
 import app.oreshkov.clikit.Option
 import app.oreshkov.clikit.StandardOptions
@@ -53,7 +55,7 @@ internal object DelvaCommands {
     val lineWidth: Option.Single<Int> = Option.Single(
         "--line-width",
         Converters.intRange(0..JsonFormat.MAX_LINE_WIDTH),
-        help = "Columns an indented container may take on one line; 0 breaks every one",
+        help = "Columns an indented container may take on one line; 0 breaks every one; implies --pretty",
         valueName = "n",
         defaultDisplay = "the terminal's width",
     )
@@ -67,11 +69,16 @@ internal object DelvaCommands {
 
     private val formatOptions = listOf(pretty, compact, lineWidth, maxLevels)
 
-    /** `--json` writes one compact record per line, so it takes none of the layout flags that would say otherwise. */
+    /**
+     * `--json` writes one compact record per line, so it takes none of the layout flags that would say otherwise; and
+     * `--line-width` lays out indented JSON, so it contradicts `--compact`.
+     */
     val formatConstraints: List<Constraint> = listOf(
         Constraint.Exclusive(pretty, compact),
+        Constraint.Exclusive(compact, lineWidth),
         Constraint.Exclusive(StandardOptions.json, pretty),
         Constraint.Exclusive(StandardOptions.json, maxLevels),
+        Constraint.Exclusive(StandardOptions.json, lineWidth),
     )
 
     val mode: Option.Single<ResultMode> = Option.Single(
@@ -85,7 +92,7 @@ internal object DelvaCommands {
     val nested: Option.Single<NestedHits> = Option.Single(
         "--nested",
         ValueArgs.nested,
-        help = "With --mode element, keep hits inside other hits, or only the outermost",
+        help = "Keep hits inside other hits, or only the outermost",
         valueName = "which",
         defaultDisplay = "all",
     )
@@ -130,6 +137,13 @@ internal object DelvaCommands {
 
     private val searchConstraints: List<Constraint> = listOf(Constraint.Exclusive(count, maxBytes))
 
+    /** `--nested` filters hits inside other hits, which only `--mode element` has; an absent `--mode` is `document`. */
+    @OptIn(ExperimentalCliKitApi::class)
+    private val nestedConstraint: Constraint = Constraint.RequiresValue(nested, mode, "element")
+
+    /** For the searches that take `--mode` and `--nested`: `search key` has neither. */
+    private val hitConstraints: List<Constraint> = searchConstraints + nestedConstraint
+
     // ------------------------------------------------------------------------------------------------ commands
 
     val info: CommandSpec = CommandSpec("info", "Show what a store holds and how it was created")
@@ -154,7 +168,7 @@ internal object DelvaCommands {
 
     val get: CommandSpec = CommandSpec(
         "get",
-        "Print a stored document, or the nodes a JSONPath query selects from it",
+        "Print a stored document, or nodes from it\n\nWith --path, only the nodes a JSONPath query selects from it.",
         options = listOf(getKey, getPath, exitStatus) + formatOptions,
         arguments = listOf(getDoc),
         examples = listOf(
@@ -162,7 +176,7 @@ internal object DelvaCommands {
             Example("delva -s store get 42 --path '\$.items[*].sku'", "The SKU of every item, one per line"),
             Example("delva -s store get --key order-1042", "The document whose key is order-1042"),
         ),
-        constraints = formatConstraints,
+        constraints = formatConstraints + Constraint.ExactlyOne(getDoc, getKey),
     )
 
     val string: Option.Flag = Option.Flag("--string", "-S", help = "Take the value as a string, not as JSON")
@@ -186,7 +200,7 @@ internal object DelvaCommands {
             Example("delva -s store search kv session s-42 -S --order desc -n 1", "The newest document for a session"),
             Example("delva -s store search kv status lost -S --count", "How many documents have \"status\": \"lost\""),
         ),
-        constraints = searchConstraints,
+        constraints = hitConstraints,
     )
 
     val scan: Option.Flag = Option.Flag("--scan", help = "Read every document when no index term narrows the query")
@@ -213,7 +227,7 @@ internal object DelvaCommands {
             Example("delva -s store search path '\$..[?@.qty < 1]' --mode element -c -n 10", "Whether at least ten items are out of stock"),
             Example("delva -s store search path '\$..sku' --where \"@.kind == 'order'\"", "Every SKU in the documents of kind order"),
         ),
-        constraints = searchConstraints,
+        constraints = hitConstraints,
     )
 
     val keyPrefix: Argument.Single<String> =
@@ -251,7 +265,7 @@ internal object DelvaCommands {
     @OptIn(ExperimentalDelvaApi::class)
     val explain: CommandSpec = CommandSpec(
         "explain",
-        "Show how a JSONPath search would find its documents, without running it",
+        "Show how a JSONPath search would run\n\nShows how the search would find its documents, without running it.",
         options = listOf(where),
         arguments = listOf(explainQuery),
     )
@@ -426,7 +440,7 @@ internal object DelvaCommands {
 
     val delete: CommandSpec = CommandSpec(
         "delete",
-        "Delete documents; asks first at a terminal, and needs --force without one",
+        "Delete documents\n\nAsks first at a terminal, and needs --force without one.",
         options = listOf(dryRun, StandardOptions.force, StandardOptions.noInput),
         arguments = listOf(deleteTargets),
         examples = listOf(
@@ -437,7 +451,9 @@ internal object DelvaCommands {
 
     val reset: CommandSpec = CommandSpec(
         "reset",
-        "Delete every document and type, leaving the store as init created it; asks first at a terminal",
+        "Empty a store, keeping its creation options\n\n" +
+            "Deletes every document and type, leaving the store as init created it. Asks first at a terminal, and " +
+            "needs --force without one.",
         options = listOf(StandardOptions.force, StandardOptions.noInput),
         examples = listOf(
             Example("delva -s ./data/store reset", "Asks, then empties the store; its creation options stay"),
@@ -447,7 +463,7 @@ internal object DelvaCommands {
 
     val verify: CommandSpec = CommandSpec(
         "verify",
-        "Read the whole store and report any damage, changing nothing; exits 1 when there is some",
+        "Check a store for damage\n\nReads the whole store and reports any damage, changing nothing; exits 1 when there is some.",
     )
 
     val left: Argument.Single<ValueArgs.Operand> =
@@ -479,13 +495,14 @@ internal object DelvaCommands {
 
     val compare: CommandSpec = CommandSpec(
         "compare",
-        "Compare two JSON values, stored or not; exits 0 when equal and 1 when not",
+        "Compare two JSON values, stored or not\n\nExits 0 when they are equal and 1 when not.",
         options = listOf(diff, ignoreKey, ignorePath, compareTypes, maxDifferences),
         arguments = listOf(left, right),
         examples = listOf(
             Example("delva compare 41 42 --diff", "What changed between two versions of a document"),
             Example("delva compare 42 expected.json --ignore-path '\$.updatedAt'", "A stored document against a file"),
         ),
+        constraints = listOf(Constraint.Requires(maxDifferences, diff)),
     )
 
     val root: CommandSpec = CommandSpec(
@@ -507,5 +524,8 @@ internal object DelvaCommands {
             Example("delva search kv name ada --string --json | jq .doc", "Pipe the hits on as JSON Lines"),
         ),
         epilogue = "Documentation and issues: https://github.com/aoreshkov/delva",
+        // The start script reads it, not the program, and `java -jar` doesn't. JAVA_OPTS, which the script reads too,
+        // shares its row: a variable declared here is listed on every command's page.
+        environment = listOf(EnvironmentVariable("DELVA_OPTS", "JVM options for the start script, such as -Xmx4g (or JAVA_OPTS)")),
     )
 }

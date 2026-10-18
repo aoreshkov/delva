@@ -302,6 +302,20 @@ class WriteCommandsTest {
     }
 
     @Test
+    fun `--max-differences needs --diff, which lists them`() {
+        initialized()
+        val (v1, v2) = ids(run("insert", file("v1.json", """{"a":1,"b":2}""").toString(), file("v2.json", """{"a":2,"b":3}""").toString()))
+        val alone = program.record("compare", "$v1", "$v2", "--max-differences", "1")
+        assertEquals(ExitStatus.USAGE, alone.status)
+        assertEquals("error: --max-differences requires --diff\nusage: delva compare [options] <a> <b>\n", alone.stderr)
+
+        val capped = run("compare", "$v1", "$v2", "-d", "--max-differences", "1", "--json")
+        assertEquals(ExitStatus.FAILURE, capped.status, capped.stderr)
+        assertEquals(1, capped.stdout.lines().count { it.isNotEmpty() }, capped.stdout)
+        assertContains(capped.stderr, "stopped after 1 differences")
+    }
+
+    @Test
     fun `a path given a type twice is a usage error`() {
         val result = program.record("insert", "-", "-t", "\$=Order", "-t", "\$=Invoice", stdin = "{}".toByteArray())
         assertEquals(ExitStatus.USAGE, result.status)

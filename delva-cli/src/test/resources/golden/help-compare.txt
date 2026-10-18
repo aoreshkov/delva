@@ -1,4 +1,6 @@
-Compare two JSON values, stored or not; exits 0 when equal and 1 when not
+Compare two JSON values, stored or not
+
+Exits 0 when they are equal and 1 when not.
 
 Usage:
   delva compare [options] <a> <b>
@@ -33,3 +35,7 @@ Global options:
 
 Environment:
   DELVA_STORE  Same as --store
+  DELVA_OPTS   JVM options for the start script, such as -Xmx4g (or JAVA_OPTS)
+
+Notes:
+  --max-differences requires --diff
