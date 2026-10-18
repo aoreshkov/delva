@@ -23,8 +23,8 @@ Options:
                           as "@.kind == 'order'"
       --mode <mode>       Hits are whole documents, or the objects that contain
                           the match (document|element) [default: document]
-      --nested <which>    With --mode element, keep hits inside other hits, or
-                          only the outermost (all|outermost) [default: all]
+      --nested <which>    Keep hits inside other hits, or only the outermost
+                          (all|outermost) [default: all]
   -t, --type <name>       Only objects of this type
   -n, --limit <n>         At most n results; a notice says how to get the rest
                           [default: all]
@@ -51,3 +51,4 @@ Environment:
 
 Notes:
   --count and --max-bytes cannot be combined
+  --nested requires --mode element

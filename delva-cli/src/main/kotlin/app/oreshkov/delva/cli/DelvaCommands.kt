@@ -5,6 +5,7 @@ import app.oreshkov.clikit.CommandSpec
 import app.oreshkov.clikit.Constraint
 import app.oreshkov.clikit.Converters
 import app.oreshkov.clikit.Example
+import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.InputSource
 import app.oreshkov.clikit.Option
 import app.oreshkov.clikit.StandardOptions
@@ -85,7 +86,7 @@ internal object DelvaCommands {
     val nested: Option.Single<NestedHits> = Option.Single(
         "--nested",
         ValueArgs.nested,
-        help = "With --mode element, keep hits inside other hits, or only the outermost",
+        help = "Keep hits inside other hits, or only the outermost",
         valueName = "which",
         defaultDisplay = "all",
     )
@@ -129,6 +130,13 @@ internal object DelvaCommands {
     private val searchOptions = listOf(mode, nested, type, limit, order, after, maxBytes, count, exitStatus)
 
     private val searchConstraints: List<Constraint> = listOf(Constraint.Exclusive(count, maxBytes))
+
+    /** `--nested` filters hits inside other hits, which only `--mode element` has; an absent `--mode` is `document`. */
+    @OptIn(ExperimentalCliKitApi::class)
+    private val nestedConstraint: Constraint = Constraint.RequiresValue(nested, mode, "element")
+
+    /** For the searches that take `--mode` and `--nested`: `search key` has neither. */
+    private val hitConstraints: List<Constraint> = searchConstraints + nestedConstraint
 
     // ------------------------------------------------------------------------------------------------ commands
 
@@ -186,7 +194,7 @@ internal object DelvaCommands {
             Example("delva -s store search kv session s-42 -S --order desc -n 1", "The newest document for a session"),
             Example("delva -s store search kv status lost -S --count", "How many documents have \"status\": \"lost\""),
         ),
-        constraints = searchConstraints,
+        constraints = hitConstraints,
     )
 
     val scan: Option.Flag = Option.Flag("--scan", help = "Read every document when no index term narrows the query")
@@ -213,7 +221,7 @@ internal object DelvaCommands {
             Example("delva -s store search path '\$..[?@.qty < 1]' --mode element -c -n 10", "Whether at least ten items are out of stock"),
             Example("delva -s store search path '\$..sku' --where \"@.kind == 'order'\"", "Every SKU in the documents of kind order"),
         ),
-        constraints = searchConstraints,
+        constraints = hitConstraints,
     )
 
     val keyPrefix: Argument.Single<String> =

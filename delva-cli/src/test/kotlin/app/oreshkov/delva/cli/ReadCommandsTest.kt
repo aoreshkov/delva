@@ -136,6 +136,23 @@ class ReadCommandsTest {
     }
 
     @Test
+    fun `--nested needs --mode element, which has hits inside hits`() {
+        for ((args, message) in listOf(
+            arrayOf("search", "kv", "sku", "\"A1\"", "--nested", "outermost") to "--nested requires --mode element",
+            arrayOf("search", "kv", "sku", "\"A1\"", "--nested", "all", "--mode", "document") to
+                "--nested requires --mode element, but --mode is 'document'",
+        )) {
+            val result = program.record(*args)
+            assertEquals(ExitStatus.USAGE, result.status, args.joinToString(" "))
+            assertEquals("error: $message\nusage: delva search kv [options] <key> <value>\n", result.stderr)
+        }
+        assertEquals(ExitStatus.USAGE, program.record("search", "path", "$..sku", "--nested", "outermost").status)
+        val element = run("search", "kv", "sku", "\"A1\"", "--mode", "element", "--nested", "outermost", "--json")
+        assertEquals(ExitStatus.OK, element.status, element.stderr)
+        assertEquals(2, element.stdout.lines().count { it.isNotEmpty() }, element.stdout)
+    }
+
+    @Test
     fun `a limit prints one page and says how to get the next, and the cursor resumes it`() {
         val first = run("search", "kv", "status", "open", "-S", "-n", "1", "--json")
         assertEquals(1, first.stdout.lines().count { it.isNotEmpty() })
