@@ -499,6 +499,7 @@ internal object DelvaCommands {
             Example("delva compare 41 42 --diff", "What changed between two versions of a document"),
             Example("delva compare 42 expected.json --ignore-path '\$.updatedAt'", "A stored document against a file"),
         ),
+        constraints = listOf(Constraint.Requires(maxDifferences, diff)),
     )
 
     val root: CommandSpec = CommandSpec(

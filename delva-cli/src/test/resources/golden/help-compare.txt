@@ -33,3 +33,6 @@ Global options:
 
 Environment:
   DELVA_STORE  Same as --store
+
+Notes:
+  --max-differences requires --diff
