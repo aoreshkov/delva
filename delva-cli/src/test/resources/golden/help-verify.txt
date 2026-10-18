@@ -1,5 +1,7 @@
-Read the whole store and report any damage, changing nothing; exits 1 when there
-is some
+Check a store for damage
+
+Reads the whole store and reports any damage, changing nothing; exits 1 when
+there is some.
 
 Usage:
   delva verify [options]

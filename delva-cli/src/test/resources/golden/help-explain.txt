@@ -1,4 +1,6 @@
-Show how a JSONPath search would find its documents, without running it
+Show how a JSONPath search would run
+
+Shows how the search would find its documents, without running it.
 
 Usage:
   delva explain [options] <query>

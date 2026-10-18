@@ -1,4 +1,6 @@
-Print a stored document, or the nodes a JSONPath query selects from it
+Print a stored document, or nodes from it
+
+With --path, only the nodes a JSONPath query selects from it.
 
 Usage:
   delva get [options] [doc]

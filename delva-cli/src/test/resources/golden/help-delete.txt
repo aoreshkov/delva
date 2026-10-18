@@ -1,4 +1,6 @@
-Delete documents; asks first at a terminal, and needs --force without one
+Delete documents
+
+Asks first at a terminal, and needs --force without one.
 
 Usage:
   delva delete [options] <doc>...

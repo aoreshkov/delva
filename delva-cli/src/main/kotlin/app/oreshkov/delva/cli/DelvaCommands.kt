@@ -167,7 +167,7 @@ internal object DelvaCommands {
 
     val get: CommandSpec = CommandSpec(
         "get",
-        "Print a stored document, or the nodes a JSONPath query selects from it",
+        "Print a stored document, or nodes from it\n\nWith --path, only the nodes a JSONPath query selects from it.",
         options = listOf(getKey, getPath, exitStatus) + formatOptions,
         arguments = listOf(getDoc),
         examples = listOf(
@@ -264,7 +264,7 @@ internal object DelvaCommands {
     @OptIn(ExperimentalDelvaApi::class)
     val explain: CommandSpec = CommandSpec(
         "explain",
-        "Show how a JSONPath search would find its documents, without running it",
+        "Show how a JSONPath search would run\n\nShows how the search would find its documents, without running it.",
         options = listOf(where),
         arguments = listOf(explainQuery),
     )
@@ -439,7 +439,7 @@ internal object DelvaCommands {
 
     val delete: CommandSpec = CommandSpec(
         "delete",
-        "Delete documents; asks first at a terminal, and needs --force without one",
+        "Delete documents\n\nAsks first at a terminal, and needs --force without one.",
         options = listOf(dryRun, StandardOptions.force, StandardOptions.noInput),
         arguments = listOf(deleteTargets),
         examples = listOf(
@@ -450,7 +450,9 @@ internal object DelvaCommands {
 
     val reset: CommandSpec = CommandSpec(
         "reset",
-        "Delete every document and type, leaving the store as init created it; asks first at a terminal",
+        "Empty a store, keeping its creation options\n\n" +
+            "Deletes every document and type, leaving the store as init created it. Asks first at a terminal, and " +
+            "needs --force without one.",
         options = listOf(StandardOptions.force, StandardOptions.noInput),
         examples = listOf(
             Example("delva -s ./data/store reset", "Asks, then empties the store; its creation options stay"),
@@ -460,7 +462,7 @@ internal object DelvaCommands {
 
     val verify: CommandSpec = CommandSpec(
         "verify",
-        "Read the whole store and report any damage, changing nothing; exits 1 when there is some",
+        "Check a store for damage\n\nReads the whole store and reports any damage, changing nothing; exits 1 when there is some.",
     )
 
     val left: Argument.Single<ValueArgs.Operand> =
@@ -492,7 +494,7 @@ internal object DelvaCommands {
 
     val compare: CommandSpec = CommandSpec(
         "compare",
-        "Compare two JSON values, stored or not; exits 0 when equal and 1 when not",
+        "Compare two JSON values, stored or not\n\nExits 0 when they are equal and 1 when not.",
         options = listOf(diff, ignoreKey, ignorePath, compareTypes, maxDifferences),
         arguments = listOf(left, right),
         examples = listOf(
