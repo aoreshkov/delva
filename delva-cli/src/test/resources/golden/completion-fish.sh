@@ -50,7 +50,7 @@ complete -c delva -n '__delva_at get' -l path -s p -r -F -d 'Only the nodes this
 complete -c delva -n '__delva_at get' -l exit-status -s e -d 'Exit 1 when nothing was found'
 complete -c delva -n '__delva_at get' -l pretty -d 'Indent the JSON (the default at a terminal)'
 complete -c delva -n '__delva_at get' -l compact -d 'Write the JSON on one line (the default down a pipe)'
-complete -c delva -n '__delva_at get' -l line-width -r -F -d 'Columns an indented container may take on one line; 0 breaks every one'
+complete -c delva -n '__delva_at get' -l line-width -r -F -d 'Columns an indented container may take on one line; 0 breaks every one; implies --pretty'
 complete -c delva -n '__delva_at get' -l max-levels -r -F -d 'Write containers nested deeper than n as {...} and [...]; implies --pretty'
 complete -c delva -n '__delva_at get' -l store -s s -r -F -d 'The store directory'
 complete -c delva -n '__delva_at get' -l json -d 'Machine-readable output on stdout'

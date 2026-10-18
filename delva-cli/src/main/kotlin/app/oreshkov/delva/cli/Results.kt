@@ -20,19 +20,21 @@ import java.io.OutputStream
  * How `delva` writes stored JSON: never materialized, always streamed from the store to stdout.
  *
  * Human output is indented at a terminal and compact down a pipe, so `delva get 7 | jq` gets compact bytes;
- * `--pretty`, `--compact`, `--line-width` and `--max-levels` override it. Machine output (`--json`) is JSON Lines, one
- * record per line, and so always compact. The flags that contradict each other are refused by the command's
- * constraints (see [DelvaCommands.formatConstraints]) before this runs.
+ * `--pretty` and `--compact` override it, and `--line-width` and `--max-levels` imply `--pretty`, since they lay out
+ * indented JSON. Machine output (`--json`) is JSON Lines, one record per line, and so always compact. The flags that
+ * contradict each other are refused by the command's constraints (see [DelvaCommands.formatConstraints]) before this
+ * runs.
  */
 internal fun CommandContext.jsonFormat(): JsonFormat {
     val pretty = values[DelvaCommands.pretty]
     val compact = values[DelvaCommands.compact]
+    val lineWidth = values[DelvaCommands.lineWidth]
     val maxLevels = values[DelvaCommands.maxLevels]
     if (output.machineReadable) return JsonFormat.COMPACT
-    val indented = pretty || maxLevels != null || (io.interactive && !compact)
+    val indented = pretty || maxLevels != null || lineWidth != null || (io.interactive && !compact)
     if (!indented) return JsonFormat.COMPACT
     return JsonFormat(
-        lineWidth = values[DelvaCommands.lineWidth] ?: io.width.coerceIn(0, JsonFormat.MAX_LINE_WIDTH),
+        lineWidth = lineWidth ?: io.width.coerceIn(0, JsonFormat.MAX_LINE_WIDTH),
         maxLevels = maxLevels ?: Int.MAX_VALUE,
     )
 }

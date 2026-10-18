@@ -73,6 +73,14 @@ class ReadCommandsTest {
     }
 
     @Test
+    fun `--line-width indents down a pipe, as --pretty does`() {
+        val result = run("get", "2", "--line-width", "0")
+        assertEquals(ExitStatus.OK, result.status, result.stderr)
+        assertContains(result.stdout, "{\n  \"order\": 2,")
+        assertContains(result.stdout, "  \"customer\": {\n    \"name\": \"bob\"\n  },")
+    }
+
+    @Test
     fun `--max-levels outlines a document`() {
         assertEquals("""{"order": 1, "status": "open", "customer": {...}, "items": [...]}""" + "\n", run("get", "1", "--max-levels", "0", "--line-width", "200").stdout)
     }
@@ -93,6 +101,8 @@ class ReadCommandsTest {
             arrayOf("get", "1", "--pretty", "--compact") to "--pretty cannot be combined with --compact",
             arrayOf("get", "1", "--json", "--pretty") to "--json cannot be combined with --pretty",
             arrayOf("--json", "get", "1", "--max-levels", "2") to "--json cannot be combined with --max-levels",
+            arrayOf("get", "1", "--compact", "--line-width", "60") to "--compact cannot be combined with --line-width",
+            arrayOf("get", "1", "--line-width", "60", "--json") to "--json cannot be combined with --line-width",
         )) {
             val result = program.record(*args)
             assertEquals(ExitStatus.USAGE, result.status, args.joinToString(" "))

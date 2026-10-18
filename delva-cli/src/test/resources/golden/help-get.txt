@@ -24,7 +24,8 @@ Options:
       --pretty          Indent the JSON (the default at a terminal)
       --compact         Write the JSON on one line (the default down a pipe)
       --line-width <n>  Columns an indented container may take on one line; 0
-                        breaks every one [default: the terminal's width]
+                        breaks every one; implies --pretty
+                        [default: the terminal's width]
       --max-levels <n>  Write containers nested deeper than n as {...} and
                         [...]; implies --pretty
 
@@ -41,5 +42,7 @@ Environment:
 
 Notes:
   --pretty and --compact cannot be combined
+  --compact and --line-width cannot be combined
   --json and --pretty cannot be combined
   --json and --max-levels cannot be combined
+  --json and --line-width cannot be combined

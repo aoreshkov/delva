@@ -54,7 +54,7 @@ internal object DelvaCommands {
     val lineWidth: Option.Single<Int> = Option.Single(
         "--line-width",
         Converters.intRange(0..JsonFormat.MAX_LINE_WIDTH),
-        help = "Columns an indented container may take on one line; 0 breaks every one",
+        help = "Columns an indented container may take on one line; 0 breaks every one; implies --pretty",
         valueName = "n",
         defaultDisplay = "the terminal's width",
     )
@@ -68,11 +68,16 @@ internal object DelvaCommands {
 
     private val formatOptions = listOf(pretty, compact, lineWidth, maxLevels)
 
-    /** `--json` writes one compact record per line, so it takes none of the layout flags that would say otherwise. */
+    /**
+     * `--json` writes one compact record per line, so it takes none of the layout flags that would say otherwise; and
+     * `--line-width` lays out indented JSON, so it contradicts `--compact`.
+     */
     val formatConstraints: List<Constraint> = listOf(
         Constraint.Exclusive(pretty, compact),
+        Constraint.Exclusive(compact, lineWidth),
         Constraint.Exclusive(StandardOptions.json, pretty),
         Constraint.Exclusive(StandardOptions.json, maxLevels),
+        Constraint.Exclusive(StandardOptions.json, lineWidth),
     )
 
     val mode: Option.Single<ResultMode> = Option.Single(
