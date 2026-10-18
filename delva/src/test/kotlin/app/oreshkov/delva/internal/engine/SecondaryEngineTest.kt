@@ -21,6 +21,7 @@ import app.oreshkov.delva.internal.io.SimulatedFileSystemIo.Platform
 import app.oreshkov.delva.internal.log.LogFiles
 import app.oreshkov.delva.internal.log.LogOptions
 import app.oreshkov.delva.internal.log.ManifestStore
+import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
 import java.util.Collections
@@ -179,6 +180,47 @@ class SecondaryEngineTest {
                     assertEquals(writer.documents(), secondary.documents(), "$platform")
                 }
                 assertEquals(emptyList(), secondary.verify().issues, "$platform")
+            }
+        }
+    }
+
+    /**
+     * A writer killed after its MANIFEST was renamed into place, before `CURRENT` named it: the secondary reads that
+     * MANIFEST and its segments, and recovery goes back to the one before. The segments' file numbers must not name other
+     * files later, or the secondary would read the new ones through what it read of the old ones.
+     */
+    @Test
+    fun `file numbers a MANIFEST that CURRENT never named used aren't used again`() {
+        for (platform in Platform.entries) {
+            val fs = SimulatedFileSystemIo(platform)
+            val options = options()
+            val random = Random(9)
+            val process = fs.process()
+            var killed = false
+            val io = object : FileSystemIo by process {
+                override fun atomicRename(from: Path, to: Path) {
+                    if (killed && to.fileName.toString() == ManifestStore.CURRENT) throw IOException("killed")
+                    process.atomicRename(from, to)
+                }
+            }
+            val writer = Engine.open(dir, options, io)
+            repeat(4) { writer.insert(doc(random, it)) }
+            writer.flush()
+            secondary(fs, options).use { secondary ->
+                repeat(4) { writer.insert(doc(random, 10 + it)) }
+                killed = true
+                assertTrue(runCatching { writer.flush() }.isFailure, "$platform: the kill")
+                process.exit()
+                runCatching { writer.close() }
+                assertTrue(secondary.refresh())
+                assertEquals(8, secondary.documents().size, "$platform: the MANIFEST CURRENT never named")
+                Engine.open(dir, options, fs.process()).use { recovered ->
+                    repeat(4) { recovered.insert(doc(random, 20 + it)) }
+                    recovered.flush()
+                    assertTrue(secondary.refresh())
+                    assertEquals(recovered.documents(), secondary.documents(), "$platform")
+                    assertEquals(emptyList(), secondary.verify().issues, "$platform")
+                }
             }
         }
     }
