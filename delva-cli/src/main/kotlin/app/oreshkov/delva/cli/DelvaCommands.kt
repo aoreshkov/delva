@@ -176,7 +176,7 @@ internal object DelvaCommands {
             Example("delva -s store get 42 --path '\$.items[*].sku'", "The SKU of every item, one per line"),
             Example("delva -s store get --key order-1042", "The document whose key is order-1042"),
         ),
-        constraints = formatConstraints,
+        constraints = formatConstraints + Constraint.ExactlyOne(getDoc, getKey),
     )
 
     val string: Option.Flag = Option.Flag("--string", "-S", help = "Take the value as a string, not as JSON")

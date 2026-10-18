@@ -68,8 +68,14 @@ class DocumentKeyCommandsTest {
         assertEquals(ExitStatus.OK, none.status)
         assertContains(none.stderr, "no document has the key nothing")
         assertEquals(ExitStatus.FAILURE, run("get", "--key", "nothing", "-e").status)
-        assertEquals(ExitStatus.USAGE, run("get").status)
-        assertEquals(ExitStatus.USAGE, run("get", "1", "--key", "order-1").status)
+        for ((args, message) in listOf(
+            arrayOf("get") to "exactly one of <doc> and --key is required",
+            arrayOf("get", "1", "--key", "order-1") to "<doc> cannot be combined with --key",
+        )) {
+            val result = run(*args)
+            assertEquals(ExitStatus.USAGE, result.status, args.joinToString(" "))
+            assertEquals("error: $message\nusage: delva get [options] [doc]\n", result.stderr)
+        }
     }
 
     @Test

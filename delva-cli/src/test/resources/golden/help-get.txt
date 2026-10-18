@@ -49,3 +49,4 @@ Notes:
   --json and --pretty cannot be combined
   --json and --max-levels cannot be combined
   --json and --line-width cannot be combined
+  exactly one of <doc> and --key

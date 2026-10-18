@@ -28,9 +28,6 @@ internal val get = CommandHandler { context ->
     val format = context.jsonFormat()
     val given = context.values[DelvaCommands.getDoc]
     val key = context.values[DelvaCommands.getKey]
-    if ((given == null) == (key == null)) {
-        throw CommandFailure(ExitStatus.USAGE, "give a document id or ${DelvaCommands.getKey.long}, not ${if (key == null) "neither" else "both"}")
-    }
     val query = context.values[DelvaCommands.getPath] ?: WHOLE_DOCUMENT
     context.withReader { store, _ ->
         val doc = given ?: run {
