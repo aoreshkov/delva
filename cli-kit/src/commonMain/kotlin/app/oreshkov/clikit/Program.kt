@@ -106,6 +106,26 @@ public object StandardOptions {
         arguments = listOf(shell),
     )
 
+    /**
+     * The variables the colour decision reads besides [noColor], which help lists with it: a program that offers
+     * `--no-color` honours them too. `TERM=dumb` is left out, as a property of the terminal rather than a choice.
+     */
+    private val colourVariables: List<EnvironmentVariable> = listOf(
+        EnvironmentVariable("NO_COLOR", "Not empty: never emit colour, as --no-color does"),
+        EnvironmentVariable("FORCE_COLOR", "Not empty: emit colour even down a pipe; --no-color and NO_COLOR win"),
+        EnvironmentVariable("CLICOLOR_FORCE", "1: the same as FORCE_COLOR"),
+    )
+
+    /** The variable the terminal's width comes from, which help lists with [width]. */
+    private val widthVariables: List<EnvironmentVariable> = listOf(EnvironmentVariable("COLUMNS", "The default for --width"))
+
+    /** The variables the kit itself reads for [option], one of these; none for any other option. */
+    internal fun variablesOf(option: Option): List<EnvironmentVariable> = when {
+        option === noColor -> colourVariables
+        option === width -> widthVariables
+        else -> emptyList()
+    }
+
     /** `--no-color`, read straight off the raw command line. */
     public fun noColor(args: Array<String>): Boolean = noColor.long in args
 
@@ -285,7 +305,7 @@ public class Program(
      * would describe the one variable twice, in two ways that can drift apart.
      */
     private fun checkEnvironment(path: List<CommandSpec>) {
-        val optionVariables = optionsFor(path).mapNotNull { (it as? Option.Single<*>)?.env }.toSet()
+        val optionVariables = optionsFor(path).flatMap { it.variables() }.map { it.name }.toSet()
         val twice = path.flatMap { it.environment }.map { it.name }.filter { it in optionVariables }.distinct()
         require(twice.isEmpty()) {
             "'${commandLine(path)}' declares the environment variables $twice, which its options already read"

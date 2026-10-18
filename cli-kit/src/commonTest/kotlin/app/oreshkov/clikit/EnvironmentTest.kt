@@ -106,6 +106,35 @@ class EnvironmentTest {
     }
 
     @Test
+    fun `--no-color and --width bring the variables the kit reads for them`() {
+        val root = CommandSpec("demo", options = listOf(store, StandardOptions.noColor, StandardOptions.width), environment = listOf(home))
+        assertEquals(
+            "  DEMO_STORE      Same as --store\n" +
+                "  NO_COLOR        Not empty: never emit colour, as --no-color does\n" +
+                "  FORCE_COLOR     Not empty: emit colour even down a pipe; --no-color and\n" +
+                "                  NO_COLOR win\n" +
+                "  CLICOLOR_FORCE  1: the same as FORCE_COLOR\n" +
+                "  COLUMNS         The default for --width\n" +
+                "  DEMO_HOME       Where the program is installed\n",
+            environmentSection(listOf(root)),
+        )
+        assertEquals(null, environmentSection(listOf(CommandSpec("demo", options = listOf(StandardOptions.json)))))
+    }
+
+    @Test
+    fun `a program can't declare a variable the kit lists for a standard option`() {
+        val noColor = EnvironmentVariable("NO_COLOR", "No colour")
+        val same = assertFailsWith<IllegalArgumentException> {
+            CommandSpec("demo", options = listOf(StandardOptions.noColor), environment = listOf(noColor))
+        }
+        assertContains(same.message.orEmpty(), "NO_COLOR")
+        val leaf = CommandSpec("run", environment = listOf(EnvironmentVariable("COLUMNS", "Width")))
+        val root = CommandSpec("demo", options = listOf(StandardOptions.width), subcommands = listOf(leaf))
+        val below = assertFailsWith<IllegalArgumentException> { Program(root, "demo 1.0", mapOf(leaf to CommandHandler { 0 })) }
+        assertEquals("'demo run' declares the environment variables [COLUMNS], which its options already read", below.message)
+    }
+
+    @Test
     fun `two options may still read one variable`() {
         val other = Option.Single("--archive", Converters.string, env = "DEMO_STORE")
         val command = CommandSpec("demo", options = listOf(store, other))
