@@ -8,6 +8,8 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
 ### Added
 
 - `HelpRenderer(styler, programName, width)`, a renderer that wraps to a given width.
@@ -33,4 +35,5 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 - A run that wrote nothing to stdout no longer exits 74 when another writer on the same stream failed.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/cli-kit-v0.2.0...HEAD
+[0.2.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.2.0
