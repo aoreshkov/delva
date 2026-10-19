@@ -22,6 +22,11 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   ignored.
 - `delva-cli`: `--line-width` implies `--pretty`, and can't be combined with `--compact` or `--json`.
 
+### Fixed
+
+- `delva`: after a writer was killed mid-flush, its recovery could give a new index file the number of one a secondary
+  had already read, and the secondary then failed with `CorruptionException` or read the wrong index blocks.
+
 ## [0.1.0] - 2026-10-15
 
 First public release.

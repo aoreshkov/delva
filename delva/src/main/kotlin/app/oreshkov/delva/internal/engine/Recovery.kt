@@ -79,7 +79,7 @@ internal class RecoveryStats {
  * damaged before it. BEGINs without COMMIT or ABORT get an ABORT. Lane files end at their last committed byte;
  * older lane files are sealed. Files no MANIFEST refers to are deleted, and so are log files that space reclamation
  * dropped from the MANIFEST before a crash kept it from deleting them; a delete that fails leaves the file to the next
- * open ([discard]).
+ * open ([discard]). New files are numbered above every file found, so no file number names two files.
  *
  * Damaged fragment records inside replayed extents don't stop the store from opening: the fragment is skipped, its
  * document is reported in [Recovered.damagedDocIds], and reads that need it fail.
@@ -133,7 +133,14 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
         }
         // The next MANIFEST goes above every one on disk, also one a crash left above the loaded one.
         val manifestNo = maxOf(manifest.manifestNo, manifests.highestOnDisk())
-        val files = LogFiles(io, dir, logOptions, manifests, info, manifestNo, manifest.nextFileNo, manifest.files)
+        // File numbers continue above every numbered file on disk too. The files a MANIFEST that CURRENT never named
+        // lists are deleted below, but a secondary may have read that MANIFEST and know them by their numbers; the
+        // MANIFEST recovery writes records the new nextFileNo before they're deleted.
+        val highestFileNo = maxOf(
+            onDisk.keys.maxOrNull() ?: 0L, segmentsOnDisk.keys.maxOrNull() ?: 0L,
+            bitmapsOnDisk.keys.maxOrNull() ?: 0L, typeDictionariesOnDisk.maxOrNull() ?: 0L,
+        )
+        val files = LogFiles(io, dir, logOptions, manifests, info, manifestNo, maxOf(manifest.nextFileNo, highestFileNo + 1), manifest.files)
         // Before replay: replayed fragments may be compressed with any of them.
         val dictionaries = DictionaryFiles.load(io, dictionaryDir, manifest.dictionaries, engine.codecs, tmpDir)
         files.restoreDictionaries(manifest.dictionaries + dictionaries)
