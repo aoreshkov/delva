@@ -8,6 +8,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Added
 
 - `delva-cli`: help lists `DELVA_STORE` and `DELVA_OPTS` under Environment.
@@ -15,7 +17,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 ### Changed
 
 - `cli-kit` and `cli-kit-testing` are released on their own, under the Maven group `app.oreshkov.clikit` and with
-  versions of their own, so their changes are in [their changelog](cli-kit/CHANGELOG.md).
+  versions of their own, so their changes are in
+  [their changelog](https://github.com/aoreshkov/delva/blob/main/cli-kit/CHANGELOG.md).
 - `delva-cli`: built on cli-kit 0.2.0 as released on Maven Central, rather than on cli-kit's source.
 - `delva-cli`: help fits 80 columns by default, and `--width` sets the width of help as well as tables.
 - `delva-cli`: `--nested` requires `--mode element`, and `--max-differences` requires `--diff`, instead of being
@@ -45,5 +48,6 @@ First public release.
 - `delva-cli`: the `delva` command line, attached to the release with SHA-256 sums and build provenance.
 - `cli-kit` and `cli-kit-testing`: a toolkit for Kotlin command-line programs, and its test kit.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/aoreshkov/delva/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aoreshkov/delva/releases/tag/v0.1.0
