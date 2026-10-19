@@ -23,6 +23,9 @@ import kotlin.test.fail
  *   none whose delete it acknowledged before; any other document it shows is one the child was writing;
  * - after each kill, once the parent recovered the store, a refresh shows exactly the recovered documents, and both the
  *   recovered writer and the secondaries verify clean.
+ *
+ * Where every write waits for a slow disk, a round writes only a few dozen documents, so the rounds go on past [ROUNDS]
+ * until the long-lived secondary has followed space reclamation.
  */
 class SecondaryCrashTest {
     @Test
@@ -37,7 +40,8 @@ class SecondaryCrashTest {
                 var next = 0
                 var refreshes = 0L
                 var epochs = 0L
-                repeat(ROUNDS) { round ->
+                var round = 0
+                while (round < ROUNDS || (longLived.stats.replayedRelocations == 0L && round < MAX_ROUNDS)) {
                     val events = Collections.synchronizedList(ArrayList<Event>())
                     val child = ProcessBuilder(
                         listOf(ProcessHandle.current().info().command().orElse("java"), "-cp", System.getProperty("java.class.path"), CrashChild::class.java.name, dir.toString(), next.toString(), "churn"),
@@ -51,13 +55,16 @@ class SecondaryCrashTest {
                             }
                         }
                     }
-                    val killAt = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(random.nextLong(1000, 4000))
+                    val window = TimeUnit.MILLISECONDS.toNanos(random.nextLong(1000, 4000))
+                    // Set at the child's first acknowledgement, so starting the JVM and recovering don't use up the window.
+                    var killAt = Long.MAX_VALUE
                     var fresh: SecondaryEngine? = null
                     // Acknowledged documents a refresh didn't show: checked once the child's every report is read.
                     val missedWhileRunning = HashSet<Long>()
                     try {
                         try {
-                            while (System.nanoTime() < killAt) {
+                            while (System.nanoTime() < killAt && child.isAlive) {
+                                if (killAt == Long.MAX_VALUE && events.isNotEmpty()) killAt = System.nanoTime() + window
                                 if (fresh == null && events.size > 20) fresh = SecondaryEngine.open(dir, JdkFileSystemIo(), options = options)
                                 for (secondary in listOfNotNull(longLived, fresh)) {
                                     val known = synchronized(events) { events.toList() }
@@ -103,7 +110,8 @@ class SecondaryCrashTest {
                         fresh?.close()
                     }
                     epochs = longLived.epochsOpened
-                    println("round $round: ${events.count { it.index >= 0 }} inserts and ${events.count { it.index < 0 }} deletes acknowledged; $refreshes refreshes, $epochs epochs so far")
+                    println("round $round: ${events.count { it.index >= 0 }} inserts and ${events.count { it.index < 0 }} deletes acknowledged; $refreshes refreshes, $epochs epochs and ${longLived.stats.replayedRelocations} relocations so far")
+                    round++
                 }
                 assertTrue(epochs > ROUNDS, "the long-lived secondary followed flushes and compactions: $epochs epochs")
                 assertTrue(longLived.stats.replayedRelocations > 0, "the long-lived secondary followed space reclamation")
@@ -144,6 +152,6 @@ class SecondaryCrashTest {
 
     private companion object {
         const val ROUNDS = 5
-
+        const val MAX_ROUNDS = 20
     }
 }
