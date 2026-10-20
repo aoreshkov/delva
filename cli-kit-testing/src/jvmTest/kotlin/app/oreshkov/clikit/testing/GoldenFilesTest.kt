@@ -1,7 +1,11 @@
 package app.oreshkov.clikit.testing
 
 import app.oreshkov.clikit.CommandSpec
+import app.oreshkov.clikit.Converters
+import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.Option
+import app.oreshkov.clikit.Setting
+import app.oreshkov.clikit.Settings
 import app.oreshkov.clikit.Shell
 import app.oreshkov.clikit.StandardOptions
 import java.nio.file.Path
@@ -64,6 +68,23 @@ class GoldenFilesTest {
         assertContains(directory.resolve("help-store-get.txt").readText(), "--raw")
 
         golden.assertSurface(root)
+    }
+
+    @Test
+    @OptIn(ExperimentalCliKitApi::class)
+    fun `with the program's settings, the pages show the configuration it reads`() {
+        val settings = object : Settings {
+            override val locations: List<String> = listOf("the user file")
+
+            override fun read(): List<Setting> = emptyList()
+        }
+        val key = Option.Single("--store", Converters.string, config = "store")
+        val tree = CommandSpec("demo", options = listOf(key))
+        write { golden.assertSurface(tree, settings = settings) }
+        assertContains(directory.resolve("help-root.txt").readText(), "Configuration:\n  store  Same as --store\n")
+
+        golden.assertSurface(tree, settings = settings)
+        assertFailsWith<AssertionError> { golden.assertSurface(tree) }
     }
 
     @Test

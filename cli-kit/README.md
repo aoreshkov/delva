@@ -5,7 +5,8 @@ repository: the machinery of a command-line program. It depends on the Kotlin st
 even Delva, and knows no command of any program's: a program declares its own tree and its handlers.
 
 - A command-tree parser whose options and arguments are typed handles (`values[limit]` is an `Int?`), declared once
-  for parsing, help and completion, with environment-variable fallbacks, command aliases,
+  for parsing, help and completion, with environment-variable fallbacks, values from
+  [configuration files](#configuration-files) where XDG and Windows put them, command aliases,
   [former names and deprecations](#renaming-and-deprecating) that keep old command lines working, and values that
   converters can call "not given", such as an unfilled template.
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
@@ -20,8 +21,8 @@ even Delva, and knows no command of any program's: a program declares its own tr
 - Terminal I/O that keeps the payload on stdout and everything decorative on stderr, with colour decided once and ANSI
   enabled on a legacy Windows console; prompts, confirmations, secrets, progress, log lines and `--quiet`. Control
   characters in table cells, notices and errors are shown as `\u001B`, never sent to the terminal.
-- A `Program` runner that answers `--help`, [`help <command>`](#a-help-command), `--version` and usage errors (exit
-  status 2), hands every other command
+- A `Program` runner that answers `--help`, [`help <command>`](#a-help-command), `--version`, usage errors (exit
+  status 2) and configuration errors (78), hands every other command
   to the handler the program registered for it, turns an expected failure (`CommandFailure`) into its exit status
   (`ExitStatus` names the `sysexits.h` codes), and lets a command that runs until stopped stop cleanly on Ctrl-C or
   SIGTERM.
@@ -186,11 +187,74 @@ parser and the completion scripts read them all. `help` reads them too, and warn
 A command that declares two subcommands, or two options, that can be typed the same way is refused when it's built,
 and so, by `Program`, is a root with any of these: its name is the program's own.
 
+## Configuration files
+
+An option that takes one value can declare a key, and a program that gives `Program` its settings then reads the
+option from configuration files ([experimental](#experimental-api)):
+
+```kotlin
+val store = Option.Single("--store", Converters.path, valueName = "dir", env = "TOOL_STORE", config = "store")
+val list = CommandSpec("list", "List entries", options = listOf(store))
+val root = CommandSpec("tool", subcommands = listOf(list))
+
+@OptIn(ExperimentalCliKitApi::class)
+val program = Program(
+    root,
+    "tool 1.0",
+    mapOf(list to CommandHandler { context -> context.output.text("${context.values[store]}"); ExitStatus.OK }),
+    environment = System::getenv,
+    settings = ConfigurationFiles("tool", variable = "TOOL_CONFIG"),
+)
+```
+
+With `store = /srv/tool` in `~/.config/tool/config`, `tool list` uses `/srv/tool`. The first source that gives a
+usable value wins: the command line, then the option's variable, then the files, highest first, then the handler's
+default. A value the converter calls "not given" moves on to the next one, and so does an empty one. Flags and
+repeated options can't be configured: there's no `--no-x` to undo a flag a file turned on, and no answer users expect
+to whether a file's values replace the command line's or add to them.
+
+`ConfigurationFiles` reads these files, highest first. A variable that is unset or empty takes its default, and a
+relative path in an XDG variable is ignored, as the XDG Base Directory specification says:
+
+| Layer | Linux, macOS | Windows |
+|---|---|---|
+| project, if `project = ".tool"` | the nearest `.tool/config` from the working directory up | the same |
+| user | the file `$TOOL_CONFIG` names, if `variable = "TOOL_CONFIG"` and it's set; else `$XDG_CONFIG_HOME/tool/config`; else `~/.config/tool/config` | the same, but `%APPDATA%\tool\config` in place of `~/.config/tool/config` |
+| system, unless `system = false` | `tool/config` in each directory of `$XDG_CONFIG_DIRS`, by default `/etc/xdg` | `%ProgramData%\tool\config` |
+
+The format is the kit's own, with no dependency:
+
+- UTF-8, at most 1 MiB, with a leading byte-order mark ignored; lines end in LF or CRLF.
+- `key = value`, with the whitespace around the key and the value trimmed. The value is taken as written, with no
+  quotes or escapes, so `store = C:\work\store` means what it says, where `java.util.Properties` would read
+  `C:workstore`.
+- A key is lower case, digits, `-` and `.`, and a file may give it once.
+- Blank lines are ignored, and so are lines whose first non-blank character is `#` or `;`. A line that starts with `[`
+  is an error, kept for sections in a later version.
+
+A file that doesn't exist is skipped, except the one the variable names. A file that can't be read or is malformed is
+an error that names the file and line, and so is a value the converter refuses: `error: invalid value for --store
+(from /home/ana/.config/tool/config:3): …`, exit status 78 (`ExitStatus.CONFIG`), with no usage line. The files are
+read only when a value is wanted from them, so `--help`, `help`, `--version`, `completion` and a command with no
+configurable option work whatever they say. A key that no option of the tree declares is warned about, with the
+nearest key, and `--quiet` silences the warning. Help tags the option `[config: store]` and lists the command's keys,
+and where they're read, in a Configuration section; `GoldenFiles.assertSurface(root, settings = …)` pins those pages.
+
+Anyone who can write a file can set every key, so give no key to an option that takes a secret, a command to run or
+code to load, and `readSecret` never reads one. The project file is off unless the program asks for it, since a
+repository someone else wrote can carry one. A value is read as if it were typed, so a relative path is relative to
+the working directory, not to the file: write absolute paths in a user or system file.
+
+To read another format, or from somewhere else, implement `Settings`.
+
 ## Experimental API
 
 `@ExperimentalCliKitApi` marks what is new and may still change, in signature or behaviour, in a minor release. Using
 it needs `@OptIn(ExperimentalCliKitApi::class)`, and the [changelog](CHANGELOG.md) says when a mark is lifted. It marks
-`Constraint.RequiresValue`, a rule that one operand needs an option to have one of some values:
+the types of [configuration files](#configuration-files), `Settings`, `Setting`, `SettingsException` and
+`ConfigurationFiles`, and the constructors of `Program`, `Parser` and `HelpRenderer` that take settings, while an
+option's `config` key is stable. It also marks `Constraint.RequiresValue`, a rule that one operand needs an option to
+have one of some values:
 
 ```kotlin
 val transport = Option.Single("--transport", Converters.choice("stdio", "http"), env = "TRANSPORT")

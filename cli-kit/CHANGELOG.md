@@ -15,11 +15,17 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 - `StandardOptions.help`, a `help [command]...` command that shows a command's help page.
 - Command aliases (`CommandSpec(aliases = …)`), and former names and deprecation for options and commands
   (`formerNames`, `deprecated`), still parsed and warned about on use.
+- Values for options from configuration files: `Option.Single(config = …)` names an option's key, and
+  `ConfigurationFiles` reads it from the project, user and system files where XDG and Windows put them. Help tags the
+  option `[config: …]` and lists the keys in a Configuration section. `Settings`, `ConfigurationFiles` and the
+  constructors that take them are experimental.
 
 ### Changed
 
 - A command that declares two subcommands with the same name, or that can be typed the same way through an alias or
   a former name, is refused when it's built.
+- `ParseResult` has a new subtype, `ConfigurationError`, for a configuration file that can't be read or gives a value
+  that isn't valid (exit status 78), so an exhaustive `when` over it needs a branch.
 
 ## [0.2.0] - 2026-10-18
 

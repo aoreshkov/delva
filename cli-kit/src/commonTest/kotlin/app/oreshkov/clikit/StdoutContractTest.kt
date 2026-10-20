@@ -23,6 +23,7 @@ class StdoutContractTest {
         help = "Working directory",
         env = "FIX_DIR",
         formerNames = listOf("--workdir"),
+        config = "dir",
     )
     private val limit = Option.Single("--limit", Converters.positiveInt, "-n", valueName = "n", required = true, env = "FIX_LIMIT")
     private val from = Option.Single("--from", Converters.string, valueName = "file")
@@ -79,12 +80,22 @@ class StdoutContractTest {
 
     private var behaviour: Behaviour = behaviours.first()
 
+    /** What the program's settings answer: none, by default. */
+    private var settings: () -> List<Setting> = { emptyList() }
+
+    private val held = object : Settings {
+        override val locations: List<String> = listOf("the fixture's settings")
+
+        override fun read(): List<Setting> = settings()
+    }
+
     private val program = Program(
         root,
         "fix 1.0",
         root.runnablePaths().associate { it.last() to CommandHandler { context -> behaviour.act(context); behaviour.status } },
         translate = { (it as? NoSuchElementException)?.let { e -> CommandFailure(ExitStatus.NO_INPUT, e.message.orEmpty()) } },
         environment = { name -> environment[name] },
+        settings = held,
     )
 
     private var environment: Map<String, String> = emptyMap()
@@ -109,9 +120,10 @@ class StdoutContractTest {
     @Test
     fun `help is written to stdout, for every command, and nothing to stderr`() {
         for (path in root.paths()) {
-            val expected = HelpRenderer().render(path)
-            // The fixture exercises the whole page, the Environment section included.
+            val expected = HelpRenderer(Styler.Plain, null, TableRenderer.DEFAULT_WIDTH, held).render(path)
+            // The fixture exercises the whole page, the Environment and Configuration sections included.
             assertContains(expected, "Environment:\n")
+            assertContains(expected, "Configuration:\n")
             val asked = listOf(words(path) + "--help", words(path) + "-h", listOf("help") + words(path)) +
                 listOfNotNull(words(path).takeIf { !path.last().runnable })
             for (args in asked) {
@@ -170,6 +182,28 @@ class StdoutContractTest {
         // A bad value from a variable is a usage error too.
         val fromVariable = record(listOf("store", "get", "k"), env = mapOf("FIX_LIMIT" to "many"))
         assertEquals(ExitStatus.USAGE to "", fromVariable.status to fromVariable.stdout)
+    }
+
+    @Test
+    fun `a configuration error, or a warning about a setting, writes nothing to stdout`() {
+        try {
+            for (path in root.runnablePaths()) {
+                settings = { throw SettingsException("fix.conf:1: expected 'key = value'") }
+                val broken = record(valid(path))
+                assertEquals(ExitStatus.CONFIG to "", broken.status to broken.stdout, "fix ${valid(path)}")
+                assertEquals("error: fix.conf:1: expected 'key = value'\n", broken.stderr, "fix ${valid(path)}")
+
+                behaviour = behaviours.first { it.stdout.isNotEmpty() }
+                settings = { listOf(Setting("dir", "\${dir}", "fix.conf:1"), Setting("nope", "1", "fix.conf:2")) }
+                val warned = record(valid(path))
+                assertEquals(ExitStatus.OK to "payload\n", warned.status to warned.stdout, "fix ${valid(path)}")
+                assertContains(warned.stderr, "warning: fix.conf:1: ignoring '\${dir}': an unfilled template\n")
+                assertContains(warned.stderr, "warning: fix.conf:2: unknown setting 'nope'\n")
+            }
+        } finally {
+            settings = { emptyList() }
+            behaviour = behaviours.first()
+        }
     }
 
     @Test

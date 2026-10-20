@@ -4,7 +4,9 @@ public final class app/oreshkov/clikit/testing/GoldenFiles {
 	public final fun assertMatches (Ljava/lang/String;Ljava/lang/String;)V
 	public final fun assertNoOrphans (Ljava/util/Set;)V
 	public final fun assertSurface (Lapp/oreshkov/clikit/CommandSpec;Lapp/oreshkov/clikit/Styler;Ljava/util/Set;)V
+	public final fun assertSurface (Lapp/oreshkov/clikit/CommandSpec;Lapp/oreshkov/clikit/Styler;Ljava/util/Set;Lapp/oreshkov/clikit/Settings;)V
 	public static synthetic fun assertSurface$default (Lapp/oreshkov/clikit/testing/GoldenFiles;Lapp/oreshkov/clikit/CommandSpec;Lapp/oreshkov/clikit/Styler;Ljava/util/Set;ILjava/lang/Object;)V
+	public static synthetic fun assertSurface$default (Lapp/oreshkov/clikit/testing/GoldenFiles;Lapp/oreshkov/clikit/CommandSpec;Lapp/oreshkov/clikit/Styler;Ljava/util/Set;Lapp/oreshkov/clikit/Settings;ILjava/lang/Object;)V
 	public final fun existing ()Ljava/util/Set;
 }
 

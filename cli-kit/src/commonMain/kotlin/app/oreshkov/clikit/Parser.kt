@@ -16,9 +16,11 @@ public sealed interface ParseResult {
         public val values: OptionValues,
         /**
          * Warnings for the command line: first each command selected by a former name or deprecated, then, in
-         * command-line order and then the variables', each option typed by a former name or deprecated, once per
-         * spelling, and what the converters said about values they called [ConversionResult.Unset], each after the
-         * option, argument or variable it came from. [Program] prints them as warnings; the parser itself never prints.
+         * command-line order and then the variables' and the settings', each option typed by a former name or
+         * deprecated, once per spelling, and what the converters said about values they called
+         * [ConversionResult.Unset], each after the option, argument, variable or setting it came from; last, each
+         * setting whose key no option of the tree declares. [Program] prints them as warnings; the parser itself never
+         * prints.
          */
         public val notices: List<String> = emptyList(),
     ) : ParseResult {
@@ -67,6 +69,21 @@ public sealed interface ParseResult {
         override fun toString(): String =
             "UsageError(message=$message, command=${commandLine(path)}${suggestion?.let { ", suggestion=$it" } ?: ""})"
     }
+
+    /**
+     * Exit [ExitStatus.CONFIG], with a message on stderr and no usage line, since the command line isn't at fault: the
+     * parser's [Settings] couldn't be read, or gave an option a value its converter refused.
+     */
+    public class ConfigurationError internal constructor(
+        /** What is wrong, naming the file and line it is in. */
+        public val message: String,
+    ) : ParseResult {
+        override fun equals(other: Any?): Boolean = other is ConfigurationError && other.message == message
+
+        override fun hashCode(): Int = message.hashCode()
+
+        override fun toString(): String = "ConfigurationError(message=$message)"
+    }
 }
 
 /**
@@ -86,7 +103,7 @@ public class OptionValues internal constructor(
     /** Whether [flag] was given. */
     public operator fun get(flag: Option.Flag): Boolean = flag in flags
 
-    /** The value of [option], from the command line or its environment variable; `null` when it has none. */
+    /** The value of [option], from the command line, its environment variable or a setting; `null` when it has none. */
     @Suppress("UNCHECKED_CAST")
     public operator fun <T> get(option: Option.Single<T>): T? = singles[option] as T?
 
@@ -126,8 +143,11 @@ public class OptionValues internal constructor(
  * new option into a breaking change for anyone who was abbreviating; and interspersed options
  * after a subcommand name is expected, which is ambiguity dressed as convenience.
  *
- * An option that is not on the command line takes its [Option.Single.env] variable from [environment],
- * converted and checked like a value typed on the command line.
+ * An option that is not on the command line takes its [Option.Single.env] variable from [environment], and failing
+ * that its [Option.Single.config] key from [settings], converted and checked like a value typed on the command line.
+ * The settings are read only then, so a broken file fails only a command that needs a value from it, and never
+ * `completion`; it fails as a [ParseResult.ConfigurationError], as does a setting the option's converter refuses. A
+ * setting whose key no option of the tree declares is warned about in [ParseResult.Invocation.notices].
  *
  * A value its converter calls [ConversionResult.Unset] counts as not given, as that type describes.
  *
@@ -138,10 +158,23 @@ public class OptionValues internal constructor(
  * Once every value is converted, the command line must keep each [Constraint] on its path, and may read standard
  * input through at most one value (see [ReadsStandardInput]); either failure is a usage error like any other.
  */
-public class Parser(
+public class Parser @ExperimentalCliKitApi constructor(
     private val root: CommandSpec,
     private val environment: (String) -> String? = { null },
+    /** Where an option's [Option.Single.config] key is read; it has no default, so a call without it never needs opt-in. */
+    private val settings: Settings,
 ) {
+    /** A parser that reads no [Settings]. */
+    public constructor(root: CommandSpec, environment: (String) -> String? = { null }) : this(root, environment, Settings.None)
+
+    /** Every key the tree reads a setting by, so a setting by any other can be warned about. */
+    private val keys: Set<String> by lazy { configurable(root).mapNotNull { it.config }.toSet() }
+
+    /** The keys of the options that aren't going away: what a suggestion may offer. */
+    private val offeredKeys: List<String> by lazy {
+        configurable(root).filter { it.deprecated == null }.mapNotNull { it.config }.distinct()
+    }
+
     /** [args], the words after the program name, parsed against the command tree; never throws for bad input. */
     public fun parse(args: Array<String>): ParseResult = parse(args.toList())
 
@@ -242,8 +275,11 @@ public class Parser(
         /** Each positional token, indexed by its place among the tokens, so its notice keeps command-line order. */
         val positionals = mutableListOf<IndexedValue<String>>()
 
-        /** The values that came from an environment variable rather than the command line, for messages to name. */
-        val fromEnvironment = mutableSetOf<Option.Single<*>>()
+        /**
+         * Where each value that didn't come from the command line came from, for messages to name: the environment
+         * variable, or the setting's origin.
+         */
+        val origins = mutableMapOf<Option.Single<*>, String>()
 
         /**
          * For each operand a converter called [ConversionResult.Unset], what was given for it: `given 'x'`, or
@@ -252,7 +288,7 @@ public class Parser(
          */
         val unset = mutableMapOf<Operand, String>()
 
-        /** The converters' notices, each with the place of its token; a variable's sorts after every token. */
+        /** The converters' notices, each with the place of its token; a variable's or a setting's sorts after every token. */
         val notices = mutableListOf<IndexedValue<String>>()
 
         /** The spellings, and variables, already warned about: one warning each, however often it's typed. */
@@ -271,12 +307,13 @@ public class Parser(
 
         /**
          * Notes that [operand] was given [what], which its converter called unset, and keeps the converter's [notice]
-         * with the name of its [source] in front. The token at [at] is [FROM_ENVIRONMENT] for a variable.
+         * with the name of its [source] in front. The token at [at] is [OFF_THE_COMMAND_LINE] for a variable or a
+         * setting.
          */
         fun unset(operand: Operand, what: String, source: String, notice: String?, at: Int) {
-            // A variable is read only after the command line gave nothing usable, and what was typed is what the
-            // reader is looking at, so it's the better thing to name.
-            if (at == FROM_ENVIRONMENT) unset.getOrPut(operand) { what } else unset[operand] = what
+            // A variable or a setting is read only after the command line gave nothing usable, and what was typed is
+            // what the reader is looking at, so it's the better thing to name; after it, the first one read.
+            if (at == OFF_THE_COMMAND_LINE) unset.getOrPut(operand) { what } else unset[operand] = what
             notice?.let { notices += IndexedValue(at, "$source: $it") }
         }
 
@@ -354,18 +391,24 @@ public class Parser(
             if (option !is Option.Single<*> || option.env == null || collected.given(option)) continue
             val value = environment(option.env)?.takeIf { it.isNotEmpty() } ?: continue
             // A variable set for an option that's going away stops working with it, as the option's name would.
-            option.deprecated?.let { collected.warn(option.env, "${option.env}: ${option.warning(option.long)}", FROM_ENVIRONMENT) }
+            option.deprecated?.let { collected.warn(option.env, "${option.env}: ${option.warning(option.long)}", OFF_THE_COMMAND_LINE) }
             when (val conversion = option.converter.convert(value)) {
                 is ConversionResult.Ok -> {
                     collected.singles[option] = conversion.value
                     collected.singleTexts[option] = value
-                    collected.fromEnvironment += option
+                    collected.origins[option] = option.env
                 }
                 is ConversionResult.Invalid ->
                     return ParseResult.UsageError("invalid value for ${option.env}: ${conversion.reason}", path)
                 is ConversionResult.Unset ->
-                    collected.unset(option, "given '$value' from ${option.env}", option.env, conversion.notice, FROM_ENVIRONMENT)
+                    collected.unset(option, "given '$value' from ${option.env}", option.env, conversion.notice, OFF_THE_COMMAND_LINE)
             }
+        }
+
+        // Then the settings, for what both left out. `completion` reads none, so it works whatever a file says.
+        val unsettled = known.filterIsInstance<Option.Single<*>>().filter { it.config != null && !collected.given(it) }
+        if (unsettled.isNotEmpty() && command !== StandardOptions.completion) {
+            fromSettings(unsettled, collected)?.let { return it }
         }
 
         known.firstOrNull { it.required && !collected.given(it) }?.let { option ->
@@ -391,6 +434,45 @@ public class Parser(
         )
     }
 
+    /**
+     * Fills in each of [options] from the first setting of its key that its converter doesn't call unset, and warns
+     * about each setting whose key the tree doesn't know; answers what stops the parse, or `null`.
+     */
+    private fun fromSettings(options: List<Option.Single<*>>, collected: Collected): ParseResult.ConfigurationError? {
+        val read = try {
+            settings.read()
+        } catch (e: SettingsException) {
+            return ParseResult.ConfigurationError(e.message ?: "the configuration can't be read")
+        }
+        val byKey = read.groupBy { it.key }
+        for (option in options) {
+            // An empty value counts as not set, as an empty variable does: a key left blank in a template.
+            for (setting in byKey[option.config].orEmpty().filter { it.value.isNotEmpty() }) {
+                val origin = setting.origin
+                // As for a variable. A key, in lower case and without dashes, can't be mistaken for a spelling or a variable.
+                option.deprecated?.let { collected.warn(setting.key, "$origin: ${option.warning(option.long)}", OFF_THE_COMMAND_LINE) }
+                when (val conversion = option.converter.convert(setting.value)) {
+                    is ConversionResult.Ok -> {
+                        collected.singles[option] = conversion.value
+                        collected.singleTexts[option] = setting.value
+                        collected.origins[option] = origin
+                        break
+                    }
+                    is ConversionResult.Invalid ->
+                        return ParseResult.ConfigurationError("invalid value for ${option.long} (from $origin): ${conversion.reason}")
+                    is ConversionResult.Unset ->
+                        collected.unset(option, "given '${setting.value}' from $origin", origin, conversion.notice, OFF_THE_COMMAND_LINE)
+                }
+            }
+        }
+        // A misspelt key would otherwise be ignored without a word, and the option it meant take its default.
+        for (setting in read.filter { it.key !in keys }) {
+            val suggestion = nearest(setting.key, offeredKeys)?.let { "; did you mean '$it'?" }.orEmpty()
+            collected.notices += IndexedValue(OFF_THE_COMMAND_LINE, "${setting.origin}: unknown setting '${setting.key}'$suggestion")
+        }
+        return null
+    }
+
     /** The first constraint on [path] the command line breaks, as its message; `null` when it keeps them all. */
     private fun violation(path: List<CommandSpec>, collected: Collected, bound: Map<Argument, List<Any?>>): String? {
         val parsed = object : ParsedOperands {
@@ -400,7 +482,7 @@ public class Parser(
             }
 
             override fun spell(operand: Operand): String =
-                if (operand is Option.Single<*> && operand in collected.fromEnvironment) "$operand (from ${operand.env})" else "$operand"
+                (operand as? Option.Single<*>)?.let(collected.origins::get)?.let { "$operand (from $it)" } ?: "$operand"
 
             override fun whyAbsent(operand: Operand): String? = collected.whyAbsent(operand)
 
@@ -555,8 +637,12 @@ public class Parser(
     private fun String.looksNumeric(): Boolean = drop(1).let { it.isNotEmpty() && it.toDoubleOrNull() != null }
 }
 
-/** The place of a value read from an environment variable, which comes after every token of the command line. */
-private const val FROM_ENVIRONMENT = Int.MAX_VALUE
+/** The place of a value read from an environment variable or a setting, which comes after every token of the command line. */
+private const val OFF_THE_COMMAND_LINE = Int.MAX_VALUE
+
+/** Every option of the tree under [root] that declares a configuration key. */
+internal fun configurable(root: CommandSpec): List<Option.Single<*>> =
+    root.paths().flatMap { it.last().options }.filterIsInstance<Option.Single<*>>().filter { it.config != null }.distinct().toList()
 
 /**
  * Every option legal at this point in the tree: the command's own, plus everything inherited from

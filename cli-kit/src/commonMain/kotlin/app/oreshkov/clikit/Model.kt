@@ -220,13 +220,22 @@ public sealed class Option(
         hidden: Boolean = false,
         /**
          * An environment variable that gives the value when the command line doesn't: the command line wins, then
-         * the variable, then the handler's default. Read through [Program]'s environment, so a test controls it.
-         * A variable set to an empty string counts as not set, and so does one [converter] calls
+         * the variable, then the [config] files, then the handler's default. Read through [Program]'s environment, so
+         * a test controls it. A variable set to an empty string counts as not set, and so does one [converter] calls
          * [ConversionResult.Unset]. Help shows it in the option's `[env: …]` tag and in the Environment section.
          */
         public val env: String? = null,
         formerNames: List<String> = emptyList(),
         deprecated: String? = null,
+        /**
+         * The key that gives the value in a configuration file, such as `store` for `store = /srv/store`, when neither
+         * the command line nor [env] does: lower case, digits, `-` and `.`. Read through [Program]'s [Settings], the
+         * layers highest first, and a value [converter] calls [ConversionResult.Unset] moves on to the next layer.
+         * Help shows it in the option's `[config: …]` tag and in the Configuration section, when the program reads
+         * any settings at all. Only an option that declares a key can be set from a file, so give none to one that
+         * takes a secret, a command to run or code to load.
+         */
+        public val config: String? = null,
     ) : Option(long, short, help, hidden, formerNames, deprecated) {
         /** The constructor of 0.2.0, before [formerNames] and [deprecated], kept so code compiled against it still links. */
         @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
@@ -240,13 +249,14 @@ public sealed class Option(
             defaultDisplay: String? = null,
             hidden: Boolean = false,
             env: String? = null,
-        ) : this(long, converter, short, help, valueName, required, defaultDisplay, hidden, env, emptyList(), null)
+        ) : this(long, converter, short, help, valueName, required, defaultDisplay, hidden, env, emptyList(), null, null)
 
         override val takesValue: Boolean get() = true
         override val choices: List<String> get() = converter.choices
 
         init {
             require(env == null || isEnvironmentName(env)) { "environment variable '$env' must be upper case, digits and '_'" }
+            require(config == null || isSettingKey(config)) { "configuration key '$config' must be lower case, digits, '-' and '.'" }
             require(!required || deprecated == null) { "option $long can't be both required and deprecated" }
         }
     }
@@ -356,9 +366,14 @@ internal fun Option.variables(): List<EnvironmentVariable> =
         StandardOptions.variablesOf(this)
 
 /** The portable spelling of a variable's name, which every shell can export: no lower case, no leading digit. */
-private fun isEnvironmentName(name: String): Boolean = ENVIRONMENT_NAME.matches(name)
+internal fun isEnvironmentName(name: String): Boolean = ENVIRONMENT_NAME.matches(name)
 
 private val ENVIRONMENT_NAME = Regex("[A-Z_][A-Z0-9_]*")
+
+/** The spelling of a configuration key, which a file gives on the left of `=`: no upper case, no space, no `=`. */
+internal fun isSettingKey(key: String): Boolean = SETTING_KEY.matches(key)
+
+private val SETTING_KEY = Regex("[a-z0-9][a-z0-9.-]*")
 
 /**
  * A command line as help shows it, [commandLine], never wrapped, with a comment saying what it does, [description],
@@ -476,6 +491,8 @@ public class CommandSpec(
         require(duplicateOptions.isEmpty()) { "command '$name' declares $duplicateOptions twice" }
         val duplicateShorts = options.mapNotNull { it.short }.groupBy { it }.filterValues { it.size > 1 }.keys
         require(duplicateShorts.isEmpty()) { "command '$name' declares $duplicateShorts twice" }
+        val duplicateKeys = options.mapNotNull { (it as? Option.Single<*>)?.config }.groupBy { it }.filterValues { it.size > 1 }.keys
+        require(duplicateKeys.isEmpty()) { "command '$name' declares configuration keys $duplicateKeys twice" }
         // An option's variable is listed for it already: declaring it again would describe one variable twice.
         val optionVariables = options.flatMap { it.variables() }.map { it.name }.toSet()
         val duplicateVariables = environment.groupBy { it.name }.filter { (name, declared) ->

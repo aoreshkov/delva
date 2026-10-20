@@ -4,7 +4,8 @@ package app.oreshkov.clikit
  * A small command tree for this module's own tests, with one of every shape the parser, help and
  * completions handle: globals, a group, a three-level leaf, a required option, a fixed enumeration,
  * a repeated option with a converter, a flag, a typed option, a positional with choices, an option's
- * environment variable beside one the program reads for itself, an alias, former names and deprecations.
+ * environment variable beside one the program reads for itself, a configuration key, an alias, former names and
+ * deprecations.
  *
  * Deliberately not any program's real surface. That one lives with its handlers and is golden-file
  * tested there; what is tested here is the machinery, which knows no command of anyone's.
@@ -22,6 +23,7 @@ internal object TestCommands {
         valueName = "dir",
         defaultDisplay = "./store",
         env = "DEMO_DATA_DIR",
+        config = "data-dir",
     )
 
     val token = EnvironmentVariable("DEMO_TOKEN", "Token to send when no session is logged in")
