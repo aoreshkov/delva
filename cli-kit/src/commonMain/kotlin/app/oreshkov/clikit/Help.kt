@@ -15,13 +15,27 @@ package app.oreshkov.clikit
  * starts its description on the next line. The usage line and example command lines are never wrapped, since they
  * are meant to be copied.
  */
-public class HelpRenderer(
+public class HelpRenderer @ExperimentalCliKitApi constructor(
     private val styler: Styler,
     /** The name printed in usage lines; the root command's own name when `null`. */
     private val programName: String?,
     /** The columns the page is wrapped to. [Program] passes the terminal's width, at most 100. */
     private val width: Int,
+    /**
+     * Where the program reads settings, for an option's `[config: …]` tag and the Configuration section, which lists
+     * the keys and [Settings.locations]; neither is shown for a source with no locations, such as [Settings.None].
+     */
+    private val settings: Settings,
 ) {
+    /** A renderer for a program that reads no [Settings]. */
+    public constructor(
+        styler: Styler,
+        /** The name printed in usage lines; the root command's own name when `null`. */
+        programName: String?,
+        /** The columns the page is wrapped to. */
+        width: Int,
+    ) : this(styler, programName, width, Settings.None)
+
     /**
      * A renderer that wraps to 80 columns, whatever the terminal: the width golden files are rendered at, so they
      * don't depend on the machine.
@@ -30,13 +44,16 @@ public class HelpRenderer(
         styler: Styler = Styler.Plain,
         /** The name printed in usage lines; the root command's own name when not given. */
         programName: String? = null,
-    ) : this(styler, programName, DEFAULT_WIDTH)
+    ) : this(styler, programName, DEFAULT_WIDTH, Settings.None)
 
     /**
      * A plain renderer at 80 columns, under the root command's name. Declared, not left to the defaults above, so Java
      * keeps the no-argument constructor that a primary constructor with every parameter defaulted would give it.
      */
-    public constructor() : this(Styler.Plain, null, DEFAULT_WIDTH)
+    public constructor() : this(Styler.Plain, null, DEFAULT_WIDTH, Settings.None)
+
+    /** Whether the program reads settings at all: otherwise an option's key is never read, and help keeps quiet about it. */
+    private val configured: Boolean get() = settings.locations.isNotEmpty()
 
     init {
         require(width > 0) { "help needs a width of at least one column, not $width" }
@@ -120,6 +137,19 @@ public class HelpRenderer(
                 appendTable(environment)
             }
 
+            val configuration = configurationFor(path, inherited)
+            if (configuration.isNotEmpty()) {
+                appendLine()
+                appendLine(styler.bold("Configuration:"))
+                appendTable(configuration)
+                append(INDENT).appendLine("Read from, highest first:")
+                settings.locations.forEach { location ->
+                    HelpText.wrap(location, width - HANGING.length - INDENT.length).forEachIndexed { i, line ->
+                        append(if (i == 0) HANGING else HANGING + INDENT).appendLine(line)
+                    }
+                }
+            }
+
             // A constraint between two options belongs to neither, so it gets its own lines rather than a note on each.
             // One that names a hidden option stays hidden with it.
             val notes = path.flatMap { it.constraints }.filter { constraint ->
@@ -167,6 +197,7 @@ public class HelpRenderer(
             choices(option.choices),
             option.defaultDisplay?.let { "[default: $it]" },
             (option as? Option.Single<*>)?.env?.let { "[env: $it]" },
+            (option as? Option.Single<*>)?.config?.takeIf { configured }?.let { "[config: $it]" },
             "(required)".takeIf { option.required },
             DEPRECATED.takeIf { option.deprecated != null },
         ),
@@ -183,6 +214,19 @@ public class HelpRenderer(
             val fromOptions = command.options.filter { option -> visible.any { it === option } }.flatMap { it.variables() }
             (fromOptions + command.environment).map { Entry(it.name, it.help) }
         }.distinctBy { it.name }
+
+    /**
+     * The configuration keys of [path], in the order [environmentFor] lists variables: for each command, the keys of
+     * its [visible] options; none when the program reads no settings.
+     */
+    private fun configurationFor(path: List<CommandSpec>, visible: List<Option>): List<Entry> {
+        if (!configured) return emptyList()
+        return path.asReversed().flatMap { command ->
+            command.options.filter { option -> visible.any { it === option } }.mapNotNull { option ->
+                (option as? Option.Single<*>)?.config?.let { Entry(it, "Same as ${option.long}") }
+            }
+        }.distinctBy { it.name }
+    }
 
     private fun choices(choices: List<String>): String? = choices.takeIf { it.isNotEmpty() }?.joinToString("|", "(", ")")
 

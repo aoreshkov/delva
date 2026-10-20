@@ -12,7 +12,8 @@ import kotlin.test.assertTrue
  */
 class HelpRendererTest {
 
-    private val help = HelpRenderer(Styler.Plain)
+    // With the settings a program would read, so the pages show the configuration as it would print them.
+    private val help = HelpRenderer(Styler.Plain, null, TableRenderer.DEFAULT_WIDTH, ConfigurationFiles("demo", "DEMO_CONFIG"))
 
     private fun pathTo(vararg names: String): List<CommandSpec> = TestCommands.root.pathTo(*names)
 

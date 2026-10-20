@@ -278,8 +278,8 @@ public class CommandFailure(
  * Parse, answer what the tree can answer by itself, and hand the rest to the command's handler:
  * the part of `main` that is the same for every command tree.
  *
- * Help, `--version` and usage errors are answered here, and so are [StandardOptions.completion] and
- * [StandardOptions.help] when the tree includes them. Every other runnable command has a handler in [handlers], which is checked
+ * Help, `--version`, usage errors and configuration errors are answered here, and so are [StandardOptions.completion]
+ * and [StandardOptions.help] when the tree includes them. Every other runnable command has a handler in [handlers], which is checked
  * when the program is built rather than when somebody first runs the command without one. The parser's
  * [ParseResult.Invocation.notices] are printed as warnings before the command runs.
  *
@@ -289,7 +289,7 @@ public class CommandFailure(
  * a bug, reported as one line and [ExitStatus.SOFTWARE] rather than a stack trace and whatever the
  * runtime felt like returning.
  */
-public class Program(
+public class Program @ExperimentalCliKitApi constructor(
     private val root: CommandSpec,
     /** What `--version` prints: `demo 0.1.0`. */
     private val version: String,
@@ -301,7 +301,28 @@ public class Program(
      * No environment at all by default, so a program that wants one says so.
      */
     private val environment: (String) -> String? = { null },
+    /**
+     * Where an option's [Option.Single.config] key is read, after the command line and the environment, such as
+     * [ConfigurationFiles]; help lists its [Settings.locations]. A setting that can't be read, or that an option's
+     * converter refuses, exits with [ExitStatus.CONFIG]. It has no default, so a call without it never needs opt-in.
+     */
+    private val settings: Settings,
 ) {
+    /** A program that reads no [Settings]. */
+    public constructor(
+        root: CommandSpec,
+        /** What `--version` prints: `demo 0.1.0`. */
+        version: String,
+        handlers: Map<CommandSpec, CommandHandler>,
+        /** Turns an exception a handler let escape into the failure it stands for, or `null` for a bug. */
+        translate: (Exception) -> CommandFailure? = { null },
+        /**
+         * Where an option's [Option.Single.env] variable is read: `System::getenv` in a real program, a map in a test.
+         * No environment at all by default, so a program that wants one says so.
+         */
+        environment: (String) -> String? = { null },
+    ) : this(root, version, handlers, translate, environment, Settings.None)
+
     init {
         require(root.aliases.isEmpty() && root.formerNames.isEmpty() && root.deprecated == null) {
             "the root command '${root.name}' is the program's own name: it can't have aliases or former names, or be deprecated"
@@ -315,6 +336,16 @@ public class Program(
         }
         root.runnablePaths().forEach(::checkConstraints)
         root.paths().forEach(::checkEnvironment)
+        root.paths().forEach(::checkKeys)
+    }
+
+    /**
+     * No two options a command on [path] reads take their value from one configuration key: a setting would give both
+     * of them the same value without anyone having asked for that.
+     */
+    private fun checkKeys(path: List<CommandSpec>) {
+        val twice = optionsFor(path).mapNotNull { (it as? Option.Single<*>)?.config }.groupBy { it }.filterValues { it.size > 1 }.keys
+        require(twice.isEmpty()) { "'${commandLine(path)}' reads the configuration keys $twice for more than one option" }
     }
 
     /**
@@ -365,8 +396,8 @@ public class Program(
 
     private fun dispatch(args: Array<String>, io: TerminalIo): Int {
         // Prose past 100 columns is hard to read, however wide the terminal.
-        val help = HelpRenderer(io.styler, null, minOf(io.width, MAX_HELP_WIDTH))
-        return when (val parsed = Parser(root, environment).parse(args)) {
+        val help = HelpRenderer(io.styler, null, minOf(io.width, MAX_HELP_WIDTH), settings)
+        return when (val parsed = Parser(root, environment, settings).parse(args)) {
             is ParseResult.Help -> {
                 // Help is the payload when it was asked for, and noise when it follows an error —
                 // which is why the error branch below writes to stderr instead.
@@ -384,6 +415,12 @@ public class Program(
                 parsed.suggestion?.let { io.errLine("       did you mean ${TerminalText.escape(it)}?") }
                 io.errLine(help.usageLine(parsed.path))
                 ExitStatus.USAGE
+            }
+
+            // The command line was fine, so a usage line would only send the reader looking in the wrong place.
+            is ParseResult.ConfigurationError -> {
+                io.errLine(io.styler.red("error: ") + TerminalText.escape(parsed.message))
+                ExitStatus.CONFIG
             }
 
             is ParseResult.Invocation -> invoke(parsed, io)

@@ -12,12 +12,21 @@ Commands:
 
 Options:
       --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
+                        [config: data-dir]
       --json            Machine-readable output on stdout
   -v, --verbose         More detail on stderr
 
 Environment:
   DEMO_DATA_DIR  Same as --data-dir
   DEMO_TOKEN     Token to send when no session is logged in
+
+Configuration:
+  data-dir  Same as --data-dir
+  Read from, highest first:
+    $DEMO_CONFIG, or if it's not set, $XDG_CONFIG_HOME/demo/config (by default
+      ~/.config/demo/config, or %APPDATA%\demo\config on Windows)
+    demo/config in each of $XDG_CONFIG_DIRS (by default /etc/xdg;
+      %ProgramData% on Windows)
 
 Run 'demo <command> --help' for more on a command.
 

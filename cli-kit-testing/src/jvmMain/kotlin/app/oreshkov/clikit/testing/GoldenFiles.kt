@@ -2,9 +2,12 @@ package app.oreshkov.clikit.testing
 
 import app.oreshkov.clikit.CommandSpec
 import app.oreshkov.clikit.CompletionGenerator
+import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.HelpRenderer
+import app.oreshkov.clikit.Settings
 import app.oreshkov.clikit.Shell
 import app.oreshkov.clikit.Styler
+import app.oreshkov.clikit.TableRenderer
 import app.oreshkov.clikit.paths
 import java.nio.file.Files
 import java.nio.file.Path
@@ -88,8 +91,23 @@ public class GoldenFiles(
      * Every file is compared before it fails, so one run lists every page a change touched: the first difference is
      * the error, and the others are attached to it as suppressed.
      */
+    @OptIn(ExperimentalCliKitApi::class)
     public fun assertSurface(root: CommandSpec, styler: Styler = Styler.Plain, extra: Set<String> = emptySet()) {
-        val help = HelpRenderer(styler)
+        assertSurface(root, styler, extra, Settings.None)
+    }
+
+    /**
+     * [assertSurface] for a program that reads [settings], the ones it gives `Program`, so that the pages show the
+     * configuration it reads.
+     */
+    @ExperimentalCliKitApi
+    public fun assertSurface(
+        root: CommandSpec,
+        styler: Styler = Styler.Plain,
+        extra: Set<String> = emptySet(),
+        settings: Settings,
+    ) {
+        val help = HelpRenderer(styler, null, TableRenderer.DEFAULT_WIDTH, settings)
         val completions = CompletionGenerator()
         val expected = root.paths().associate { helpFileName(it) to { help.render(it) } } +
             Shell.entries.associate { completionFileName(it) to { completions.generate(it, root) } }
