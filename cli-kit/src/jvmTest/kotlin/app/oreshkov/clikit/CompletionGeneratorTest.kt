@@ -64,6 +64,25 @@ class CompletionGeneratorTest {
     }
 
     @Test
+    fun `aliases at two levels add ways to type a place, not lines for each`() {
+        fun tree(aliased: Boolean): CommandSpec {
+            fun others(vararg names: String) = if (aliased) names.toList() else emptyList()
+            val list = CommandSpec("list", "List entries", aliases = others("ls"), formerNames = others("l"))
+            val store = CommandSpec("store", "The store", subcommands = listOf(list), aliases = others("st", "s"))
+            // An option, so that every place has something to offer, and fish a line for it.
+            return CommandSpec("demo", options = listOf(Option.Flag("--fast")), subcommands = listOf(store))
+        }
+        Shell.entries.forEach { shell ->
+            val plain = generator.generate(shell, tree(aliased = false)).lines().size
+            val aliased = generator.generate(shell, tree(aliased = true))
+            // PowerShell's switch takes one entry per way to type a place: two more for `store`, eight for `store list`.
+            val entries = if (shell == Shell.PowerShell) 2 + 8 else 0
+            assertEquals(plain + entries, aliased.lines().size, shell.id)
+            assertContains(aliased, "s l", message = "${shell.id} misses the last combination")
+        }
+    }
+
+    @Test
     fun `the program name is the root's unless one is given`() {
         Shell.entries.forEach { shell ->
             assertContains(generator.generate(shell, TestCommands.root), "demo")

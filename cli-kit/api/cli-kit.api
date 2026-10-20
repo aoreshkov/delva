@@ -79,13 +79,18 @@ public abstract interface class app/oreshkov/clikit/CommandHandler {
 public final class app/oreshkov/clikit/CommandSpec {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;ZLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAliases ()Ljava/util/List;
 	public final fun getArguments ()Ljava/util/List;
 	public final fun getConstraints ()Ljava/util/List;
+	public final fun getDeprecated ()Ljava/lang/String;
 	public final fun getEnvironment ()Ljava/util/List;
 	public final fun getEpilogue ()Ljava/lang/String;
 	public final fun getExamples ()Ljava/util/List;
+	public final fun getFormerNames ()Ljava/util/List;
 	public final fun getHelp ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
 	public final fun getOptions ()Ljava/util/List;
@@ -371,7 +376,9 @@ public abstract interface class app/oreshkov/clikit/Operand {
 }
 
 public abstract class app/oreshkov/clikit/Option : app/oreshkov/clikit/Operand {
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/util/List;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDeprecated ()Ljava/lang/String;
+	public final fun getFormerNames ()Ljava/util/List;
 	public final fun getHelp ()Ljava/lang/String;
 	public final fun getHidden ()Z
 	public final fun getLong ()Ljava/lang/String;
@@ -383,23 +390,29 @@ public abstract class app/oreshkov/clikit/Option : app/oreshkov/clikit/Operand {
 }
 
 public final class app/oreshkov/clikit/Option$Flag : app/oreshkov/clikit/Option {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getRequired ()Z
 	public fun getTakesValue ()Z
 }
 
 public final class app/oreshkov/clikit/Option$Repeated : app/oreshkov/clikit/Option {
-	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V
 	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZLjava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZLjava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
 	public fun getRequired ()Z
 	public fun getTakesValue ()Z
 }
 
 public final class app/oreshkov/clikit/Option$Single : app/oreshkov/clikit/Option {
-	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;Ljava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;ZLjava/lang/String;Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
 	public final fun getEnv ()Ljava/lang/String;
 	public fun getRequired ()Z

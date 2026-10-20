@@ -22,6 +22,7 @@ class StdoutContractTest {
         valueName = "dir",
         help = "Working directory",
         env = "FIX_DIR",
+        formerNames = listOf("--workdir"),
     )
     private val limit = Option.Single("--limit", Converters.positiveInt, "-n", valueName = "n", required = true, env = "FIX_LIMIT")
     private val from = Option.Single("--from", Converters.string, valueName = "file")
@@ -37,8 +38,8 @@ class StdoutContractTest {
         constraints = listOf(Constraint.Exclusive(from, stdin)),
         environment = listOf(EnvironmentVariable("FIX_EDITOR", "Editor for the entry when neither is given")),
     )
-    private val run = CommandSpec("run", "Run until stopped")
-    private val store = CommandSpec("store", "The store", subcommands = listOf(get, put))
+    private val run = CommandSpec("run", "Run until stopped", deprecated = "it stops by itself now")
+    private val store = CommandSpec("store", "The store", subcommands = listOf(get, put), aliases = listOf("st"))
 
     private val root = CommandSpec(
         "fix",
@@ -157,6 +158,8 @@ class StdoutContractTest {
             add(listOf("completion", "tcsh"))
             add(listOf("help", "nope"))
             add(listOf("help", "store", "nope"))
+            add(listOf("help", "st", "nope"))
+            add(listOf("--workdir"))
             add(listOf("help", "run", "nope"))
         }
         for (args in usageErrors) {
@@ -175,6 +178,7 @@ class StdoutContractTest {
             emptyList(),
             listOf("--dir", "\${user_config.dir}"),
             listOf("--quiet", "--dir", "\${user_config.dir}"),
+            listOf("--workdir", "1"),
             listOf("--verbose"),
             listOf("--no-input"),
         )
@@ -189,6 +193,10 @@ class StdoutContractTest {
                         assertEquals(each.status to each.stdout, result.status to result.stdout, what)
                         // The notices were there to be misplaced: the fixture isn't passing by printing none.
                         if ("--dir" in extra && "--quiet" !in extra) assertContains(result.stderr, "warning: --dir: ", message = what)
+                        if ("--workdir" in extra) assertContains(result.stderr, "warning: --workdir is deprecated", message = what)
+                        if (path.last() === run && "--quiet" !in extra) {
+                            assertContains(result.stderr, "warning: 'fix run' is deprecated", message = what)
+                        }
                     }
                 }
             }

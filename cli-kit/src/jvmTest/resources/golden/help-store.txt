@@ -1,0 +1,22 @@
+The store
+
+Usage:
+  demo store [options] <command>
+
+Commands:
+  get    Read one entry
+  query  Search the store
+  prune  Delete old entries
+  purge  Delete every entry (deprecated)
+         use 'demo store prune' instead
+
+Global options:
+      --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
+      --json            Machine-readable output on stdout
+  -v, --verbose         More detail on stderr
+
+Environment:
+  DEMO_DATA_DIR  Same as --data-dir
+  DEMO_TOKEN     Token to send when no session is logged in
+
+Run 'demo store <command> --help' for more on a command.

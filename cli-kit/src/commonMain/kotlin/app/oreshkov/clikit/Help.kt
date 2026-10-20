@@ -50,6 +50,12 @@ public class HelpRenderer(
         val own = command.options.map { it.long }.toSet()
 
         return buildString {
+            // First, so nobody reads on to learn a command they should stop using.
+            if (command.deprecated != null) {
+                appendText(styler.bold("Deprecated:") + " " + command.deprecated)
+                appendLine()
+            }
+
             if (command.help.isNotBlank()) {
                 appendText(command.help)
                 appendLine()
@@ -75,8 +81,13 @@ public class HelpRenderer(
             if (command.subcommands.isNotEmpty()) {
                 appendLine()
                 appendLine(styler.bold("Commands:"))
-                // A command's first line is its summary; the rest is for its own page.
-                appendTable(command.subcommands.map { Entry(it.name, HelpText.summary(it.help)) })
+                // A command's first line is its summary; the rest is for its own page. Former names are left out, so
+                // nobody learns them.
+                appendTable(
+                    command.subcommands.map {
+                        Entry((listOf(it.name) + it.aliases).joinToString(", "), HelpText.summary(it.help), it.deprecated)
+                    },
+                )
             }
 
             if (command.arguments.isNotEmpty()) {
@@ -137,10 +148,17 @@ public class HelpRenderer(
         }.trimEnd() + "\n"
     }
 
-    /** A row of a two-column table: [name] on the left, then [help] and its [tags], each tag kept on one line. */
-    private class Entry(val name: String, val help: String, val tags: List<String> = emptyList())
+    /**
+     * A row of a two-column table: [name] on the left, then [help] and its [tags], each tag kept on one line, then
+     * [deprecated], the message of an entry that is, from a line of its own. A tag can't break, so a message of any
+     * length can't be one.
+     */
+    private class Entry(val name: String, val help: String, val tags: List<String>, val deprecated: String?) {
+        constructor(name: String, help: String, deprecated: String? = null) :
+            this(name, help, listOfNotNull(DEPRECATED.takeIf { deprecated != null }), deprecated)
+    }
 
-    private fun entry(argument: Argument): Entry = Entry(argument.name, argument.help, listOfNotNull(choices(argument.choices)))
+    private fun entry(argument: Argument): Entry = Entry(argument.name, argument.help, listOfNotNull(choices(argument.choices)), null)
 
     private fun entry(option: Option): Entry = Entry(
         option.render(),
@@ -150,7 +168,9 @@ public class HelpRenderer(
             option.defaultDisplay?.let { "[default: $it]" },
             (option as? Option.Single<*>)?.env?.let { "[env: $it]" },
             "(required)".takeIf { option.required },
+            DEPRECATED.takeIf { option.deprecated != null },
         ),
+        option.deprecated,
     )
 
     /**
@@ -186,7 +206,8 @@ public class HelpRenderer(
         entries.forEach { entry ->
             val name = entry.name
             append(INDENT).append(name)
-            val lines = HelpText.wrap(entry.help, width - margin.length, entry.tags)
+            val lines = HelpText.wrap(entry.help, width - margin.length, entry.tags) +
+                entry.deprecated?.let { HelpText.wrap(it, width - margin.length) }.orEmpty()
             val nameWidth = Styler.displayWidth(name)
             if (lines.isNotEmpty() && nameWidth <= left) {
                 repeat(left - nameWidth + GAP) { append(' ') }
@@ -222,6 +243,9 @@ private const val DEFAULT_WIDTH = TableRenderer.DEFAULT_WIDTH
 private const val INDENT = "  "
 private const val HANGING = "    "
 private const val COMMENT = "# "
+
+/** The tag of a deprecated option or command. */
+private const val DEPRECATED = "(deprecated)"
 
 /** Spaces between the two columns of a table. */
 private const val GAP = 2

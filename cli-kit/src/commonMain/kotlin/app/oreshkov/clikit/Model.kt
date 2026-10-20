@@ -126,12 +126,43 @@ public sealed class Option(
     public val help: String,
     /** Kept out of `--help` and completions, for a debug flag. */
     public val hidden: Boolean,
+    /**
+     * The long names it had before it was renamed, with their dashes, such as `--data-dir` for an option now called
+     * `--store`. The parser still reads them, with a warning that names [long]; help and completions show only [long],
+     * so a script that types an old name keeps working while people learn the new one. A command that narrows the
+     * option declares them again, since its declaration replaces the inherited one.
+     */
+    public val formerNames: List<String>,
+    /**
+     * What to do instead, such as `use 'tool export' instead`, for an option that is going away; `null` for one that
+     * isn't. The parser still reads it, with a warning that gives this; help tags it `(deprecated)` with this on the
+     * line below, and completions leave it out.
+     */
+    public val deprecated: String?,
 ) : Operand {
     init {
         require(long.startsWith("--") && long.length > 2) { "long option '$long' must start with '--'" }
         require(short == null || (short.length == 2 && short[0] == '-' && short[1] != '-')) {
             "short option '$short' must be a single dash and one character"
         }
+        for (former in formerNames) {
+            require(former.startsWith("--") && former.length > 2) { "former name '$former' of $long must start with '--'" }
+        }
+        require(spellings.distinct().size == spellings.size) { "option $long names a spelling twice: $spellings" }
+        require(deprecated == null || deprecated.isNotBlank()) { "deprecated option $long needs to say what to do instead" }
+    }
+
+    /** Every long name the parser reads it by: [long], then the [formerNames]. */
+    internal val spellings: List<String> get() = listOf(long) + formerNames
+
+    /**
+     * The warning for [spelling], a name this option was typed by: that it is [deprecated], or that it is a former
+     * name; `null` when it's neither. The deprecation says more, so it's the one given when both apply.
+     */
+    internal fun warning(spelling: String): String? = when {
+        deprecated != null -> "$spelling is deprecated: $deprecated"
+        spelling in formerNames -> "$spelling is deprecated; use $long"
+        else -> null
     }
 
     /** Whether the option carries a value, as opposed to being a flag. */
@@ -159,7 +190,18 @@ public sealed class Option(
         short: String? = null,
         help: String = "",
         hidden: Boolean = false,
-    ) : Option(long, short, help, hidden) {
+        formerNames: List<String> = emptyList(),
+        deprecated: String? = null,
+    ) : Option(long, short, help, hidden, formerNames, deprecated) {
+        /** The constructor of 0.2.0, before [formerNames] and [deprecated], kept so code compiled against it still links. */
+        @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
+        public constructor(
+            long: String,
+            short: String? = null,
+            help: String = "",
+            hidden: Boolean = false,
+        ) : this(long, short, help, hidden, emptyList(), null)
+
         override val takesValue: Boolean get() = false
         override val required: Boolean get() = false
     }
@@ -183,12 +225,29 @@ public sealed class Option(
          * [ConversionResult.Unset]. Help shows it in the option's `[env: …]` tag and in the Environment section.
          */
         public val env: String? = null,
-    ) : Option(long, short, help, hidden) {
+        formerNames: List<String> = emptyList(),
+        deprecated: String? = null,
+    ) : Option(long, short, help, hidden, formerNames, deprecated) {
+        /** The constructor of 0.2.0, before [formerNames] and [deprecated], kept so code compiled against it still links. */
+        @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
+        public constructor(
+            long: String,
+            converter: ValueConverter<T>,
+            short: String? = null,
+            help: String = "",
+            valueName: String? = null,
+            required: Boolean = false,
+            defaultDisplay: String? = null,
+            hidden: Boolean = false,
+            env: String? = null,
+        ) : this(long, converter, short, help, valueName, required, defaultDisplay, hidden, env, emptyList(), null)
+
         override val takesValue: Boolean get() = true
         override val choices: List<String> get() = converter.choices
 
         init {
             require(env == null || isEnvironmentName(env)) { "environment variable '$env' must be upper case, digits and '_'" }
+            require(!required || deprecated == null) { "option $long can't be both required and deprecated" }
         }
     }
 
@@ -209,9 +268,27 @@ public sealed class Option(
         /** At least one value must be given. */
         override val required: Boolean = false,
         hidden: Boolean = false,
-    ) : Option(long, short, help, hidden) {
+        formerNames: List<String> = emptyList(),
+        deprecated: String? = null,
+    ) : Option(long, short, help, hidden, formerNames, deprecated) {
+        /** The constructor of 0.2.0, before [formerNames] and [deprecated], kept so code compiled against it still links. */
+        @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
+        public constructor(
+            long: String,
+            converter: ValueConverter<T>,
+            short: String? = null,
+            help: String = "",
+            valueName: String? = null,
+            required: Boolean = false,
+            hidden: Boolean = false,
+        ) : this(long, converter, short, help, valueName, required, hidden, emptyList(), null)
+
         override val takesValue: Boolean get() = true
         override val choices: List<String> get() = converter.choices
+
+        init {
+            require(!required || deprecated == null) { "option $long can't be both required and deprecated" }
+        }
     }
 }
 
@@ -335,7 +412,41 @@ public class CommandSpec(
      * redeclare a variable to describe it differently.
      */
     public val environment: List<EnvironmentVariable> = emptyList(),
+    /**
+     * Other words that select it for good, such as `ls` for `list`. The parser reads them as [name], with no warning,
+     * and the command list of the command above shows them beside [name]; completions offer only [name].
+     */
+    public val aliases: List<String> = emptyList(),
+    /**
+     * The names it had before it was renamed. The parser still reads them, with a warning that names [name]; help and
+     * completions show only [name], so a script that types an old name keeps working while people learn the new one.
+     */
+    public val formerNames: List<String> = emptyList(),
+    /**
+     * What to do instead, such as `use 'tool export' instead`, for a command that is going away; `null` for one that
+     * isn't. The parser still runs it, with a warning that gives this; help tags it `(deprecated)` in the command list
+     * and starts its own page with this, and completions leave it out.
+     */
+    public val deprecated: String? = null,
 ) {
+    /** The constructor of 0.2.0, before [aliases], [formerNames] and [deprecated], kept so code compiled against it still links. */
+    @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        name: String,
+        help: String = "",
+        options: List<Option> = emptyList(),
+        arguments: List<Argument> = emptyList(),
+        subcommands: List<CommandSpec> = emptyList(),
+        runnable: Boolean = subcommands.isEmpty(),
+        examples: List<Example> = emptyList(),
+        epilogue: String? = null,
+        constraints: List<Constraint> = emptyList(),
+        environment: List<EnvironmentVariable> = emptyList(),
+    ) : this(
+        name, help, options, arguments, subcommands, runnable, examples, epilogue, constraints, environment,
+        emptyList(), emptyList(), null,
+    )
+
     /** The constructor of 0.1.0, before [environment], kept so code compiled against it still links. */
     @Deprecated("Kept for binary compatibility", level = DeprecationLevel.HIDDEN)
     public constructor(
@@ -348,11 +459,20 @@ public class CommandSpec(
         examples: List<Example> = emptyList(),
         epilogue: String? = null,
         constraints: List<Constraint> = emptyList(),
-    ) : this(name, help, options, arguments, subcommands, runnable, examples, epilogue, constraints, emptyList())
+    ) : this(
+        name, help, options, arguments, subcommands, runnable, examples, epilogue, constraints, emptyList(),
+        emptyList(), emptyList(), null,
+    )
 
     init {
         require(name.isNotBlank()) { "a command needs a name" }
-        val duplicateOptions = options.groupBy { it.long }.filterValues { it.size > 1 }.keys
+        require((aliases + formerNames).none { it.isBlank() }) { "command '$name' has a blank alias or former name" }
+        require(spellings.distinct().size == spellings.size) { "command '$name' names a spelling twice: $spellings" }
+        require(deprecated == null || deprecated.isNotBlank()) { "deprecated command '$name' needs to say what to do instead" }
+        // Each word must select one command: with two, the parser would silently take the first.
+        val duplicateCommands = subcommands.flatMap { it.spellings }.groupBy { it }.filterValues { it.size > 1 }.keys
+        require(duplicateCommands.isEmpty()) { "command '$name' has more than one subcommand called $duplicateCommands" }
+        val duplicateOptions = options.flatMap { it.spellings }.groupBy { it }.filterValues { it.size > 1 }.keys
         require(duplicateOptions.isEmpty()) { "command '$name' declares $duplicateOptions twice" }
         val duplicateShorts = options.mapNotNull { it.short }.groupBy { it }.filterValues { it.size > 1 }.keys
         require(duplicateShorts.isEmpty()) { "command '$name' declares $duplicateShorts twice" }
@@ -378,8 +498,27 @@ public class CommandSpec(
         require(strangers.isEmpty()) { "command '$name' constrains $strangers, which are not its arguments" }
     }
 
-    /** The subcommand called [name], or `null`. */
+    /** The subcommand called [name], or `null`. Only [CommandSpec.name] counts, not an alias or a former name. */
     public fun subcommand(name: String): CommandSpec? = subcommands.firstOrNull { it.name == name }
+
+    /** Every word that selects it: [name], then the [aliases], then the [formerNames]. */
+    internal val spellings: List<String> get() = listOf(name) + aliases + formerNames
+
+    /** The subcommand [word] selects, by any of its [spellings], or `null`. */
+    internal fun resolve(word: String): CommandSpec? = subcommands.firstOrNull { word in it.spellings }
+
+    /**
+     * The warning for selecting it by [spelling] below [parent], the commands from the root down to the one that lists
+     * it: that it is [deprecated], or that [spelling] is a former name; `null` when it's neither.
+     */
+    internal fun warning(spelling: String, parent: List<CommandSpec>): String? {
+        val above = commandLine(parent)
+        return when {
+            deprecated != null -> "'$above $spelling' is deprecated: $deprecated"
+            spelling in formerNames -> "'$above $spelling' is deprecated; use '$above $name'"
+            else -> null
+        }
+    }
 
     override fun toString(): String = "CommandSpec($name)"
 }

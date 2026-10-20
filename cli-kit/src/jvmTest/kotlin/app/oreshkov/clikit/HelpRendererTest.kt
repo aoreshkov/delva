@@ -32,6 +32,11 @@ class HelpRendererTest {
     }
 
     @Test
+    fun `a group with a deprecated command and one with a former name`() {
+        Golden.assertMatches("help-store.txt", help.render(pathTo("store")))
+    }
+
+    @Test
     fun `help lists a command's own options separately from the inherited globals`() {
         val rendered = help.render(pathTo("session", "login"))
         assertContains(rendered, "Options:")
@@ -182,6 +187,7 @@ class HelpRendererTest {
             "help-root.txt",
             "help-request-get.txt",
             "help-help.txt",
+            "help-store.txt",
             "completion-bash.sh",
             "completion-zsh.sh",
             "completion-fish.sh",

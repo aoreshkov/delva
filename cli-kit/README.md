@@ -5,8 +5,9 @@ repository: the machinery of a command-line program. It depends on the Kotlin st
 even Delva, and knows no command of any program's: a program declares its own tree and its handlers.
 
 - A command-tree parser whose options and arguments are typed handles (`values[limit]` is an `Int?`), declared once
-  for parsing, help and completion, with environment-variable fallbacks, and values that converters can call "not
-  given", such as an unfilled template.
+  for parsing, help and completion, with environment-variable fallbacks, command aliases,
+  [former names and deprecations](#renaming-and-deprecating) that keep old command lines working, and values that
+  converters can call "not given", such as an unfilled template.
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
   (`Constraint.Requires`), needs a value (`Constraint.RequiresValue`, [experimental](#experimental-api)) — and a single
   reader of standard input, checked while parsing.
@@ -154,6 +155,36 @@ command below the group that lists `help`, so a group can list it too: `tool sto
 word that names no command is a usage error, with the nearest name suggested. `Program` answers `help` without a
 handler, before reading any environment variable or checking a required option, so it works wherever `--help` does,
 and the completion scripts complete its words.
+
+## Renaming and deprecating
+
+A command can have aliases, other names it keeps for good, such as `ls` for `list`. An option or command that is
+renamed keeps its old names as former names, so the scripts that type them go on working, and one that is going away
+is deprecated, with what to do instead:
+
+```kotlin
+val store = Option.Single("--store", Converters.path, valueName = "dir", formerNames = listOf("--data-dir"))
+val pretty = Option.Flag("--pretty", help = "Indent the output", deprecated = "pipe --json to a formatter instead")
+val list = CommandSpec("list", "List entries", options = listOf(pretty), aliases = listOf("ls"))
+val dump = CommandSpec("dump", "Print every entry", deprecated = "use 'tool list' instead")
+val root = CommandSpec("tool", options = listOf(store), subcommands = listOf(list, dump))
+```
+
+`tool --data-dir /srv ls --pretty` runs `list`, after these lines on stderr:
+
+```text
+warning: --data-dir is deprecated; use --store
+warning: --pretty is deprecated: pipe --json to a formatter instead
+```
+
+Each spelling is warned about once, however often it's typed, and `--quiet` silences the warnings; an option's
+variable set for a deprecated option is warned about too. Help lists `list, ls` among the commands, and tags `--pretty`
+and `dump` `(deprecated)`, with the message on the line below; `dump`'s own page starts with it. Former names appear on
+no help page, and completion and "did you mean" suggestions offer neither former names nor anything deprecated, but the
+parser and the completion scripts read them all. `help` reads them too, and warns about none.
+
+A command that declares two subcommands, or two options, that can be typed the same way is refused when it's built,
+and so, by `Program`, is a root with any of these: its name is the program's own.
 
 ## Experimental API
 

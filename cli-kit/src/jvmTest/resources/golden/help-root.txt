@@ -4,11 +4,11 @@ Usage:
   demo [options] <command>
 
 Commands:
-  session     Sessions
-  request     Requests
-  store       The store
-  completion  Print a shell completion script to stdout
-  help        Show help for a command
+  session       Sessions
+  request, req  Requests
+  store         The store
+  completion    Print a shell completion script to stdout
+  help          Show help for a command
 
 Options:
       --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
