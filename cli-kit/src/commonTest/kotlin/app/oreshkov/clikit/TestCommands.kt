@@ -3,8 +3,8 @@ package app.oreshkov.clikit
 /**
  * A small command tree for this module's own tests, with one of every shape the parser, help and
  * completions handle: globals, a group, a three-level leaf, a required option, a fixed enumeration,
- * a repeated option with a converter, a flag, a typed option, a positional with choices, and an option's
- * environment variable beside one the program reads for itself.
+ * a repeated option with a converter, a flag, a typed option, a positional with choices, an option's
+ * environment variable beside one the program reads for itself, an alias, former names and deprecations.
  *
  * Deliberately not any program's real surface. That one lives with its handlers and is golden-file
  * tested there; what is tested here is the machinery, which knows no command of anyone's.
@@ -28,7 +28,14 @@ internal object TestCommands {
 
     val force = Option.Flag("--force", help = "Log in again")
 
-    val limit = Option.Single("--limit", Converters.positiveInt, "-n", help = "Most sessions to list", valueName = "n")
+    val limit = Option.Single(
+        "--limit",
+        Converters.positiveInt,
+        "-n",
+        help = "Most sessions to list",
+        valueName = "n",
+        formerNames = listOf("--max"),
+    )
 
     val param = Option.Repeated(
         "--param",
@@ -58,6 +65,8 @@ internal object TestCommands {
 
     val confirm = Option.Flag("--confirm", help = "Actually delete")
 
+    val pretty = Option.Flag("--pretty", help = "Indent the output", deprecated = "pipe --json to a formatter instead")
+
     val login = CommandSpec("login", "Log an account in", options = listOf(account, site, force))
 
     val list = CommandSpec("list", "One row per login", options = listOf(site, limit))
@@ -65,7 +74,7 @@ internal object TestCommands {
     val get = CommandSpec(
         "get",
         "Issue a read",
-        options = listOf(account, param),
+        options = listOf(account, param, pretty),
         arguments = listOf(endpoint),
         examples = listOf(
             Example("demo request get -a alice game.startup", "Read game.startup as alice"),
@@ -78,9 +87,11 @@ internal object TestCommands {
 
     val storeGet = CommandSpec("get", "Read one entry", arguments = listOf(key))
 
-    val query = CommandSpec("query", "Search the store", arguments = listOf(paths))
+    val query = CommandSpec("query", "Search the store", arguments = listOf(paths), formerNames = listOf("search"))
 
     val prune = CommandSpec("prune", "Delete old entries", options = listOf(before, confirm))
+
+    val purge = CommandSpec("purge", "Delete every entry", deprecated = "use 'demo store prune' instead")
 
     val root: CommandSpec = CommandSpec(
         name = "demo",
@@ -90,8 +101,8 @@ internal object TestCommands {
         environment = listOf(token),
         subcommands = listOf(
             CommandSpec("session", "Sessions", subcommands = listOf(login, list)),
-            CommandSpec("request", "Requests", subcommands = listOf(get, raw)),
-            CommandSpec("store", "The store", subcommands = listOf(storeGet, query, prune)),
+            CommandSpec("request", "Requests", subcommands = listOf(get, raw), aliases = listOf("req")),
+            CommandSpec("store", "The store", subcommands = listOf(storeGet, query, prune, purge)),
             StandardOptions.completion,
             StandardOptions.help,
         ),
@@ -99,5 +110,5 @@ internal object TestCommands {
 
     /** A handler for every runnable command, answering [status]. */
     fun handlers(status: Int = ExitStatus.OK): Map<CommandSpec, CommandHandler> =
-        listOf(login, list, get, raw, storeGet, query, prune).associateWith { CommandHandler { status } }
+        listOf(login, list, get, raw, storeGet, query, prune, purge).associateWith { CommandHandler { status } }
 }

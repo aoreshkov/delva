@@ -303,6 +303,9 @@ public class Program(
     private val environment: (String) -> String? = { null },
 ) {
     init {
+        require(root.aliases.isEmpty() && root.formerNames.isEmpty() && root.deprecated == null) {
+            "the root command '${root.name}' is the program's own name: it can't have aliases or former names, or be deprecated"
+        }
         val runnable = root.runnablePaths().map { it.last() }.toList()
         val missing = runnable.filter { it !in handlers }
         require(missing.isEmpty()) { "no handler for ${missing.joinToString { it.name }}" }

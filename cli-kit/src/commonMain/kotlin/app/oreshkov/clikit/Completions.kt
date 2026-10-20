@@ -45,6 +45,9 @@ public enum class Shell(
  * [StandardOptions.help] it offers commands, as the parser reads its words: `demo help store` offers
  * what `demo store` does.
  *
+ * Only names are offered: a command's aliases and former names, and an option's former names, are read on the way to
+ * the cursor but never offered, and neither is a deprecated command or option.
+ *
  * An option name is read the same way wherever it appears in the tree: if it takes a value under
  * one command, the word after it is skipped under every command. A tree that used one name as a
  * flag here and a valued option there would be confusing to type as well.
@@ -77,19 +80,28 @@ public class CompletionGenerator(private val programName: String? = null) {
             walk(listOf(root))
         }
 
-        private val valuedOptions: List<Option> =
-            paths.flatMap { it.last().options }.filter { it.takesValue && !it.hidden }.distinctBy { it.long }
+        /** Every declaration of an option that takes a value, a narrowing one as well, since it may have former names of its own. */
+        private val valuedDeclarations: List<Option> = paths.flatMap { it.last().options }.filter { it.takesValue && !it.hidden }
+
+        /** One declaration per option that takes a value: the first decides what completes after it. */
+        private val valuedOptions: List<Option> = valuedDeclarations.distinctBy { it.long }
+
+        /**
+         * Every spelling the parser reads [option] by. Former names and deprecated options are never offered, but
+         * they are read: a value typed after one must still be skipped, or completed.
+         */
+        private fun spellingsOf(option: Option): List<String> = listOfNotNull(option.long, option.short) + option.formerNames
 
         /** The spellings of every option that takes a value: the word after one is its value. */
-        val valued: List<String> = valuedOptions.flatMap { listOfNotNull(it.long, it.short) }.distinct()
+        val valued: List<String> = valuedDeclarations.flatMap(::spellingsOf).distinct()
 
         /** Options with a fixed set of values, grouped by those values: spellings to choices. */
         val choices: List<Pair<List<String>, List<String>>> = valuedOptions.filter { it.choices.isNotEmpty() }
             .groupBy { it.choices }
-            .map { (choices, options) -> options.flatMap { listOfNotNull(it.long, it.short) } to choices }
+            .map { (choices, options) -> options.flatMap(::spellingsOf).distinct() to choices }
 
         /** Valued options with no fixed set: after one of these, the shell completes file names. */
-        val open: List<String> = valuedOptions.filter { it.choices.isEmpty() }.flatMap { listOfNotNull(it.long, it.short) }
+        val open: List<String> = valuedOptions.filter { it.choices.isEmpty() }.flatMap(::spellingsOf).distinct()
 
         /**
          * Every place the walk over the typed words can arrive at, in the order of [paths]. After
@@ -100,14 +112,18 @@ public class CompletionGenerator(private val programName: String? = null) {
             val holder = path.dropLast(1).lastOrNull()
             if (path.last() === StandardOptions.help && holder != null) {
                 holder.paths().filter { it.last().subcommands.isNotEmpty() }
-                    .map { group -> Place(path + group.drop(1), path, group.last().subcommands) }
+                    .map { group -> Place(path + group.drop(1), path, offered(group.last())) }
                     .toList()
             } else {
-                listOf(Place(path, path, path.last().subcommands))
+                listOf(Place(path, path, offered(path.last())))
             }
         }
 
-        fun options(path: List<CommandSpec>): List<Option> = optionsFor(path).filterNot { it.hidden }
+        /** The subcommands of [command] a word may complete to: deprecated ones are still read, but not offered. */
+        private fun offered(command: CommandSpec): List<CommandSpec> = command.subcommands.filter { it.deprecated == null }
+
+        /** The options offered at [path]: neither hidden nor deprecated. */
+        fun options(path: List<CommandSpec>): List<Option> = optionsFor(path).offered().filterNot { it.hidden }
 
         /** The fixed values of the command's arguments, which complete where an argument is due. */
         fun argumentChoices(path: List<CommandSpec>): List<String> = path.last().arguments.flatMap { it.choices }.distinct()
@@ -123,8 +139,14 @@ public class CompletionGenerator(private val programName: String? = null) {
      * [command] they run, whose options and arguments apply; and the [commands] a word can name next.
      */
     private class Place(private val typed: List<CommandSpec>, val command: List<CommandSpec>, val commands: List<CommandSpec>) {
-        /** `session login`: the words typed, root excluded. */
-        val words: String get() = typed.drop(1).joinToString(" ") { it.name }
+        /**
+         * `session login`: the words typed, root excluded, each way they can be typed, since a command is read by its
+         * aliases and former names too. The names come first; with `ls` for `list`, `session list` then `session ls`.
+         * One alternative per combination of spellings, which stays small: a tree has a handful of either.
+         */
+        val words: List<String> = typed.drop(1).fold(listOf("")) { typedSoFar, command ->
+            typedSoFar.flatMap { before -> command.spellings.map { if (before.isEmpty()) it else "$before $it" } }
+        }
     }
 
     private fun bash(tree: Tree, program: String): String = buildString {
@@ -156,7 +178,7 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("  case \"\$cmdpath\" in")
         for (place in tree.places) {
             val words = tree.candidates(place).joinToString(" ") { it.escapeForDoubleQuotes() }
-            appendLine("    \"${place.words}\") candidates=\"$words\" ;;")
+            appendLine("    ${place.pattern()}) candidates=\"$words\" ;;")
         }
         appendLine("    *) candidates=\"--help\" ;;")
         appendLine("  esac")
@@ -197,7 +219,7 @@ public class CompletionGenerator(private val programName: String? = null) {
                     tree.argumentChoices(place.command).map { it.escapeForZsh() } +
                     tree.options(place.command).map { "${it.long}:${HelpText.summary(it.help).escapeForZsh()}" }
                 ).joinToString(" ") { "'$it'" }
-            appendLine("    \"${place.words}\") candidates=($entries) ;;")
+            appendLine("    ${place.pattern()}) candidates=($entries) ;;")
         }
         appendLine("  esac")
         appendLine("  _describe 'command' candidates")
@@ -234,7 +256,8 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("end")
         appendLine("complete -c $program -f")
         for (place in tree.places) {
-            val condition = "'$at${place.words.let { if (it.isEmpty()) "" else " $it" }}'"
+            // Any of the ways to type the place: `__demo_at session list; or __demo_at session ls`.
+            val condition = place.words.joinToString("; or ", "'", "'") { words -> if (words.isEmpty()) at else "$at $words" }
             place.commands.forEach {
                 appendLine("complete -c $program -n $condition -a '${it.name}' -d '${HelpText.summary(it.help).escapeForShell()}'")
             }
@@ -285,7 +308,8 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("    default {")
         appendLine("      switch -CaseSensitive -Exact (\$words -join ' ') {")
         for (place in tree.places) {
-            appendLine("        '${place.words.escapeForPowerShell()}' { ${list(tree.candidates(place))} }")
+            val candidates = list(tree.candidates(place))
+            place.words.forEach { appendLine("        '${it.escapeForPowerShell()}' { $candidates }") }
         }
         appendLine("        default { @('--help') }")
         appendLine("      }")
@@ -296,6 +320,9 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("  }")
         appendLine("}")
     }
+
+    /** The `case` pattern of bash and zsh that matches [Place.words]: `"session list"|"session ls"`. */
+    private fun Place.pattern(): String = words.joinToString("|") { "\"${it.escapeForDoubleQuotes()}\"" }
 
     private fun String.escapeForShell(): String = replace("'", "'\\''")
 

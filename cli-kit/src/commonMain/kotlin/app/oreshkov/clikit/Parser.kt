@@ -15,9 +15,10 @@ public sealed interface ParseResult {
         /** The option and argument values, converted. */
         public val values: OptionValues,
         /**
-         * What the converters said about values they called [ConversionResult.Unset], each after the option,
-         * argument or variable it came from, in command-line order and then the variables'. [Program] prints them
-         * as warnings; the parser itself never prints.
+         * Warnings for the command line: first each command selected by a former name or deprecated, then, in
+         * command-line order and then the variables', each option typed by a former name or deprecated, once per
+         * spelling, and what the converters said about values they called [ConversionResult.Unset], each after the
+         * option, argument or variable it came from. [Program] prints them as warnings; the parser itself never prints.
          */
         public val notices: List<String> = emptyList(),
     ) : ParseResult {
@@ -130,6 +131,10 @@ public class OptionValues internal constructor(
  *
  * A value its converter calls [ConversionResult.Unset] counts as not given, as that type describes.
  *
+ * A command is selected by its name, an alias or a former name, and an option by its long name or a former one. A
+ * former name, or a command or option that is deprecated, is still read, with a warning in
+ * [ParseResult.Invocation.notices].
+ *
  * Once every value is converted, the command line must keep each [Constraint] on its path, and may read standard
  * input through at most one value (see [ReadsStandardInput]); either failure is a usage error like any other.
  */
@@ -149,6 +154,8 @@ public class Parser(
         // options are only legal once that command has been named — `demo --account x session login`
         // is a mistake worth reporting rather than silently accepting.
         val collected = mutableListOf<String>()
+        // A command selected by a former name, or one that is deprecated; their words come before any option's.
+        val warnings = mutableListOf<String>()
         while (index < args.size) {
             val arg = args[index]
             val current = path.last()
@@ -169,8 +176,9 @@ public class Parser(
                 }
                 continue
             }
-            val child = current.subcommand(arg)
+            val child = current.resolve(arg)
             if (child != null) {
+                child.warning(arg, path)?.let { warnings += it }
                 path += child
                 index++
                 continue
@@ -180,12 +188,17 @@ public class Parser(
             break
         }
 
-        return parseOptions(path, collected)
+        return parseOptions(path, collected, warnings)
     }
 
-    /** [word] names none of the subcommands of the group at the end of [path]. */
-    private fun unknownSubcommand(word: String, path: List<CommandSpec>): ParseResult.UsageError =
-        ParseResult.UsageError("unknown subcommand '$word'", path, nearest(word, path.last().subcommands.map { it.name }))
+    /**
+     * [word] names none of the subcommands of the group at the end of [path]. The suggestion is a name or an alias
+     * of one that isn't deprecated: a former name, or a command on its way out, is no word to teach.
+     */
+    private fun unknownSubcommand(word: String, path: List<CommandSpec>): ParseResult.UsageError {
+        val offered = path.last().subcommands.filter { it.deprecated == null }.flatMap { listOf(it.name) + it.aliases }
+        return ParseResult.UsageError("unknown subcommand '$word'", path, nearest(word, offered))
+    }
 
     /**
      * [StandardOptions.help], at the end of [path], asked about [words]: the page of the command they name below the
@@ -196,7 +209,7 @@ public class Parser(
         val topic = path.dropLast(1).ifEmpty { path }.toMutableList()
         for (word in words) {
             val current = topic.last()
-            topic += current.subcommand(word)
+            topic += current.resolve(word)
                 ?: return if (current.subcommands.isNotEmpty()) {
                     unknownSubcommand(word, topic)
                 } else {
@@ -210,7 +223,7 @@ public class Parser(
         val known = optionsFor(path)
         if (arg.startsWith("--")) {
             if ('=' in arg) return false
-            return known.firstOrNull { it.long == arg }?.takesValue == true
+            return known.named(arg)?.takesValue == true
         }
         // `-svalue` and `-abc` are self-contained; a bare `-s` may take the next token.
         if (arg.length != 2) return false
@@ -242,6 +255,14 @@ public class Parser(
         /** The converters' notices, each with the place of its token; a variable's sorts after every token. */
         val notices = mutableListOf<IndexedValue<String>>()
 
+        /** The spellings, and variables, already warned about: one warning each, however often it's typed. */
+        private val warned = mutableSetOf<String>()
+
+        /** Keeps [warning] about [spelling], the token at [at], unless [spelling] was warned about already. */
+        fun warn(spelling: String, warning: String?, at: Int) {
+            if (warning != null && warned.add(spelling)) notices += IndexedValue(at, warning)
+        }
+
         fun given(option: Option): Boolean = when (option) {
             is Option.Flag -> option in flags
             is Option.Single<*> -> option in singles
@@ -264,7 +285,7 @@ public class Parser(
     }
 
     @Suppress("ReturnCount")
-    private fun parseOptions(path: List<CommandSpec>, tokens: List<String>): ParseResult {
+    private fun parseOptions(path: List<CommandSpec>, tokens: List<String>, warnings: List<String>): ParseResult {
         val command = path.last()
         val known = optionsFor(path)
         val collected = Collected()
@@ -285,12 +306,13 @@ public class Parser(
 
                 token.startsWith("--") -> {
                     val (name, inlineValue) = token.splitInline()
-                    val spec = known.firstOrNull { it.long == name }
+                    val spec = known.named(name)
                         ?: return ParseResult.UsageError(
                             "unknown option '$name'",
                             path,
-                            nearest(name, known.map { it.long }),
+                            nearest(name, known.offered().map { it.long }),
                         )
+                    collected.warn(name, spec.warning(name), index)
                     if (spec is Option.Flag) {
                         if (inlineValue != null) {
                             return ParseResult.UsageError("option '$name' does not take a value", path)
@@ -300,7 +322,7 @@ public class Parser(
                         val at = index
                         val value = inlineValue ?: tokens.getOrNull(++index)
                             ?: return ParseResult.UsageError("option '$name' requires a value", path)
-                        record(spec, value, collected, at)?.let { return ParseResult.UsageError(it, path) }
+                        record(spec, name, value, collected, at)?.let { return ParseResult.UsageError(it, path) }
                     }
                 }
 
@@ -331,6 +353,8 @@ public class Parser(
         for (option in known) {
             if (option !is Option.Single<*> || option.env == null || collected.given(option)) continue
             val value = environment(option.env)?.takeIf { it.isNotEmpty() } ?: continue
+            // A variable set for an option that's going away stops working with it, as the option's name would.
+            option.deprecated?.let { collected.warn(option.env, "${option.env}: ${option.warning(option.long)}", FROM_ENVIRONMENT) }
             when (val conversion = option.converter.convert(value)) {
                 is ConversionResult.Ok -> {
                     collected.singles[option] = conversion.value
@@ -363,7 +387,7 @@ public class Parser(
         return ParseResult.Invocation(
             path,
             OptionValues(collected.flags, collected.singles, collected.repeated, bound),
-            collected.notices.sortedBy { it.index }.map { it.value },
+            warnings + collected.notices.sortedBy { it.index }.map { it.value },
         )
     }
 
@@ -418,8 +442,9 @@ public class Parser(
                     // `search kv score -5`: POSIX reads `-5` as an option, which is right but baffling.
                     ShortOutcome.Error("unknown option '$token'; put '--' before a value that starts with '-'")
                 } else {
-                    ShortOutcome.Error("unknown option '$short'", nearest(short, known.mapNotNull { it.short }))
+                    ShortOutcome.Error("unknown option '$short'", nearest(short, known.offered().mapNotNull { it.short }))
                 }
+            collected.warn(short, spec.warning(short), at)
             if (spec is Option.Flag) {
                 collected.flags += spec
                 position++
@@ -428,29 +453,34 @@ public class Parser(
             val rest = token.substring(position + 1)
             val value = rest.ifEmpty { nextToken() }
                 ?: return ShortOutcome.Error("option '$short' requires a value")
-            record(spec, value, collected, at)?.let { return ShortOutcome.Error(it) }
+            record(spec, short, value, collected, at)?.let { return ShortOutcome.Error(it) }
             return ShortOutcome.Ok
         }
         return ShortOutcome.Ok
     }
 
-    /** Converts and stores one option value, whose option is the token at [at], or returns why it could not. */
-    private fun record(spec: Option, value: String, collected: Collected, at: Int): String? {
+    /**
+     * Converts and stores one option value, whose option is the token at [at], typed as [spelling], or returns why it
+     * could not. Messages name the option by its long name, unless it was typed by a former one, which is then the
+     * name the reader knows it by.
+     */
+    private fun record(spec: Option, spelling: String, value: String, collected: Collected, at: Int): String? {
         val converter = when (spec) {
             is Option.Single<*> -> spec.converter
             is Option.Repeated<*> -> spec.converter
             is Option.Flag -> error("a flag has no value")
         }
+        val name = if (spelling in spec.formerNames) spelling else spec.long
         val converted = when (val conversion = converter.convert(value)) {
             is ConversionResult.Ok -> conversion.value
-            is ConversionResult.Invalid -> return "invalid value for ${spec.long}: ${conversion.reason}"
+            is ConversionResult.Invalid -> return "invalid value for $name: ${conversion.reason}"
             is ConversionResult.Unset -> {
                 // As if this occurrence weren't there; for a single value, the earlier ones are overridden all the same.
                 if (spec is Option.Single<*>) {
                     collected.singles -= spec
                     collected.singleTexts -= spec
                 }
-                collected.unset(spec, "given '$value'", spec.long, conversion.notice, at)
+                collected.unset(spec, "given '$value'", name, conversion.notice, at)
                 return null
             }
         }
@@ -539,6 +569,15 @@ private const val FROM_ENVIRONMENT = Int.MAX_VALUE
  */
 internal fun optionsFor(path: List<CommandSpec>): List<Option> =
     path.asReversed().flatMap { it.options }.distinctBy { it.long }
+
+/**
+ * The option [spelling] names among these, which [optionsFor] lists deepest declaration first: by its long name or a
+ * former one, so the deepest declaration wins for each spelling.
+ */
+internal fun List<Option>.named(spelling: String): Option? = firstOrNull { spelling in it.spellings }
+
+/** These options less the deprecated ones: what a suggestion or a completion may offer. */
+internal fun List<Option>.offered(): List<Option> = filter { it.deprecated == null }
 
 /**
  * The nearest candidate within a small edit distance, or `null`.

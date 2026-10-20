@@ -13,6 +13,13 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 - Help's Environment section lists the variables the kit reads for `--no-color` and `--width`: `NO_COLOR`,
   `FORCE_COLOR`, `CLICOLOR_FORCE` and `COLUMNS`. A command can't declare them itself.
 - `StandardOptions.help`, a `help [command]...` command that shows a command's help page.
+- Command aliases (`CommandSpec(aliases = …)`), and former names and deprecation for options and commands
+  (`formerNames`, `deprecated`), still parsed and warned about on use.
+
+### Changed
+
+- A command that declares two subcommands with the same name, or that can be typed the same way through an alias or
+  a former name, is refused when it's built.
 
 ## [0.2.0] - 2026-10-18
 

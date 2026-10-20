@@ -4,13 +4,13 @@ _demo_complete() {
   COMPREPLY=()
   case "$prev" in
     --method) COMPREPLY=($(compgen -W "GET POST DELETE" -- "$cur")); return ;;
-    --data-dir|--account|-a|--site|-s|--limit|-n|--param|-p|--url|--before) return ;;
+    --data-dir|--account|-a|--site|-s|--limit|-n|--max|--param|-p|--url|--before) return ;;
   esac
   local cmdpath="" skip=0 i
   for ((i = 1; i < COMP_CWORD; i++)); do
     if ((skip)); then [[ "${COMP_WORDS[i]}" == "=" ]] || skip=0; continue; fi
     case "${COMP_WORDS[i]}" in
-      --data-dir|--account|-a|--site|-s|--limit|-n|--param|-p|--method|--url|--before) skip=1 ;;
+      --data-dir|--account|-a|--site|-s|--limit|-n|--max|--param|-p|--method|--url|--before) skip=1 ;;
       -*) ;;
       *) cmdpath="${cmdpath:+$cmdpath }${COMP_WORDS[i]}" ;;
     esac
@@ -21,17 +21,18 @@ _demo_complete() {
     "session") candidates="login list --data-dir --json --verbose -v --help" ;;
     "session login") candidates="--account -a --site -s --force --data-dir --json --verbose -v --help" ;;
     "session list") candidates="--site -s --limit -n --data-dir --json --verbose -v --help" ;;
-    "request") candidates="get raw --data-dir --json --verbose -v --help" ;;
-    "request get") candidates="--account -a --param -p --data-dir --json --verbose -v --help" ;;
-    "request raw") candidates="--method --url --data-dir --json --verbose -v --help" ;;
+    "request"|"req") candidates="get raw --data-dir --json --verbose -v --help" ;;
+    "request get"|"req get") candidates="--account -a --param -p --data-dir --json --verbose -v --help" ;;
+    "request raw"|"req raw") candidates="--method --url --data-dir --json --verbose -v --help" ;;
     "store") candidates="get query prune --data-dir --json --verbose -v --help" ;;
     "store get") candidates="--data-dir --json --verbose -v --help" ;;
-    "store query") candidates="--data-dir --json --verbose -v --help" ;;
+    "store query"|"store search") candidates="--data-dir --json --verbose -v --help" ;;
     "store prune") candidates="--before --confirm --data-dir --json --verbose -v --help" ;;
+    "store purge") candidates="--data-dir --json --verbose -v --help" ;;
     "completion") candidates="bash zsh fish powershell --data-dir --json --verbose -v --help" ;;
     "help") candidates="session request store completion help --data-dir --json --verbose -v --help" ;;
     "help session") candidates="login list --data-dir --json --verbose -v --help" ;;
-    "help request") candidates="get raw --data-dir --json --verbose -v --help" ;;
+    "help request"|"help req") candidates="get raw --data-dir --json --verbose -v --help" ;;
     "help store") candidates="get query prune --data-dir --json --verbose -v --help" ;;
     *) candidates="--help" ;;
   esac

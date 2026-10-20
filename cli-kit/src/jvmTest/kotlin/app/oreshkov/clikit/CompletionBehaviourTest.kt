@@ -32,6 +32,14 @@ class CompletionBehaviourTest {
         "demo help st" to listOf("store"),
         "demo help store q" to listOf("query"),
         "demo -v help --data-dir x request g" to listOf("get"),
+        // An alias and a former name are read on the way, a former option name's value skipped, and nothing
+        // deprecated offered: `purge` and `--pretty` would match too.
+        "demo req g" to listOf("get"),
+        "demo help req r" to listOf("raw"),
+        "demo store search --d" to listOf("--data-dir"),
+        "demo session list --max 5 --s" to listOf("--site"),
+        "demo store p" to listOf("prune"),
+        "demo request get --p" to listOf("--param"),
     )
 
     @Test

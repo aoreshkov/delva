@@ -16,6 +16,8 @@ Arguments:
 Options:
   -a, --account <name>  Account to act as
   -p, --param <k=v>     Query parameter, repeatable
+      --pretty          Indent the output (deprecated)
+                        pipe --json to a formatter instead
 
 Global options:
       --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
