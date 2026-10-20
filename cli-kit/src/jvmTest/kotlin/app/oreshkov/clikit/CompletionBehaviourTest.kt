@@ -28,6 +28,10 @@ class CompletionBehaviourTest {
         "demo session list --site x --li" to listOf("--limit"),
         "demo completion f" to listOf("fish"),
         "demo store prune --b" to listOf("--before"),
+        // help's words name commands, level by level, wherever its options are.
+        "demo help st" to listOf("store"),
+        "demo help store q" to listOf("query"),
+        "demo -v help --data-dir x request g" to listOf("get"),
     )
 
     @Test

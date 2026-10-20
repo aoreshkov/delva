@@ -555,11 +555,13 @@ public final class app/oreshkov/clikit/StandardOptions {
 	public final fun getCompletion ()Lapp/oreshkov/clikit/CommandSpec;
 	public final fun getDryRun ()Lapp/oreshkov/clikit/Option$Flag;
 	public final fun getForce ()Lapp/oreshkov/clikit/Option$Flag;
+	public final fun getHelp ()Lapp/oreshkov/clikit/CommandSpec;
 	public final fun getJson ()Lapp/oreshkov/clikit/Option$Flag;
 	public final fun getNoColor ()Lapp/oreshkov/clikit/Option$Flag;
 	public final fun getNoInput ()Lapp/oreshkov/clikit/Option$Flag;
 	public final fun getQuiet ()Lapp/oreshkov/clikit/Option$Flag;
 	public final fun getShell ()Lapp/oreshkov/clikit/Argument$Single;
+	public final fun getTopic ()Lapp/oreshkov/clikit/Argument$Variadic;
 	public final fun getVerbose ()Lapp/oreshkov/clikit/Option$Flag;
 	public final fun getWidth ()Lapp/oreshkov/clikit/Option$Single;
 	public final fun noColor ([Ljava/lang/String;)Z

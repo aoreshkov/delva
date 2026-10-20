@@ -93,6 +93,7 @@ internal object TestCommands {
             CommandSpec("request", "Requests", subcommands = listOf(get, raw)),
             CommandSpec("store", "The store", subcommands = listOf(storeGet, query, prune)),
             StandardOptions.completion,
+            StandardOptions.help,
         ),
     )
 

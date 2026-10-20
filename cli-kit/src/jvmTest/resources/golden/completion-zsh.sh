@@ -17,7 +17,7 @@ _demo() {
     --data-dir|--account|-a|--site|-s|--limit|-n|--param|-p|--url|--before) _files; return ;;
   esac
   case "$cmdpath" in
-    "") candidates=('session:Sessions' 'request:Requests' 'store:The store' 'completion:Print a shell completion script to stdout' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
+    "") candidates=('session:Sessions' 'request:Requests' 'store:The store' 'completion:Print a shell completion script to stdout' 'help:Show help for a command' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
     "session") candidates=('login:Log an account in' 'list:One row per login' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
     "session login") candidates=('--account:Account to act as' '--site:Site id' '--force:Log in again' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
     "session list") candidates=('--site:Site id' '--limit:Most sessions to list' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
@@ -29,6 +29,10 @@ _demo() {
     "store query") candidates=('--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
     "store prune") candidates=('--before:Cutoff' '--confirm:Actually delete' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
     "completion") candidates=('bash' 'zsh' 'fish' 'powershell' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
+    "help") candidates=('session:Sessions' 'request:Requests' 'store:The store' 'completion:Print a shell completion script to stdout' 'help:Show help for a command' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
+    "help session") candidates=('login:Log an account in' 'list:One row per login' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
+    "help request") candidates=('get:Issue a read' 'raw:Issue an arbitrary URL' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
+    "help store") candidates=('get:Read one entry' 'query:Search the store' 'prune:Delete old entries' '--data-dir:Data directory' '--json:Machine-readable output on stdout' '--verbose:More detail on stderr') ;;
   esac
   _describe 'command' candidates
 }

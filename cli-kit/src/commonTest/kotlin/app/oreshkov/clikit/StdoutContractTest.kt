@@ -51,7 +51,7 @@ class StdoutContractTest {
             StandardOptions.noInput,
             StandardOptions.width,
         ),
-        subcommands = listOf(store, run, StandardOptions.completion),
+        subcommands = listOf(store, run, StandardOptions.completion, StandardOptions.help),
         environment = listOf(EnvironmentVariable("FIX_HOME", "Where the program is installed")),
     )
 
@@ -111,7 +111,7 @@ class StdoutContractTest {
             val expected = HelpRenderer().render(path)
             // The fixture exercises the whole page, the Environment section included.
             assertContains(expected, "Environment:\n")
-            val asked = listOf(words(path) + "--help", words(path) + "-h") +
+            val asked = listOf(words(path) + "--help", words(path) + "-h", listOf("help") + words(path)) +
                 listOfNotNull(words(path).takeIf { !path.last().runnable })
             for (args in asked) {
                 val result = record(args)
@@ -155,6 +155,9 @@ class StdoutContractTest {
             add(listOf("store", "get", "k", "yaml"))
             add(listOf("store", "put", "--from", "f", "--stdin"))
             add(listOf("completion", "tcsh"))
+            add(listOf("help", "nope"))
+            add(listOf("help", "store", "nope"))
+            add(listOf("help", "run", "nope"))
         }
         for (args in usageErrors) {
             val result = record(args)

@@ -16,7 +16,7 @@ Register-ArgumentCompleter -Native -CommandName demo -ScriptBlock {
     '--method' { @('GET', 'POST', 'DELETE') }
     default {
       switch -CaseSensitive -Exact ($words -join ' ') {
-        '' { @('session', 'request', 'store', 'completion', '--data-dir', '--json', '--verbose', '-v', '--help') }
+        '' { @('session', 'request', 'store', 'completion', 'help', '--data-dir', '--json', '--verbose', '-v', '--help') }
         'session' { @('login', 'list', '--data-dir', '--json', '--verbose', '-v', '--help') }
         'session login' { @('--account', '-a', '--site', '-s', '--force', '--data-dir', '--json', '--verbose', '-v', '--help') }
         'session list' { @('--site', '-s', '--limit', '-n', '--data-dir', '--json', '--verbose', '-v', '--help') }
@@ -28,6 +28,10 @@ Register-ArgumentCompleter -Native -CommandName demo -ScriptBlock {
         'store query' { @('--data-dir', '--json', '--verbose', '-v', '--help') }
         'store prune' { @('--before', '--confirm', '--data-dir', '--json', '--verbose', '-v', '--help') }
         'completion' { @('bash', 'zsh', 'fish', 'powershell', '--data-dir', '--json', '--verbose', '-v', '--help') }
+        'help' { @('session', 'request', 'store', 'completion', 'help', '--data-dir', '--json', '--verbose', '-v', '--help') }
+        'help session' { @('login', 'list', '--data-dir', '--json', '--verbose', '-v', '--help') }
+        'help request' { @('get', 'raw', '--data-dir', '--json', '--verbose', '-v', '--help') }
+        'help store' { @('get', 'query', 'prune', '--data-dir', '--json', '--verbose', '-v', '--help') }
         default { @('--help') }
       }
     }

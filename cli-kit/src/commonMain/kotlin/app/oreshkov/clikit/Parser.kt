@@ -35,7 +35,10 @@ public sealed interface ParseResult {
         override fun toString(): String = "Invocation(${commandLine()})"
     }
 
-    /** `--help` at any level: the help of the last command of [path], the commands from the root down to it. */
+    /**
+     * `--help` at any level, a group named without a command, or [StandardOptions.help]: the help of the last command
+     * of [path], the commands from the root down to it.
+     */
     public data class Help(val path: List<CommandSpec>) : ParseResult
 
     /** `--version` at any level. */
@@ -172,18 +175,35 @@ public class Parser(
                 index++
                 continue
             }
-            if (current.subcommands.isNotEmpty()) {
-                return ParseResult.UsageError(
-                    "unknown subcommand '$arg'",
-                    path,
-                    nearest(arg, current.subcommands.map { it.name }),
-                )
-            }
+            if (current.subcommands.isNotEmpty()) return unknownSubcommand(arg, path)
             collected += args.subList(index, args.size)
             break
         }
 
         return parseOptions(path, collected)
+    }
+
+    /** [word] names none of the subcommands of the group at the end of [path]. */
+    private fun unknownSubcommand(word: String, path: List<CommandSpec>): ParseResult.UsageError =
+        ParseResult.UsageError("unknown subcommand '$word'", path, nearest(word, path.last().subcommands.map { it.name }))
+
+    /**
+     * [StandardOptions.help], at the end of [path], asked about [words]: the page of the command they name below the
+     * group that lists it, or the group's own page for none.
+     */
+    private fun helpFor(path: List<CommandSpec>, words: List<String>): ParseResult {
+        // A tree whose root is `help` itself has no group above it, and can show only its own page.
+        val topic = path.dropLast(1).ifEmpty { path }.toMutableList()
+        for (word in words) {
+            val current = topic.last()
+            topic += current.subcommand(word)
+                ?: return if (current.subcommands.isNotEmpty()) {
+                    unknownSubcommand(word, topic)
+                } else {
+                    ParseResult.UsageError("unexpected argument '$word'", topic)
+                }
+        }
+        return ParseResult.Help(topic)
     }
 
     private fun consumesNextToken(path: List<CommandSpec>, arg: String): Boolean {
@@ -303,6 +323,8 @@ public class Parser(
             index++
         }
 
+        // Before any variable is read and any rule checked, so that, like `--help`, help works whatever they say.
+        if (command === StandardOptions.help) return helpFor(path, collected.positionals.map { it.value })
         if (!command.runnable) return ParseResult.Help(path)
 
         // The command line wins; a variable fills in only what it left out, or gave only an unset value for.

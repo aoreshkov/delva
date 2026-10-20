@@ -18,7 +18,7 @@ class ProgramTest {
     private val root = CommandSpec(
         name = "demo",
         options = listOf(StandardOptions.verbose, StandardOptions.width),
-        subcommands = listOf(go, StandardOptions.completion),
+        subcommands = listOf(go, StandardOptions.completion, StandardOptions.help),
     )
 
     private fun run(vararg args: String, handler: CommandHandler = CommandHandler { 3 }): RunResult =
@@ -80,6 +80,25 @@ class ProgramTest {
         assertContains(result.stdout, "demo")
         assertEquals("", result.stderr)
         result.assertPipeSafe()
+    }
+
+    @Test
+    fun `the help command is answered without a handler, with the page --help shows`() {
+        val result = run("help", "go") { error("dispatched") }
+        assertEquals(RunResult(ExitStatus.OK, run("go", "--help").stdout, "").toString(), result.toString())
+        assertEquals(run("--help").stdout, run("help").stdout)
+        result.assertPipeSafe()
+    }
+
+    @Test
+    fun `the help command's usage errors go to stderr and exit USAGE`() {
+        val typo = run("help", "og") { error("dispatched") }
+        assertEquals(ExitStatus.USAGE to "", typo.status to typo.stdout)
+        assertEquals("error: unknown subcommand 'og'\n       did you mean go?\nusage: demo [options] <command>\n", typo.stderr)
+
+        val afterLeaf = run("help", "go", "x")
+        assertEquals(ExitStatus.USAGE to "", afterLeaf.status to afterLeaf.stdout)
+        assertEquals("error: unexpected argument 'x'\nusage: demo go [options]\n", afterLeaf.stderr)
     }
 
     @Test
@@ -335,6 +354,10 @@ class ProgramTest {
             Program(root, "demo 1.0", mapOf(go to CommandHandler { 0 }, stray to CommandHandler { 0 }))
         }
         assertContains(error.message.orEmpty(), "stray")
+        val help = assertFailsWith<IllegalArgumentException> {
+            Program(root, "demo 1.0", mapOf(go to CommandHandler { 0 }, StandardOptions.help to CommandHandler { 0 }))
+        }
+        assertContains(help.message.orEmpty(), "help")
     }
 
     @Test

@@ -27,6 +27,11 @@ class HelpRendererTest {
     }
 
     @Test
+    fun `the help command, a variadic argument that may be left out`() {
+        Golden.assertMatches("help-help.txt", help.render(pathTo("help")))
+    }
+
+    @Test
     fun `help lists a command's own options separately from the inherited globals`() {
         val rendered = help.render(pathTo("session", "login"))
         assertContains(rendered, "Options:")
@@ -176,6 +181,7 @@ class HelpRendererTest {
         val asserted = setOf(
             "help-root.txt",
             "help-request-get.txt",
+            "help-help.txt",
             "completion-bash.sh",
             "completion-zsh.sh",
             "completion-fish.sh",
