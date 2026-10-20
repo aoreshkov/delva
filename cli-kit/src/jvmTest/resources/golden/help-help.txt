@@ -1,0 +1,16 @@
+Show help for a command
+
+Usage:
+  demo help [options] [command]...
+
+Arguments:
+  command  The command to show help for
+
+Global options:
+      --data-dir <dir>  Data directory [default: ./store] [env: DEMO_DATA_DIR]
+      --json            Machine-readable output on stdout
+  -v, --verbose         More detail on stderr
+
+Environment:
+  DEMO_DATA_DIR  Same as --data-dir
+  DEMO_TOKEN     Token to send when no session is logged in

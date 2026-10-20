@@ -17,7 +17,7 @@ _demo_complete() {
   done
   local candidates
   case "$cmdpath" in
-    "") candidates="session request store completion --data-dir --json --verbose -v --help" ;;
+    "") candidates="session request store completion help --data-dir --json --verbose -v --help" ;;
     "session") candidates="login list --data-dir --json --verbose -v --help" ;;
     "session login") candidates="--account -a --site -s --force --data-dir --json --verbose -v --help" ;;
     "session list") candidates="--site -s --limit -n --data-dir --json --verbose -v --help" ;;
@@ -29,6 +29,10 @@ _demo_complete() {
     "store query") candidates="--data-dir --json --verbose -v --help" ;;
     "store prune") candidates="--before --confirm --data-dir --json --verbose -v --help" ;;
     "completion") candidates="bash zsh fish powershell --data-dir --json --verbose -v --help" ;;
+    "help") candidates="session request store completion help --data-dir --json --verbose -v --help" ;;
+    "help session") candidates="login list --data-dir --json --verbose -v --help" ;;
+    "help request") candidates="get raw --data-dir --json --verbose -v --help" ;;
+    "help store") candidates="get query prune --data-dir --json --verbose -v --help" ;;
     *) candidates="--help" ;;
   esac
   COMPREPLY=($(compgen -W "$candidates" -- "$cur"))

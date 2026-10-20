@@ -45,7 +45,7 @@ class ParserTest {
         // keeps the fixture honest: a case below that fails should fail for the rule it names.
         fun walk(path: List<CommandSpec>) {
             val command = path.last()
-            if (command.runnable && path.size > 1) {
+            if (command.runnable && path.size > 1 && command !== StandardOptions.help) {
                 val args = path.drop(1).map { it.name } +
                     optionsFor(path).filter { it.required }.flatMap { listOf(it.long, sampleFor(it)) } +
                     command.arguments.filter { it.required }.map { it.choices.firstOrNull() ?: "x" }
@@ -166,6 +166,56 @@ class ParserTest {
         val result = parser.parse(arrayOf("session"))
         assertIs<ParseResult.Help>(result)
         assertEquals("session", result.path.last().name)
+    }
+
+    @Test
+    fun `the help command shows the page of the command its words name`() {
+        assertEquals(ParseResult.Help(TestCommands.root.pathTo()), parser.parse(listOf("help")))
+        assertEquals(ParseResult.Help(TestCommands.root.pathTo("store")), parser.parse(listOf("help", "store")))
+        assertEquals(ParseResult.Help(TestCommands.root.pathTo("store", "get")), parser.parse(listOf("help", "store", "get")))
+        assertEquals(ParseResult.Help(TestCommands.root.pathTo("help")), parser.parse(listOf("help", "help")))
+    }
+
+    @Test
+    fun `the help command takes global options before and after its words`() {
+        val page = ParseResult.Help(TestCommands.root.pathTo("store", "get"))
+        assertEquals(page, parser.parse(listOf("-v", "help", "store", "get")))
+        assertEquals(page, parser.parse(listOf("help", "--data-dir", "store", "store", "get", "--json")))
+        assertEquals(page, parser.parse(listOf("help", "store", "--", "get")))
+    }
+
+    @Test
+    fun `the help command names commands below the group that lists it`() {
+        val get = CommandSpec("get", "Read one entry")
+        val store = CommandSpec("store", "The store", subcommands = listOf(get, StandardOptions.help))
+        val root = CommandSpec("demo", subcommands = listOf(store, StandardOptions.help))
+        assertEquals(ParseResult.Help(root.pathTo("store", "get")), Parser(root).parse(listOf("store", "help", "get")))
+        assertEquals(ParseResult.Help(root.pathTo("store")), Parser(root).parse(listOf("store", "help")))
+        assertEquals(ParseResult.Help(root.pathTo("store", "help")), Parser(root).parse(listOf("help", "store", "help")))
+    }
+
+    @Test
+    fun `the help command refuses a word that names no command`() {
+        val typo = usageError("help", "store", "gte")
+        assertEquals("unknown subcommand 'gte'", typo.message)
+        assertEquals("get", typo.suggestion)
+        assertEquals(TestCommands.root.pathTo("store"), typo.path)
+
+        val afterLeaf = usageError("help", "store", "get", "x")
+        assertEquals("unexpected argument 'x'", afterLeaf.message)
+        assertEquals(TestCommands.root.pathTo("store", "get"), afterLeaf.path)
+    }
+
+    @Test
+    fun `the help command works whatever the environment says`() {
+        // A required option left out and a variable with a bad value would each fail a command; like --help, help reads neither.
+        val needed = Option.Single("--needed", Converters.string, required = true)
+        val limit = Option.Single("--limit", Converters.positiveInt, env = "LIMIT")
+        val go = CommandSpec("go")
+        val root = CommandSpec("demo", options = listOf(needed, limit), subcommands = listOf(go, StandardOptions.help))
+        val parser = Parser(root, mapOf("LIMIT" to "many")::get)
+        assertIs<ParseResult.UsageError>(parser.parse(listOf("go", "--needed", "x")))
+        assertEquals(ParseResult.Help(root.pathTo("go")), parser.parse(listOf("help", "go")))
     }
 
     @Test

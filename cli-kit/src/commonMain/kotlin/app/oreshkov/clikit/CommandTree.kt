@@ -18,11 +18,11 @@ public fun CommandSpec.paths(): Sequence<List<CommandSpec>> = sequence {
 }
 
 /**
- * The paths that end in a runnable command, [StandardOptions.completion] excluded: exactly the commands [Program]
- * needs a handler for.
+ * The paths that end in a runnable command, [StandardOptions.completion] and [StandardOptions.help] excluded: exactly
+ * the commands [Program] needs a handler for.
  */
 public fun CommandSpec.runnablePaths(): Sequence<List<CommandSpec>> =
-    paths().filter { it.last().runnable && it.last() !== StandardOptions.completion }
+    paths().filter { it.last().runnable && it.last() !== StandardOptions.completion && it.last() !== StandardOptions.help }
 
 /**
  * The path to a subcommand by name, this command first: `root.pathTo("store", "get")` is `[root, store, get]`, and

@@ -106,6 +106,20 @@ public object StandardOptions {
         arguments = listOf(shell),
     )
 
+    /** The command words of [help]. */
+    public val topic: Argument.Variadic<String> =
+        Argument.Variadic("command", Converters.string, "The command to show help for", required = false)
+
+    /**
+     * `help [command]...`, the same page as `--help`: `tool help store get` is `tool store get --help`. The words name
+     * a command below the group that lists it, so `tool store help get` shows the same page, and `tool help` the
+     * group's own. The parser answers it as [ParseResult.Help], so [Program] needs no handler for it, and a word that
+     * names no command is a usage error.
+     *
+     * Not in any tree unless a program lists it, so it can't take the name from a `help` command of a program's own.
+     */
+    public val help: CommandSpec = CommandSpec("help", "Show help for a command", arguments = listOf(topic))
+
     /**
      * The variables the colour decision reads besides [noColor], which help lists with it: a program that offers
      * `--no-color` honours them too. `TERM=dumb` is left out, as a property of the terminal rather than a choice.
@@ -264,8 +278,8 @@ public class CommandFailure(
  * Parse, answer what the tree can answer by itself, and hand the rest to the command's handler:
  * the part of `main` that is the same for every command tree.
  *
- * Help, `--version` and usage errors are answered here, and so is [StandardOptions.completion] when
- * the tree includes it. Every other runnable command has a handler in [handlers], which is checked
+ * Help, `--version` and usage errors are answered here, and so are [StandardOptions.completion] and
+ * [StandardOptions.help] when the tree includes them. Every other runnable command has a handler in [handlers], which is checked
  * when the program is built rather than when somebody first runs the command without one. The parser's
  * [ParseResult.Invocation.notices] are printed as warnings before the command runs.
  *

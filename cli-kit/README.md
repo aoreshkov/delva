@@ -19,7 +19,8 @@ even Delva, and knows no command of any program's: a program declares its own tr
 - Terminal I/O that keeps the payload on stdout and everything decorative on stderr, with colour decided once and ANSI
   enabled on a legacy Windows console; prompts, confirmations, secrets, progress, log lines and `--quiet`. Control
   characters in table cells, notices and errors are shown as `\u001B`, never sent to the terminal.
-- A `Program` runner that answers `--help`, `--version` and usage errors (exit status 2), hands every other command
+- A `Program` runner that answers `--help`, [`help <command>`](#a-help-command), `--version` and usage errors (exit
+  status 2), hands every other command
   to the handler the program registered for it, turns an expected failure (`CommandFailure`) into its exit status
   (`ExitStatus` names the `sysexits.h` codes), and lets a command that runs until stopped stop cleanly on Ctrl-C or
   SIGTERM.
@@ -138,6 +139,21 @@ An unset value on the command line overrides an earlier one and lets the option'
 a variadic argument drops just that value, and an argument keeps its place, so the ones after it don't shift. When a
 required option is left unset, the error says what was given: `missing required option --forms-dir (given
 '${user_config.forms_dir}', which counts as not set)`.
+
+## A help command
+
+`StandardOptions.help` is `help [command]...`, which prints the page `--help` prints, as git-like tools do. A tree has
+it only if the program lists it, so a program can still have a `help` command of its own:
+
+```kotlin
+val root = CommandSpec("tool", subcommands = listOf(store, StandardOptions.completion, StandardOptions.help))
+```
+
+`tool help store get` then prints the page of `tool store get --help`, and `tool help` the root's. The words name a
+command below the group that lists `help`, so a group can list it too: `tool store help get` prints the same page. A
+word that names no command is a usage error, with the nearest name suggested. `Program` answers `help` without a
+handler, before reading any environment variable or checking a required option, so it works wherever `--help` does,
+and the completion scripts complete its words.
 
 ## Experimental API
 

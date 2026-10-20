@@ -41,7 +41,9 @@ public enum class Shell(
  * follows an option taking one — `demo --data-dir store session` is the command `session`, not
  * `store session` — and offers what the command it arrives at accepts: subcommands, options, and
  * the choices of its arguments. Right after an option that takes a value it offers that value
- * instead: the option's choices, or the shell's own file-name completion when it has none.
+ * instead: the option's choices, or the shell's own file-name completion when it has none. After
+ * [StandardOptions.help] it offers commands, as the parser reads its words: `demo help store` offers
+ * what `demo store` does.
  *
  * An option name is read the same way wherever it appears in the tree: if it takes a value under
  * one command, the word after it is skipped under every command. A tree that used one name as a
@@ -89,18 +91,40 @@ public class CompletionGenerator(private val programName: String? = null) {
         /** Valued options with no fixed set: after one of these, the shell completes file names. */
         val open: List<String> = valuedOptions.filter { it.choices.isEmpty() }.flatMap { listOfNotNull(it.long, it.short) }
 
-        /** `session login`: the words that name the command, root excluded. */
-        fun words(path: List<CommandSpec>): String = path.drop(1).joinToString(" ") { it.name }
+        /**
+         * Every place the walk over the typed words can arrive at, in the order of [paths]. After
+         * [StandardOptions.help], the words name a command below the group that lists it, so its place is followed by
+         * one for each group down there: `help store` offers what `store` does.
+         */
+        val places: List<Place> = paths.flatMap { path ->
+            val holder = path.dropLast(1).lastOrNull()
+            if (path.last() === StandardOptions.help && holder != null) {
+                holder.paths().filter { it.last().subcommands.isNotEmpty() }
+                    .map { group -> Place(path + group.drop(1), path, group.last().subcommands) }
+                    .toList()
+            } else {
+                listOf(Place(path, path, path.last().subcommands))
+            }
+        }
 
         fun options(path: List<CommandSpec>): List<Option> = optionsFor(path).filterNot { it.hidden }
 
         /** The fixed values of the command's arguments, which complete where an argument is due. */
         fun argumentChoices(path: List<CommandSpec>): List<String> = path.last().arguments.flatMap { it.choices }.distinct()
 
-        /** Everything a word after this command can be. */
-        fun candidates(path: List<CommandSpec>): List<String> =
-            path.last().subcommands.map { it.name } + argumentChoices(path) +
-                options(path).flatMap { listOfNotNull(it.long, it.short) } + "--help"
+        /** Everything a word after [place] can be. */
+        fun candidates(place: Place): List<String> =
+            place.commands.map { it.name } + argumentChoices(place.command) +
+                options(place.command).flatMap { listOfNotNull(it.long, it.short) } + "--help"
+    }
+
+    /**
+     * Where the walk over the typed words arrives: the commands and words named, root first, [typed]; the path of the
+     * [command] they run, whose options and arguments apply; and the [commands] a word can name next.
+     */
+    private class Place(private val typed: List<CommandSpec>, val command: List<CommandSpec>, val commands: List<CommandSpec>) {
+        /** `session login`: the words typed, root excluded. */
+        val words: String get() = typed.drop(1).joinToString(" ") { it.name }
     }
 
     private fun bash(tree: Tree, program: String): String = buildString {
@@ -130,9 +154,9 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("  done")
         appendLine("  local candidates")
         appendLine("  case \"\$cmdpath\" in")
-        for (path in tree.paths) {
-            val words = tree.candidates(path).joinToString(" ") { it.escapeForDoubleQuotes() }
-            appendLine("    \"${tree.words(path)}\") candidates=\"$words\" ;;")
+        for (place in tree.places) {
+            val words = tree.candidates(place).joinToString(" ") { it.escapeForDoubleQuotes() }
+            appendLine("    \"${place.words}\") candidates=\"$words\" ;;")
         }
         appendLine("    *) candidates=\"--help\" ;;")
         appendLine("  esac")
@@ -167,13 +191,13 @@ public class CompletionGenerator(private val programName: String? = null) {
             appendLine("  esac")
         }
         appendLine("  case \"\$cmdpath\" in")
-        for (path in tree.paths) {
+        for (place in tree.places) {
             val entries = (
-                path.last().subcommands.map { "${it.name.escapeForZsh()}:${HelpText.summary(it.help).escapeForZsh()}" } +
-                    tree.argumentChoices(path).map { it.escapeForZsh() } +
-                    tree.options(path).map { "${it.long}:${HelpText.summary(it.help).escapeForZsh()}" }
+                place.commands.map { "${it.name.escapeForZsh()}:${HelpText.summary(it.help).escapeForZsh()}" } +
+                    tree.argumentChoices(place.command).map { it.escapeForZsh() } +
+                    tree.options(place.command).map { "${it.long}:${HelpText.summary(it.help).escapeForZsh()}" }
                 ).joinToString(" ") { "'$it'" }
-            appendLine("    \"${tree.words(path)}\") candidates=($entries) ;;")
+            appendLine("    \"${place.words}\") candidates=($entries) ;;")
         }
         appendLine("  esac")
         appendLine("  _describe 'command' candidates")
@@ -209,17 +233,17 @@ public class CompletionGenerator(private val programName: String? = null) {
         appendLine("    test \"\$cmdpath\" = \"\$argv\"")
         appendLine("end")
         appendLine("complete -c $program -f")
-        for (path in tree.paths) {
-            val condition = "'$at${tree.words(path).let { if (it.isEmpty()) "" else " $it" }}'"
-            path.last().subcommands.forEach {
+        for (place in tree.places) {
+            val condition = "'$at${place.words.let { if (it.isEmpty()) "" else " $it" }}'"
+            place.commands.forEach {
                 appendLine("complete -c $program -n $condition -a '${it.name}' -d '${HelpText.summary(it.help).escapeForShell()}'")
             }
-            val argumentChoices = tree.argumentChoices(path)
+            val argumentChoices = tree.argumentChoices(place.command)
             if (argumentChoices.isNotEmpty()) {
                 val words = argumentChoices.joinToString(" ") { it.escapeForShell() }
                 appendLine("complete -c $program -n $condition -a '$words'")
             }
-            tree.options(path).forEach { option ->
+            tree.options(place.command).forEach { option ->
                 val short = option.short?.removePrefix("-")?.let { " -s $it" } ?: ""
                 // -x: a value from the listed choices only; -r -F: a value, completed as a file name.
                 val value = when {
@@ -260,8 +284,8 @@ public class CompletionGenerator(private val programName: String? = null) {
         }
         appendLine("    default {")
         appendLine("      switch -CaseSensitive -Exact (\$words -join ' ') {")
-        for (path in tree.paths) {
-            appendLine("        '${tree.words(path).escapeForPowerShell()}' { ${list(tree.candidates(path))} }")
+        for (place in tree.places) {
+            appendLine("        '${place.words.escapeForPowerShell()}' { ${list(tree.candidates(place))} }")
         }
         appendLine("        default { @('--help') }")
         appendLine("      }")

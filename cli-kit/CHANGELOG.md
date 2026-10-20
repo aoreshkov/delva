@@ -12,6 +12,7 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 - Help's Environment section lists the variables the kit reads for `--no-color` and `--width`: `NO_COLOR`,
   `FORCE_COLOR`, `CLICOLOR_FORCE` and `COLUMNS`. A command can't declare them itself.
+- `StandardOptions.help`, a `help [command]...` command that shows a command's help page.
 
 ## [0.2.0] - 2026-10-18
 

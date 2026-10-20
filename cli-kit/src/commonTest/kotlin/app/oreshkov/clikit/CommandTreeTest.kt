@@ -17,7 +17,7 @@ class CommandTreeTest {
                 "demo session", "demo session login", "demo session list",
                 "demo request", "demo request get", "demo request raw",
                 "demo store", "demo store get", "demo store query", "demo store prune",
-                "demo completion",
+                "demo completion", "demo help",
             ),
             TestCommands.root.paths().map { it.names() }.toList(),
         )
@@ -29,7 +29,7 @@ class CommandTreeTest {
     }
 
     @Test
-    fun `runnable paths are the commands a program needs a handler for, completion left out`() {
+    fun `runnable paths are the commands a program needs a handler for, completion and help left out`() {
         assertEquals(
             listOf(TestCommands.login, TestCommands.list, TestCommands.get, TestCommands.raw) +
                 listOf(TestCommands.storeGet, TestCommands.query, TestCommands.prune),
