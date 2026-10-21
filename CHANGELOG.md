@@ -8,6 +8,11 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
+### Added
+
+- `delva-cli`: built on cli-kit 0.3.0, so help lists `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR_FORCE` and `COLUMNS` under
+  Environment.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added
