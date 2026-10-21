@@ -335,6 +335,9 @@ class JsonPathQueryGen(samples: List<OValue>) {
         }
         val placeholders = StringBuilder()
         val filled = StringBuilder()
+        // Only the slots the text still has: a generator that drops what it made, as [logical] drops a long expression,
+        // leaves the slots of the dropped text behind, and a value for a placeholder the template lacks fails the bind.
+        val values = LinkedHashMap<String, JsonQueryValue>()
         val parts = marked.split(MARK)
         for ((k, part) in parts.withIndex()) {
             if (k % 2 == 0) {
@@ -344,9 +347,10 @@ class JsonPathQueryGen(samples: List<OValue>) {
                 val slot = slots[part.toInt()]
                 placeholders.append("\${").append(slot.name).append('}')
                 filled.append(slot.literal)
+                values[slot.name] = slot.value
             }
         }
-        return Template(placeholders.toString(), slots.associate { it.name to it.value }, filled.toString())
+        return Template(placeholders.toString(), values, filled.toString())
     }
 
     /** A template's [text], the [values] its placeholders are bound to, and the text with the literals in place. */
