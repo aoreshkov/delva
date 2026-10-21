@@ -5,7 +5,7 @@ configuration you pass (`Json` by default).
 
 ```kotlin
 dependencies {
-    implementation("app.oreshkov.delva:delva-kotlinx-serialization:0.1.0")
+    implementation("app.oreshkov.delva:delva-kotlinx-serialization:0.2.0")
 }
 ```
 

@@ -53,7 +53,8 @@ one once the release is on Maven Central, or open it yourself as the release's l
 ## Cutting a release
 
 1. `gradle.properties`: set the train's version (`delva.version` or `clikit.version`) to the release version (no
-   `-SNAPSHOT`).
+   `-SNAPSHOT`), and the installation snippets to the same version: in `README.md` and
+   `delva-kotlinx-serialization/README.md` for Delva, in `cli-kit/README.md` for cli-kit.
 2. The train's changelog: move the `Unreleased` entries under a new `## [X.Y.Z] - YYYY-MM-DD` heading dated the day
    you tag, leaving `## [Unreleased]` empty above it, and point the link references at the bottom at the tag
    (`[X.Y.Z]: …/releases/tag/<tag>`, `[Unreleased]: …/compare/<tag>...HEAD`).

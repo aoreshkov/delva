@@ -132,6 +132,27 @@ class GuideExampleTest {
     }
 
     @Test
+    fun `types come with each document of insertAll and are listed as a flow, as the guide shows`() = runTest {
+        JsonStore.openOrCreate(dir.resolve("types")).use { store ->
+            val outcomes = store.blocking().insertAll(
+                listOf(
+                    InsertSource("""{"order":1,"customer":{"name":"ada"}}""".byteInputStream(), mapOf("$" to "Order", "$.customer" to "Customer")),
+                    InsertSource("""{"invoice":7}""".byteInputStream(), mapOf("$" to "Invoice")),
+                ),
+            )
+            val (order, invoice) = outcomes.map { (it as InsertOutcome.Inserted).docId }
+
+            val customers = mutableListOf<NodeRef>()
+            store.objectsOfTypeFlow("Customer").collect { node -> customers += node }
+            assertEquals(listOf(NodeRef(order, 2)), customers)
+            assertEquals(listOf(NodeRef(invoice, 0)), store.objectsOfType("Invoice"))
+            assertEquals(1L, store.countOfType("Order"))
+            assertEquals(1L, store.clearType("Order"))
+            assertEquals(0L, store.countOfType("Order"))
+        }
+    }
+
+    @Test
     fun `JSONPath selects and searches as the guide shows`() {
         JsonStore.openOrCreate(dir.resolve("jsonpath")).use { store ->
             val blocking = store.blocking()

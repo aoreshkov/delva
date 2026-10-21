@@ -230,10 +230,10 @@ whose segments fit in memory.
 
 ## Using it from Java
 
-Delva 0.1.0 is a Kotlin API. `DocId` is a value class, so `insert`, `delete` and everything else that takes or
-returns one has a JVM name Java cannot spell — the write path is effectively Kotlin-only. The one place that is fixed
-is `Durability`, whose static `periodic(java.time.Duration)` factory stands in for a constructor Java cannot call
-either. A Java facade is on the [roadmap](ROADMAP.md) for after 0.1.0.
+Delva is a Kotlin API. `DocId` is a value class, so `insert`, `delete` and everything else that takes or returns one
+has a JVM name Java cannot spell — the write path is effectively Kotlin-only. The one place that is fixed is
+`Durability`, whose static `periodic(java.time.Duration)` factory stands in for a constructor Java cannot call either.
+A Java facade is on the [roadmap](ROADMAP.md).
 
 ## Compatibility
 
