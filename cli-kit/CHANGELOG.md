@@ -8,6 +8,8 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
 ### Added
 
 - Help's Environment section lists the variables the kit reads for `--no-color` and `--width`: `NO_COLOR`,
@@ -54,5 +56,6 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 - A run that wrote nothing to stdout no longer exits 74 when another writer on the same stream failed.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/cli-kit-v0.2.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/cli-kit-v0.3.0...HEAD
+[0.3.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.3.0
 [0.2.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.2.0
