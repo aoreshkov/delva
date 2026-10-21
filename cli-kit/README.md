@@ -52,8 +52,8 @@ cli-kit is published to Maven Central. A build depends on the root coordinates, 
 
 ```kotlin
 dependencies {
-    implementation("app.oreshkov.clikit:cli-kit:0.2.0")
-    testImplementation("app.oreshkov.clikit:cli-kit-testing:0.2.0")
+    implementation("app.oreshkov.clikit:cli-kit:0.3.0")
+    testImplementation("app.oreshkov.clikit:cli-kit-testing:0.3.0")
 }
 ```
 
