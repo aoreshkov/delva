@@ -5,7 +5,7 @@ kotlinxSerialization = "1.11.0"
 kotlinxBenchmark = "0.5.0"
 dokka = "2.2.0"
 # The released cli-kit that delva-cli builds on and a Delva release ships; its own train's version is clikit.version.
-cliKit = "0.2.0"
+cliKit = "0.3.0"
 
 [libraries]
 cli-kit = { module = "app.oreshkov.clikit:cli-kit", version.ref = "cliKit" }

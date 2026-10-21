@@ -49,8 +49,14 @@ Global options:
       --width <n>    Columns to fit output to [default: $COLUMNS or 80]
 
 Environment:
-  DELVA_STORE  Same as --store
-  DELVA_OPTS   JVM options for the start script, such as -Xmx4g (or JAVA_OPTS)
+  DELVA_STORE     Same as --store
+  NO_COLOR        Not empty: never emit colour, as --no-color does
+  FORCE_COLOR     Not empty: emit colour even down a pipe; --no-color and
+                  NO_COLOR win
+  CLICOLOR_FORCE  1: the same as FORCE_COLOR
+  COLUMNS         The default for --width
+  DELVA_OPTS      JVM options for the start script, such as -Xmx4g (or
+                  JAVA_OPTS)
 
 Notes:
   --count and --max-bytes cannot be combined
