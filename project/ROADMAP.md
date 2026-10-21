@@ -1,7 +1,7 @@
 # Roadmap
 
-What Delva does not do in 0.1.0, and what is meant to come after it. Nothing here is dated or promised; the list
-exists so the gaps are known rather than discovered.
+What Delva does not do yet, and what is meant to come later. Nothing here is dated or promised; the list exists so
+the gaps are known rather than discovered.
 
 The on-disk format is versioned, and everything below is designed to be addable without rewriting a store.
 

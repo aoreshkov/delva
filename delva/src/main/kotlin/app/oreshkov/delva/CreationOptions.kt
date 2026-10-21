@@ -31,7 +31,7 @@ import app.oreshkov.delva.internal.path.SingularPath
  * - [hashTerms]: index whole object and array values, which searches for object and array literals need.
  * - [indexedKeys]: when not empty, only members with these keys are indexed; [excludedKeys]: keys never indexed.
  * - [minIndexedStringBytes], [maxIndexedStringBytes]: UTF-8 lengths of the string values that are indexed. Numbers,
- *   booleans and null are always indexed. A search the controls leave unanswerable is rejected (SPEC.md §4.6);
+ *   booleans and null are always indexed. A search the controls leave unanswerable is rejected (SPEC.md §4.1);
  *   documents are stored and read back in full either way.
  * - [normalization]: whether strings and keys are normalized to NFC as they are read (SPEC.md §2.1). With
  *   [Normalization.NFC] the normalized form is what is stored, indexed, compared and read back, and query keys,

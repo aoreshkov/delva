@@ -170,7 +170,7 @@ private fun differences(stored: CreationOptions, requested: CreationOptions): St
 }
 
 /**
- * A search the store can't answer, refused for [reason] before anything is read (SPEC.md §4.6, §10.4). Nothing is wrong
+ * A search the store can't answer, refused for [reason] before anything is read (SPEC.md §4.1, §10.4). Nothing is wrong
  * with the query as such: another store, a narrower query, [ScanPolicy.ALLOW_SCAN], or a select of each document
  * answers it.
  */
@@ -218,7 +218,7 @@ public class InvalidJsonPathException(
  */
 public class InvalidCursorException(detail: String, cause: Throwable? = null) : IllegalArgumentException(detail, cause)
 
-/** A type name doesn't meet the rules of SPEC.md §6.1. */
+/** A type name doesn't meet the rules of SPEC.md §6. */
 public class InvalidTypeNameException(detail: String) : DelvaException("Invalid type name: $detail")
 
 /** A value is longer than the [maxChars] characters the caller allowed, for example in [SearchHit.readJsonAsString]. */

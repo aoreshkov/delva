@@ -54,7 +54,7 @@ They follow `sysexits.h`:
 | Status | Meaning |
 |---|---|
 | 0 | success |
-| 1 | `compare`: the values differ; `verify`: the store is damaged; a query run with `--exit-status`: nothing found |
+| 1 | `compare`: the values differ; `verify`: the store is damaged; a query run with `--exit-status`: nothing found; `delete` or `reset`: declined at the prompt |
 | 2 | usage error |
 | 65 | rejected data: a document, query or option value |
 | 66 | a missing store, file or document, or a write conflict |

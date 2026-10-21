@@ -21,7 +21,7 @@ public interface ReadableJsonStore : AutoCloseable {
     /**
      * Starts a search on the current state, reading on the caller's thread; close the result when done. A search the
      * index controls of [CreationOptions] leave unanswerable throws [QueryRejectedException] with
-     * [QueryRejectedException.Reason.NOT_INDEXED] (SPEC.md §4.6).
+     * [QueryRejectedException.Reason.NOT_INDEXED] (SPEC.md §4.1).
      */
     public fun search(query: KeyValueQuery): SearchResult
 
