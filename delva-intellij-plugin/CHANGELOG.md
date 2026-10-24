@@ -11,5 +11,7 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 - The **Delva** tool window lists a project's stores, saved in `.idea/delva.xml`, and shows what the selected one
   holds: its documents, deleted documents and the process that has it open as its writer.
+- The tool window lists the selected store's documents a page at a time, in key order or id order, and opens one in a
+  read-only JSON editor; it offers to exclude a store inside the project from indexing.
 - **Search Delva Store…**, in the tool window and the Tools menu: opens a store read-only, as a Delva 0.2 secondary,
   and shows the hits of an RFC 9535 JSONPath query in a read-only JSON editor.

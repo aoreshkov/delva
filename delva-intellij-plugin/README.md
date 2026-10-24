@@ -6,8 +6,8 @@ An IntelliJ Platform plugin for Delva.
 
 <!-- Plugin description -->
 Tools for [Delva](https://github.com/aoreshkov/delva), the embedded JSON document database for the JVM: list a project's
-stores on disk, see what each holds, and search them with RFC 9535 JSONPath from the IDE, even while an application
-has a store open.
+stores on disk, see what each holds, browse and open their documents, and search them with RFC 9535 JSONPath from the
+IDE, even while an application has a store open.
 
 Stores are read-only in the IDE: they are opened as Delva *secondaries*, which take no lock and never write.
 The plugin reads the stores of the Delva minor its own version starts with: 0.2.x reads stores of Delva 0.2.
@@ -18,6 +18,12 @@ The plugin reads the stores of the Delva minor its own version starts with: 0.2.
 - The **Delva** tool window lists the project's stores and shows what the selected one holds: its documents, deleted
   documents, and the process that has it open as its writer. **Refresh** reads it again. The list is saved in
   `.idea/delva.xml`, with directories inside the project relative to it, so it can be shared like run configurations.
+- Below that come the store's **documents**, a hundred at a time: in key order in a store created with a document key,
+  in id order otherwise, each with its rough size. A double click or Enter opens a document in a read-only JSON
+  editor, up to the IDE's size limit for code insight (`idea.max.intellisense.filesize`, 2.5 MB by default); `delva
+  get` writes out a larger one.
+- A store inside the project's content would be indexed with it, which only costs time for a store's binary files: the
+  tool window offers to exclude it, as **Mark Directory as | Excluded** does.
 - **Search Delva Store…** asks for a JSONPath query and opens the hits in a read-only JSON editor, each with its
   document id, document key and path. It searches the store selected in the tool window, or, from the Tools menu, a
   directory it asks for.

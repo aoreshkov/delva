@@ -1,5 +1,7 @@
 package app.oreshkov.delva.intellij.store
 
+import app.oreshkov.delva.CreationOptions
+import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonStore
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -62,6 +64,56 @@ class EmbeddedStoreBackendTest {
         val hit = backend.searchPath(dir, "$.text", limit = 10, maxChars = 100).hits.single()
         assertNull(hit.json)
         assertTrue(hit.encodedSize >= 500)
+    }
+
+    @Test
+    fun `pages documents in id order and ends on the last page`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        val ids = JsonStore.create(dir).use { writer -> (1..5).map { writer.insert("""{"n": $it}""").raw } }
+
+        val first = backend.documents(dir, after = null, limit = 2)
+        val second = backend.documents(dir, first.next, limit = 2)
+        val third = backend.documents(dir, second.next, limit = 2)
+        assertEquals(ids, (first.documents + second.documents + third.documents).map { it.docId })
+        assertNull("a page that ends with the last document is the last", third.next)
+        assertTrue(first.documents.all { it.key == null && it.encodedSize > 0 })
+        assertNull(backend.documents(dir, after = null, limit = 5).next)
+        assertNull(backend.info(dir).documentKey)
+    }
+
+    @Test
+    fun `pages documents of a keyed store in key order`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        @OptIn(ExperimentalDelvaApi::class)
+        JsonStore.create(dir, CreationOptions().withDocumentKey("$.name")).use { writer ->
+            for (name in listOf("carol", "alice", "bob")) writer.insert("""{"name": "$name"}""")
+        }
+
+        val first = backend.documents(dir, after = null, limit = 2)
+        val second = backend.documents(dir, first.next, limit = 2)
+        assertEquals(listOf("alice", "bob", "carol"), (first.documents + second.documents).map { it.key })
+        assertNull(second.next)
+        assertEquals("$.name", backend.info(dir).documentKey)
+    }
+
+    @Test
+    fun `reads a document as indented JSON, or nothing when it's longer than allowed`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        val id = JsonStore.create(dir).use { writer -> writer.insert("""{"item": {"name": "a"}, "text": "${"x".repeat(500)}"}""").raw }
+
+        val json = backend.readDocument(dir, id, maxChars = 10_000)!!
+        assertTrue(json, json.startsWith("{\n") && "\"name\": \"a\"" in json)
+        assertNull(backend.readDocument(dir, id, maxChars = 100))
+    }
+
+    @Test
+    fun `reports a document that is no longer in the store`() {
+        val dir = temp.newFolder("store").toPath()
+        val id = runBlocking {
+            JsonStore.create(dir).use { writer -> writer.insert("""{"n": 1}""").also { writer.delete(it) } }
+        }
+        val e = assertThrows(StoreAccessException::class.java) { runBlocking { backend.readDocument(dir, id.raw, 1000) } }
+        assertEquals("Document ${id.raw} is no longer in the store.", e.message)
     }
 
     @Test

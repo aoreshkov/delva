@@ -11,6 +11,19 @@ internal interface StoreBackend {
     suspend fun info(dir: Path): StoreSummary
 
     /**
+     * Up to [limit] documents of the store in [dir]: in key order in a store with document keys, in id order otherwise.
+     * The first page when [after] is null, else the page after the one whose [DocumentPage.next] it is. Throws
+     * [StoreAccessException].
+     */
+    suspend fun documents(dir: Path, after: String?, limit: Int): DocumentPage
+
+    /**
+     * The document [docId] of the store in [dir] as indented JSON, or null when that's longer than [maxChars]
+     * characters. Throws [StoreAccessException], also when the document is no longer in the store.
+     */
+    suspend fun readDocument(dir: Path, docId: Long, maxChars: Int): String?
+
+    /**
      * The first [limit] nodes the RFC 9535 JSONPath [query] selects in the store in [dir], each node's JSON cut off at
      * [maxChars] characters. Scans every document when the indexes can't narrow the query down. Throws
      * [StoreAccessException].
@@ -32,6 +45,22 @@ internal data class StoreSummary(
     val deletedDocuments: Long,
     /** The process that has the store open as its writer, as a person reads it, or null when none has. */
     val writer: String?,
+    /** The JSON path of the string that names each document, or null in a store without document keys. */
+    val documentKey: String?,
+)
+
+internal data class DocumentPage(
+    val documents: List<DocumentEntry>,
+    /** Where the next page starts, for [StoreBackend.documents], or null when this page is the last. */
+    val next: String?,
+)
+
+internal data class DocumentEntry(
+    val docId: Long,
+    /** The document's key, or null in a store without document keys. */
+    val key: String?,
+    /** Payload bytes that store the document, before compression: roughly the size of its JSON. */
+    val encodedSize: Long,
 )
 
 internal data class SearchOutcome(val hits: List<StoreHit>, val more: Boolean)
