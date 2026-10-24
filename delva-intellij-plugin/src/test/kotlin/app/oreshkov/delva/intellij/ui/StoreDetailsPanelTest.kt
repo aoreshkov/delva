@@ -1,7 +1,8 @@
 package app.oreshkov.delva.intellij.ui
 
 import app.oreshkov.delva.JsonStore
-import app.oreshkov.delva.intellij.actions.openDocument
+import app.oreshkov.delva.intellij.actions.StoredNode
+import app.oreshkov.delva.intellij.actions.openNode
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.testFramework.LightVirtualFile
@@ -50,14 +51,14 @@ class StoreDetailsPanelTest : BasePlatformTestCase() {
         val document = panel.listed.single()
         val editors = FileEditorManager.getInstance(project)
 
-        openDocument(project, dir, document)
+        openNode(project, dir, StoredNode(document))
         waitUntil("the editor") { editors.openFiles.isNotEmpty() }
         val file = editors.openFiles.single() as LightVirtualFile
         assertEquals("orders #${document.docId}.json", file.name)
         assertFalse(file.isWritable)
         assertEquals("{\n  \"order\": {\"sku\": \"$sku\"},\n  \"n\": 1\n}", file.content.toString())
 
-        openDocument(project, dir, document)
+        openNode(project, dir, StoredNode(document))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
         assertSame(file, editors.openFiles.single())
     }

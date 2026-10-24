@@ -13,5 +13,7 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
   holds: its documents, deleted documents and the process that has it open as its writer.
 - The tool window lists the selected store's documents a page at a time, in key order or id order, and opens one in a
   read-only JSON editor; it offers to exclude a store inside the project from indexing.
-- **Search Delva Store…**, in the tool window and the Tools menu: opens a store read-only, as a Delva 0.2 secondary,
-  and shows the hits of an RFC 9535 JSONPath query in a read-only JSON editor.
+- The tool window's **Search** tab searches a store read-only, as a Delva 0.2 secondary, by RFC 9535 JSONPath, with a
+  filter on each document's root, or by a key and value; it lists the hits a page at a time and opens each in a
+  read-only JSON editor, and **Explain** shows how the store would find a JSONPath search's documents.
+  **Search Delva Store…** in the Tools menu opens it.

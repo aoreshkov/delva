@@ -18,20 +18,27 @@ internal interface StoreBackend {
     suspend fun documents(dir: Path, after: String?, limit: Int): DocumentPage
 
     /**
-     * The document [docId] of the store in [dir] as indented JSON, or null when that's longer than [maxChars]
-     * characters. Throws [StoreAccessException], also when the document is no longer in the store.
+     * The node [nodePre] of the document [docId] of the store in [dir] as indented JSON, 0 being the document itself, or
+     * null when that's longer than [maxChars] characters. Throws [StoreAccessException], also when the document is no
+     * longer in the store.
      */
-    suspend fun readDocument(dir: Path, docId: Long, maxChars: Int): String?
+    suspend fun readNode(dir: Path, docId: Long, nodePre: Long, maxChars: Int): String?
 
     /**
-     * The first [limit] nodes the RFC 9535 JSONPath [query] selects in the store in [dir], each node's JSON cut off at
-     * [maxChars] characters. Scans every document when the indexes can't narrow the query down. Throws
-     * [StoreAccessException].
+     * Up to [limit] hits of [query] in the store in [dir], in the order they were stored. The first page when [after] is
+     * null, else the page after the one whose [HitPage.next] it is. Throws [StoreAccessException], also for a query the
+     * store refuses.
      */
-    suspend fun searchPath(dir: Path, query: String, limit: Int, maxChars: Int): SearchOutcome
+    suspend fun search(dir: Path, query: StoreQuery, after: String?, limit: Int): HitPage
+
+    /** How the store in [dir] would find the documents [query] searches, without reading any. */
+    suspend fun explain(dir: Path, query: StoreQuery.ByPath): SearchPlan
 
     /** Why [query] isn't a JSONPath query the store can run, or null when it is one. */
     fun checkQuery(query: String): String?
+
+    /** Why [filter] isn't a filter on a document's root the store can apply, or null when it is one. */
+    fun checkFilter(filter: String): String?
 
     /**
      * Closes the store in [dir] if this backend has it open, so no file of a store the project no longer lists stays
@@ -63,16 +70,52 @@ internal data class DocumentEntry(
     val encodedSize: Long,
 )
 
-internal data class SearchOutcome(val hits: List<StoreHit>, val more: Boolean)
+/** A search of a store, as a person puts it together in the IDE. */
+internal sealed interface StoreQuery {
+    /** Whether each hit is a whole document, rather than the node the query matched or the object that holds it. */
+    val wholeDocuments: Boolean
+
+    /**
+     * The nodes the RFC 9535 JSONPath [path] selects, in the documents whose root passes [where] when it isn't null.
+     * Unless [scan] allows reading every document, a query that no index term narrows is refused.
+     */
+    data class ByPath(val path: String, val where: String?, override val wholeDocuments: Boolean, val scan: Boolean) : StoreQuery
+
+    /**
+     * The objects with a member [key] equal to [value], or holding it in an array: [value] is JSON text, or the string
+     * itself when [valueIsText].
+     */
+    data class ByKeyValue(val key: String, val value: String, val valueIsText: Boolean, override val wholeDocuments: Boolean) :
+        StoreQuery
+}
+
+internal data class HitPage(
+    val hits: List<StoreHit>,
+    /** Where the next page starts, for [StoreBackend.search], or null when this page is the last. */
+    val next: String?,
+)
 
 internal data class StoreHit(
     val docId: Long,
+    /** The node's number in its document, in pre-order: 0 for the document itself. */
+    val nodePre: Long,
     val documentKey: String?,
     /** The node's normalized path in its document. */
     val path: String,
-    /** The node as JSON text, or null when it's longer than the search allowed. */
-    val json: String?,
+    /** The node as compact JSON, cut off after a line's worth of characters. */
+    val preview: String,
+    /** Whether [preview] is only the start of the node's JSON. */
+    val previewCut: Boolean,
     val encodedSize: Long,
+)
+
+internal data class SearchPlan(
+    /** Whether the search reads every document, as no index term narrows it. */
+    val fullScan: Boolean,
+    /** The index terms every document it reads has, such as `'kind' == 'order'`, or null for a full scan. */
+    val terms: String?,
+    /** The path of the parent of the objects the query's filter tests, when the query fixes it, else null. */
+    val within: String?,
 )
 
 /** A store couldn't be read; [message] says why, for a person. */

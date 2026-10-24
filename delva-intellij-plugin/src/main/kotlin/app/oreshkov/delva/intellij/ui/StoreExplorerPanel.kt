@@ -19,6 +19,7 @@ import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBTabbedPane
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -32,6 +33,11 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
     private val model = CollectionListModel<Path>()
     private val list = JBList(model)
     private val details = StoreDetailsPanel(project)
+    private val search = StoreSearchPanel(project, this)
+    private val tabs = JBTabbedPane().apply {
+        addTab(DelvaBundle.message("explorer.tab.documents"), details)
+        addTab(DelvaBundle.message("explorer.tab.search"), search)
+    }
 
     init {
         list.selectionMode = ListSelectionModel.SINGLE_SELECTION
@@ -47,7 +53,7 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
         toolbar = actions.createActionToolbar(PLACE, group, true).also { it.targetComponent = this }.component
         setContent(OnePixelSplitter(true, SPLITTER_KEY, 0.4f).apply {
             firstComponent = ScrollPaneFactory.createScrollPane(list, true)
-            secondComponent = details
+            secondComponent = tabs
         })
 
         project.messageBus.connect(this).subscribe(DelvaStoreList.TOPIC, DelvaStoreList.Listener {
@@ -70,8 +76,17 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
         }
     }
 
-    /** Reads the selected store again, to show what its writer has done since. */
-    fun refresh() = showSelected()
+    /** Reads the selected store again, to show what its writer has done since: its documents and the search's hits. */
+    fun refresh() {
+        details.show(list.selectedValue)
+        search.refresh()
+    }
+
+    /** Shows the search of the selected store, ready to type a query. */
+    fun showSearch() {
+        tabs.selectedComponent = search
+        search.focusForm()
+    }
 
     override fun uiDataSnapshot(sink: DataSink) {
         super.uiDataSnapshot(sink)
@@ -81,6 +96,7 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
 
     override fun dispose() {
         details.cancel()
+        search.cancel()
     }
 
     private fun reloadList() {
@@ -94,7 +110,10 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
         }
     }
 
-    private fun showSelected() = details.show(list.selectedValue)
+    private fun showSelected() {
+        details.show(list.selectedValue)
+        search.show(list.selectedValue)
+    }
 
     companion object {
         val PANEL: DataKey<StoreExplorerPanel> = DataKey.create("app.oreshkov.delva.StoreExplorerPanel")

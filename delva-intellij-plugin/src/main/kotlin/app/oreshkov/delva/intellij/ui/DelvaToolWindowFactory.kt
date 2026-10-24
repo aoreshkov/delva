@@ -14,4 +14,9 @@ internal class DelvaToolWindowFactory : ToolWindowFactory, DumbAware {
         content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
     }
+
+    companion object {
+        /** The tool window's id, as `plugin.xml` declares it. */
+        const val ID = "Delva"
+    }
 }
