@@ -6,8 +6,8 @@ An IntelliJ Platform plugin for Delva.
 
 <!-- Plugin description -->
 Tools for [Delva](https://github.com/aoreshkov/delva), the embedded JSON document database for the JVM: list a project's
-stores on disk, see what each holds, browse and open their documents, and search them with RFC 9535 JSONPath from the
-IDE, even while an application has a store open.
+stores on disk, see what each holds, browse and open their documents and typed objects, search them with RFC 9535
+JSONPath, compare two documents and verify a store from the IDE, even while an application has a store open.
 
 Stores are read-only in the IDE: they are opened as Delva *secondaries*, which take no lock and never write.
 The plugin reads the stores of the Delva minor its own version starts with: 0.2.x reads stores of Delva 0.2.
@@ -30,6 +30,14 @@ The plugin reads the stores of the Delva minor its own version starts with: 0.2.
   filter, as `--where` does on the command line, and can list whole documents instead of the nodes it selects;
   **Explain** shows which index terms narrow it down. A query that no index term narrows would read every document,
   so it runs only once that's allowed. **Search Delva Store…** in the Tools menu opens the tab.
+- The **Types** tab lists the types assigned in the store, each with how many objects have it, and the objects of the
+  one chosen, a hundred at a time, each with its document, where in the document it is and how it starts.
+- Every list of documents, hits or objects takes several selected at once. **Compare** in its context menu, or the
+  shortcut of **Compare Files** (Ctrl+D or ⌘D), shows the two selected side by side in the IDE's diff viewer, as
+  indented JSON, up to the same size limit as the editor.
+- **Verify Store** reads every byte of the selected store in the background and checks it, without changing anything,
+  as `delva verify` does; the progress can be cancelled. A notification says whether the store is intact, and **Show
+  Problems** lists what is damaged and which documents can't be read.
 
 ## Compatibility
 

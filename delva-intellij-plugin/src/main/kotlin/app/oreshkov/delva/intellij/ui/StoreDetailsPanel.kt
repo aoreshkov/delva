@@ -1,7 +1,6 @@
 package app.oreshkov.delva.intellij.ui
 
 import app.oreshkov.delva.intellij.DelvaBundle
-import app.oreshkov.delva.intellij.actions.NodeNavigatable
 import app.oreshkov.delva.intellij.actions.StoredNode
 import app.oreshkov.delva.intellij.actions.excludeFromIndexing
 import app.oreshkov.delva.intellij.actions.isIndexed
@@ -13,7 +12,6 @@ import app.oreshkov.delva.intellij.store.StoreAccessException
 import app.oreshkov.delva.intellij.store.StoreSummary
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationType
-import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.application.EDT
@@ -30,8 +28,6 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.AlignY
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.util.EditSourceOnDoubleClickHandler
-import com.intellij.util.EditSourceOnEnterKeyHandler
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +37,6 @@ import java.nio.file.Path
 import java.text.NumberFormat
 import javax.swing.JComponent
 import javax.swing.JList
-import javax.swing.ListSelectionModel
 
 /**
  * What the selected store holds: its summary, then its documents a page at a time, each opened in an editor on a
@@ -60,12 +55,8 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
     private var loading: Job? = null
 
     init {
-        list.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        list.cellRenderer = DocumentRenderer()
+        configureNodeList(list, DocumentRenderer())
         list.emptyText.text = DelvaBundle.message("explorer.documents.empty")
-        // Both open what the data context's navigatable points at: the selected document.
-        EditSourceOnDoubleClickHandler.install(list)
-        EditSourceOnEnterKeyHandler.install(list)
     }
 
     /** Shows what the store in [dir] holds now, or nothing for null. */
@@ -139,11 +130,7 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
     }
 
     override fun uiDataSnapshot(sink: DataSink) {
-        val dir = shown ?: return
-        val document = list.selectedValue ?: return
-        val navigatable = NodeNavigatable(project, dir, StoredNode(document))
-        sink[CommonDataKeys.NAVIGATABLE] = navigatable
-        sink[CommonDataKeys.NAVIGATABLE_ARRAY] = arrayOf(navigatable)
+        sink.selectedNodes(project, shown ?: return, list.selectedValuesList.map { StoredNode(it) })
     }
 
     private fun exclude(dir: Path, banner: InlineBanner) {

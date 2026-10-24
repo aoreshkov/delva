@@ -26,6 +26,11 @@
                 icon="AllIcons.Actions.Find">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        <action id="app.oreshkov.delva.VerifyStore" class="app.oreshkov.delva.intellij.actions.VerifyStoreAction"
+                icon="AllIcons.General.InspectionsOK"/>
+        <!-- Compares as Compare Files does elsewhere, so it takes that action's shortcut in the tool window's lists. -->
+        <action id="app.oreshkov.delva.CompareNodes" class="app.oreshkov.delva.intellij.actions.CompareNodesAction"
+                icon="AllIcons.Actions.Diff" use-shortcut-of="CompareTwoFiles"/>
 
         <group id="app.oreshkov.delva.ToolWindow">
             <reference ref="app.oreshkov.delva.AddStore"/>
@@ -33,6 +38,13 @@
             <separator/>
             <reference ref="app.oreshkov.delva.RefreshStore"/>
             <reference ref="app.oreshkov.delva.SearchStore"/>
+            <reference ref="app.oreshkov.delva.VerifyStore"/>
+        </group>
+
+        <!-- The context menu of the tool window's lists of documents and nodes. -->
+        <group id="app.oreshkov.delva.NodePopup">
+            <reference ref="EditSource"/>
+            <reference ref="app.oreshkov.delva.CompareNodes"/>
         </group>
     </actions>
 </idea-plugin>

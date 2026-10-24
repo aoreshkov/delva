@@ -32,7 +32,8 @@ internal data class StoredNode(
     val documentKey: String?,
     /** The node's normalized path in its document: `$` for the document itself. */
     val path: String,
-    val encodedSize: Long,
+    /** Payload bytes that store the node, before compression, or null when that isn't known. */
+    val encodedSize: Long?,
 ) {
     constructor(document: DocumentEntry) : this(document.docId, 0, document.key, "$", document.encodedSize)
 
@@ -66,13 +67,19 @@ internal fun openNode(project: Project, dir: Path, node: StoredNode) {
         }
         withContext(Dispatchers.EDT) {
             if (text == null) {
-                val sizes = arrayOf(StringUtil.formatFileSize(node.encodedSize), StringUtil.formatFileSize(maxChars.toLong()))
-                notify(project, DelvaBundle.message("document.tooLarge", name, *sizes), NotificationType.WARNING)
+                notify(project, tooLargeMessage(name, node, maxChars), NotificationType.WARNING)
             } else {
                 open(project, editors.remember(shown, jsonFile(name, text)))
             }
         }
     }
+}
+
+/** Why [node], named [name], isn't shown: it's longer than the [maxChars] characters the JSON editor works with. */
+internal fun tooLargeMessage(name: String, node: StoredNode, maxChars: Int): String {
+    val limit = StringUtil.formatFileSize(maxChars.toLong())
+    val size = node.encodedSize ?: return DelvaBundle.message("document.tooLarge.unsized", name, limit)
+    return DelvaBundle.message("document.tooLarge", name, StringUtil.formatFileSize(size), limit)
 }
 
 /** Opens [node] of the store in [dir] when the platform navigates to it: on a double click, Enter or Jump to Source. */
@@ -109,7 +116,7 @@ internal fun notify(project: Project, content: String, type: NotificationType) {
  * The store's directory name, then the document's key, or its id in a store without document keys, then where the
  * node is in the document unless it's the document itself.
  */
-private fun nodeName(dir: Path, node: StoredNode): String {
+internal fun nodeName(dir: Path, node: StoredNode): String {
     val store = dir.fileName ?: dir
     val key = node.documentKey
     val document = if (key != null) DelvaBundle.message("document.name.key", store, StringUtil.shortenTextWithEllipsis(key, 60, 10))
