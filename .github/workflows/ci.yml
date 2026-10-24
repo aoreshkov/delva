@@ -38,6 +38,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: ./gradlew stageDelva stageCliKit :delva-cli:distZip :delva-cli:distTar --console=plain
 
+      # The ZIP that `check` built and checked, to install into an IDE from disk and try a pull request's plugin.
+      - name: Upload the IntelliJ plugin
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: delva-intellij-plugin
+          path: delva-intellij-plugin/build/distributions/*.zip
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -50,3 +58,32 @@ jobs:
       - name: Stop Gradle
         if: ${{ !cancelled() }}
         run: ./gradlew --stop
+
+  # The IntelliJ Plugin Verifier: the plugin against the lowest IDE it supports and the newest EAP, both of which it
+  # downloads.
+  verify-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # The IDEs don't fit in the runner's free disk space beside what it comes with.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The IDEs are gigabytes, and an entry holding them would push CI's own out of the repository's cache.
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-read-only: 'true'
+
+      - name: Verify the IntelliJ plugin
+        run: ./gradlew :delva-intellij-plugin:verifyPlugin --console=plain
+
+      - name: Upload Plugin Verifier reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plugin-verifier-reports
+          path: delva-intellij-plugin/build/reports/pluginVerifier

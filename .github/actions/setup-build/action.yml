@@ -5,6 +5,11 @@ inputs:
   cache-disabled:
     description: "'true' builds without the Gradle cache, as a release does."
     default: 'false'
+  cache-read-only:
+    description: >-
+      'true' reads the Gradle cache but never saves it, for a job whose downloads shouldn't fill it. The default is
+      setup-gradle's own: read-only except on the default branch.
+    default: ${{ github.event.repository != null && github.ref_name != github.event.repository.default_branch }}
 
 runs:
   using: composite
@@ -20,3 +25,4 @@ runs:
       with:
         cache-provider: basic
         cache-disabled: ${{ inputs.cache-disabled }}
+        cache-read-only: ${{ inputs.cache-read-only }}

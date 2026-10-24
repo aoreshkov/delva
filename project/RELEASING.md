@@ -19,6 +19,11 @@ published module it doesn't list fails the build, and an unpublished one takes D
 task (`stageDelva`, `stageCliKit`) builds the train's bundle in `build/staging-repository/<train>`. Only Delva's
 releases update the KDoc on GitHub Pages and become the repository's *Latest* release.
 
+Delva Tools, the IntelliJ plugin in `delva-intellij-plugin`, rides neither train: it ships to JetBrains Marketplace,
+with its version in `delvaTools.version`, tags `delva-tools-vX.Y.Z` and its own
+[changelog](../delva-intellij-plugin/CHANGELOG.md). It has not been released yet, and nothing below applies to it. Like
+delva-cli with cli-kit, it bundles a released Delva, the `delva` version in the catalog.
+
 delva-cli builds on a released cli-kit, the `cliKit` version in
 [`libs.versions.toml`](../gradle/libs.versions.toml), never on the cli-kit source beside it, so a Delva release ships
 the cli-kit pinned there. `checkRuntimeDependencies` fails a build in which cli-kit doesn't come from a repository. A

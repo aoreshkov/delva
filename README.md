@@ -77,6 +77,7 @@ The [guide](project/GUIDE.md) covers the suspending functions that `blocking()` 
 | `delva` | The engine; see the [guide](project/GUIDE.md). |
 | [`delva-kotlinx-serialization`](delva-kotlinx-serialization/README.md) | Stores and reads `@Serializable` values. |
 | [`delva-cli`](delva-cli/README.md) | The `delva` command line, shipped with each GitHub release. |
+| [`delva-intellij-plugin`](delva-intellij-plugin/README.md) | Delva Tools, a plugin for IntelliJ-based IDEs that searches stores on disk. |
 | [`cli-kit`, `cli-kit-testing`](cli-kit/README.md) | A standalone library for command-line programs, and its test kit, with versions of its own. |
 | [`delva-examples`](delva-examples/README.md) | Runnable programs that use only the public API. |
 

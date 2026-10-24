@@ -34,10 +34,13 @@ jobs:
           # needs; it reads CI's instead.
           cache-read-only: true
           dependency-graph: generate-and-submit
-          # Only what runs: the library's, the command line's, the tests' and the benchmarks' runtime classpaths. The
-          # build's own tooling (plugin classpaths, Dokka's generator, the Kotlin plugin's internal configurations and
-          # build-logic, whose runtime classpath is plugins) stays out. Its transitive libraries can't be updated from
-          # here, so their alerts could only be dismissed and their security updates only fail; upgrading the plugins
-          # is what fixes them, and Dependabot's version updates do that.
+          # Only what runs: the library's, the command line's, the IntelliJ plugin's, the tests' and the benchmarks'
+          # runtime classpaths. The build's own tooling (plugin classpaths, Dokka's generator, the Kotlin plugin's
+          # internal configurations and build-logic, whose runtime classpath is plugins) stays out. Its transitive
+          # libraries can't be updated from here, so their alerts could only be dismissed and their security updates
+          # only fail; upgrading the plugins is what fixes them, and Dependabot's version updates do that. The IDEs the
+          # IntelliJ plugin builds and runs its tests in stay out too: they aren't Maven dependencies, and the IDE
+          # brings its own libraries.
           dependency-graph-exclude-projects: ':build-logic'
           dependency-graph-include-configurations: '.*[Rr]untimeClasspath'
+          dependency-graph-exclude-configurations: 'intellijPlatform.*'
