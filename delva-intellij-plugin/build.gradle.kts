@@ -33,6 +33,10 @@ kotlin {
     }
 }
 
+// The integration test runs a real IDE with the built plugin ZIP installed, through JetBrains' Starter and Driver
+// frameworks, from a JVM of its own: unlike the unit tests, it sees the plugin as a user gets it.
+val integrationTest: SourceSet by sourceSets.creating
+
 dependencies {
     implementation(libs.delva) {
         // The IDE provides both, and a plugin must use the IDE's copies: a second kotlinx-coroutines in the plugin's
@@ -43,12 +47,23 @@ dependencies {
 
     testImplementation(libs.junit4)
 
+    // Starter leaves out what the IDE provides, but its test JVM isn't the IDE: it needs the standard library,
+    // coroutines and TeamCity's service messages of its own, and Delva to make the store the IDE opens.
+    "integrationTestImplementation"(kotlin("stdlib"))
+    "integrationTestImplementation"(libs.kotlinx.coroutines.core)
+    "integrationTestImplementation"(libs.delva)
+    "integrationTestRuntimeOnly"(libs.teamcity.serviceMessages)
+    "integrationTestRuntimeOnly"(libs.junit.platform.launcher)
+    // Starter brings JUnit's engine for JUnit 4 tests, which fails without JUnit 4 beside it.
+    "integrationTestRuntimeOnly"(libs.junit4)
+
     intellijPlatform {
         intellijIdea(libs.versions.intellijIdea)
         testFramework(TestFrameworkType.Platform)
         // Tests of the unified IntelliJ IDEA distribution need its Ultimate module; the JSONPath plugin is the IDE's own
         // JSONPath language, which the dialect test checks against RFC 9535.
         testBundledPlugins("com.intellij.modules.ultimate", "com.intellij.jsonpath")
+        testFramework(TestFrameworkType.Starter, configurationName = integrationTest.implementationConfigurationName)
     }
 }
 
@@ -59,6 +74,37 @@ if (delvaFromSource) {
                 .because("delva.delvaFromSource builds on Delva's source")
         }
     }
+}
+
+val bundledDelvaVersion = if (delvaFromSource) providers.gradleProperty("delva.version") else libs.versions.delva
+
+/** The minor of a version: `0.2` of `0.2.1` or of `0.2.0-SNAPSHOT`. */
+fun minorOf(version: String): String = version.split('.', '-').take(2).joinToString(".")
+
+// The plugin names the Delva minor it reads in its messages; the constant comes from the version it bundles, so the two
+// can't disagree.
+val generateBundledDelva = tasks.register("generateBundledDelva") {
+    description = "Generates the constant that names the Delva minor the plugin bundles."
+    val minor = minorOf(bundledDelvaVersion.get())
+    val outputDirectory = layout.buildDirectory.dir("generated/sources/bundledDelva/kotlin")
+    inputs.property("minor", minor)
+    outputs.dir(outputDirectory)
+    doLast {
+        val file = outputDirectory.get().file("app/oreshkov/delva/intellij/store/BundledDelva.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            """
+            |package app.oreshkov.delva.intellij.store
+            |
+            |/** The Delva minor this plugin bundles, whose store format is the only one it reads. */
+            |internal const val BUNDLED_DELVA_MINOR: String = "$minor"
+            |""".trimMargin(),
+        )
+    }
+}
+
+kotlin.sourceSets.main {
+    kotlin.srcDir(generateBundledDelva)
 }
 
 intellijPlatform {
@@ -107,6 +153,27 @@ intellijPlatform {
     }
 }
 
+configurations.named(integrationTest.runtimeClasspathConfigurationName) {
+    // Starter's kotlin-reflect would otherwise lag the standard library it runs with.
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-reflect:${kotlin.coreLibrariesVersion}")
+}
+
+// Downloads and starts IntelliJ IDEA of the version the plugin builds against, installs the ZIP buildPlugin made, and
+// drives the IDE's UI; left out of check, as it takes minutes and a desktop.
+intellijPlatformTesting.testIdeUi.register("integrationTest") {
+    task {
+        testClassesDirs = integrationTest.output.classesDirs
+        classpath = integrationTest.runtimeClasspath
+        useJUnitPlatform()
+        systemProperty("delva.ideVersion", libs.versions.intellijIdea.get())
+        // The project the IDE opens. Starter keeps the IDE it downloads and each run's logs and screenshots in the
+        // repository's out/ide-tests.
+        systemProperty("delva.integrationTestDir", layout.buildDirectory.dir("integrationTest").get().asFile.path)
+        // Starter reports each run to Allure as well, by default into the module's own directory.
+        systemProperty("allure.results.directory", layout.buildDirectory.dir("integrationTest/allure-results").get().asFile.path)
+    }
+}
+
 changelog {
     repositoryUrl = "https://github.com/aoreshkov/delva"
     // A release's tag is delva-tools-vX.Y.Z, which tells it apart from Delva's and cli-kit's.
@@ -117,10 +184,16 @@ val checkPluginDistribution = tasks.register("checkPluginDistribution") {
     description = "Checks that the plugin ZIP bundles only the plugin's jar and Delva, not the libraries the IDE provides."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     val zip = tasks.buildPlugin.flatMap { it.archiveFile }
-    val delvaVersion = if (delvaFromSource) providers.gradleProperty("delva.version").get() else libs.versions.delva.get()
+    val delvaVersion = bundledDelvaVersion.get()
     val expected = sortedSetOf("${project.name}-${project.version}.jar", "delva-$delvaVersion.jar")
+    // A release's minor is the Delva minor it reads; built on Delva's source, the plugin reads whatever that is.
+    val pluginVersion = project.version.toString()
+    val minorsAgree = delvaFromSource || minorOf(pluginVersion) == minorOf(delvaVersion)
     inputs.file(zip)
     doLast {
+        check(minorsAgree) {
+            "Delva Tools $pluginVersion bundles Delva $delvaVersion; its minor must be Delva's"
+        }
         val jars = ZipFile(zip.get().asFile).use { file ->
             file.entries().asSequence()
                 .map { it.name }

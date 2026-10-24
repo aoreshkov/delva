@@ -319,9 +319,6 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
     }
 
     private companion object {
-        /** The Delva minor this plugin bundles, whose store format is the only one it reads. */
-        const val BUNDLED_DELVA_MINOR = "0.2"
-
         /** Selects a document's root: each document once, in a search of every document. */
         val ROOT: JsonPath = JsonPath.compile("$")
 

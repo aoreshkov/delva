@@ -40,7 +40,8 @@ jobs:
           # libraries can't be updated from here, so their alerts could only be dismissed and their security updates
           # only fail; upgrading the plugins is what fixes them, and Dependabot's version updates do that. The IDEs the
           # IntelliJ plugin builds and runs its tests in stay out too: they aren't Maven dependencies, and the IDE
-          # brings its own libraries.
+          # brings its own libraries. So does the plugin's integration test, whose classpath is JetBrains' Starter and
+          # what it brings.
           dependency-graph-exclude-projects: ':build-logic'
           dependency-graph-include-configurations: '.*[Rr]untimeClasspath'
-          dependency-graph-exclude-configurations: 'intellijPlatform.*'
+          dependency-graph-exclude-configurations: 'intellijPlatform.*|integrationTest.*'

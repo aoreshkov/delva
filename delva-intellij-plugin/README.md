@@ -46,6 +46,13 @@ The plugin reads the stores of the Delva minor its own version starts with: 0.2.
 | IDEs | IntelliJ-based IDEs 2026.2 and newer. Delva's classes need Java 22, and 2026.2 is the first IDE line on Java 25. |
 | Stores | Those of the Delva release the plugin bundles. Until Delva 1.0 a minor can change the store format, so the plugin's minor follows Delva's: 0.2.x reads stores of Delva 0.2. |
 
+## Reporting problems
+
+An exception in the plugin shows in the IDE's error reporter, the red icon at the right of the status bar. Its
+report button sends the exception's stack trace and the IDE's version through JetBrains Marketplace to the plugin's
+maintainer; nothing is sent until you press it. Anything else, a wrong result above all, is best reported as an
+[issue](https://github.com/aoreshkov/delva/issues).
+
 ## Trying it out
 
 ```shell
