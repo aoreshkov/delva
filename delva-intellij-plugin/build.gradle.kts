@@ -27,6 +27,9 @@ kotlin {
     jvmToolchain(25)
     compilerOptions {
         allWarningsAsErrors = true
+        // As in Delva's own modules. It also keeps the compiler from overriding the platform interfaces' default methods
+        // with stubs, which would count as uses of the experimental ones among them.
+        freeCompilerArgs.add("-jvm-default=no-compatibility")
     }
 }
 

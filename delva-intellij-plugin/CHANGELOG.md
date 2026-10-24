@@ -9,5 +9,7 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ### Added
 
-- **Tools | Search Delva Store…**: opens a store read-only, as a Delva 0.2 secondary, and shows the hits of an RFC 9535
-  JSONPath query in a read-only JSON editor.
+- The **Delva** tool window lists a project's stores, saved in `.idea/delva.xml`, and shows what the selected one
+  holds: its documents, deleted documents and the process that has it open as its writer.
+- **Search Delva Store…**, in the tool window and the Tools menu: opens a store read-only, as a Delva 0.2 secondary,
+  and shows the hits of an RFC 9535 JSONPath query in a read-only JSON editor.

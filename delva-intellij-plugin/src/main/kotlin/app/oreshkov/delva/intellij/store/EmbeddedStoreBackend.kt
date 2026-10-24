@@ -65,6 +65,10 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         DelvaBundle.message("query.invalid", e.offset, e.reason)
     }
 
+    override fun release(dir: Path) {
+        synchronized(stores) { stores.remove(dir) }?.close()
+    }
+
     override fun close() {
         val open = synchronized(stores) {
             closed = true
