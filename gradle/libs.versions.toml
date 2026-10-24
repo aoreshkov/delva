@@ -6,6 +6,15 @@ kotlinxBenchmark = "0.5.0"
 dokka = "2.2.0"
 # The released cli-kit that delva-cli builds on and a Delva release ships; its own train's version is clikit.version.
 cliKit = "0.3.0"
+# The released Delva that delva-intellij-plugin bundles, and so the only store format it reads; its own train's version
+# is delva.version.
+delva = "0.2.0"
+# delva-intellij-plugin builds against the lowest IDE it supports, never a newer one: 2026.2 is the first on Java 25,
+# and Delva's JVM 22 classes can't load on the Java 21 runtime of older IDEs.
+intellijIdea = "2026.2.3"
+# The IntelliJ Platform's test framework runs on JUnit 4.
+junit4 = "4.13.2"
+changelog = "2.5.0"
 
 [libraries]
 cli-kit = { module = "app.oreshkov.clikit:cli-kit", version.ref = "cliKit" }
@@ -17,6 +26,8 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5", version.ref = "kotlin" }
 # Version aligned through the JUnit BOM that kotlin-test-junit5 brings in; test runtime only.
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+delva = { module = "app.oreshkov.delva:delva", version.ref = "delva" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
 kotlinx-benchmark-runtime = { module = "org.jetbrains.kotlinx:kotlinx-benchmark-runtime", version.ref = "kotlinxBenchmark" }
 
 # Gradle plugins, put on the build-logic classpath so every module shares one Kotlin plugin instance.
@@ -26,3 +37,4 @@ kotlin-allopen-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-allopen",
 kotlin-serialization-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 kotlinx-benchmark-gradle-plugin = { module = "org.jetbrains.kotlinx:kotlinx-benchmark-plugin", version.ref = "kotlinxBenchmark" }
 dokka-gradle-plugin = { module = "org.jetbrains.dokka:dokka-gradle-plugin", version.ref = "dokka" }
+changelog-gradle-plugin = { module = "org.jetbrains.intellij.plugins:gradle-changelog-plugin", version.ref = "changelog" }

@@ -18,7 +18,7 @@ updates:
         applies-to: security-updates
         patterns: ["*"]
 
-  # gradle/libs.versions.toml, the build-logic plugins and the Gradle wrapper.
+  # gradle/libs.versions.toml, the settings and build-logic plugins, and the Gradle wrapper.
   - package-ecosystem: gradle
     directories: ["/", "/build-logic"]
     schedule:
@@ -26,7 +26,8 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
-      # Libraries released from this repository, such as cli-kit for delva-cli, are proposed as soon as they ship.
+      # Libraries released from this repository, such as cli-kit for delva-cli and Delva for the IntelliJ plugin, are
+      # proposed as soon as they ship.
       exclude: ["app.oreshkov.*"]
     groups:
       gradle:

@@ -3,6 +3,8 @@
 build/
 out/
 .kotlin/
+# The IntelliJ plugin's sandbox IDEs and platform artifacts
+.intellijPlatform/
 
 # IDE
 .idea/

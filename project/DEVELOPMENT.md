@@ -18,7 +18,10 @@ Building needs JDK 25, which Gradle uses as a toolchain; the classes it produces
 | `processTest` | delva-cli's `*ProcessTest` | the installed start script, in a child process |
 | `checkRuntimeDependencies` | delva-cli's runtime classpath | only delva, cli-kit and what they need; cli-kit from a repository, or from source with the switch below |
 | `checkPublishedDependencies` | cli-kit-testing's published module metadata | only cli-kit, kotlin-test and the standard library |
+| `checkPluginDistribution` | delva-intellij-plugin's ZIP | only the plugin's jar and Delva's; see [below](#the-intellij-plugin) |
 | `:build-logic:check` | the build logic's own tests | |
+
+delva-intellij-plugin's `test` runs in IntelliJ IDEA, which the first run downloads; no task of another module needs it.
 
 These are left out of `check` because they take long:
 
@@ -27,6 +30,7 @@ These are left out of `check` because they take long:
 | `heapCappedTest` | `*HeapCappedTest`: huge documents under a 256 MB heap, proving memory is bounded by the options, not by document size |
 | `crashTest` | `*CrashTest`: child JVMs killed mid-write, proving an insert is whole or absent after a real crash |
 | `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads |
+| `:delva-intellij-plugin:verifyPlugin` | the IntelliJ Plugin Verifier, against the lowest IDE the plugin supports and the newest EAP, both downloaded |
 
 Micro-benchmarks of internals: `./gradlew :delva:jmhBenchmark`.
 
@@ -40,6 +44,28 @@ build on the source instead:
 
 delva-cli's golden files follow the pinned cli-kit, so a change to cli-kit's help rendering fails them under the
 switch until the pin moves.
+
+## The IntelliJ plugin
+
+delva-intellij-plugin is Delva Tools, an IntelliJ Platform plugin built with the IntelliJ Platform Gradle Plugin, whose
+settings plugin adds the JetBrains repositories after Maven Central. `./gradlew :delva-intellij-plugin:runIde` opens a
+sandbox IDE with the plugin installed. The rules that the build doesn't spell out:
+
+- **It bundles a released Delva**, the `delva` version in [`libs.versions.toml`](../gradle/libs.versions.toml), and so
+  reads exactly that release's store format. To try a Delva change in the plugin before it is released, build on the
+  source instead: `./gradlew :delva-intellij-plugin:check -Pdelva.delvaFromSource=true`.
+- **It builds against the lowest IDE it supports** (`intellijIdea` in the catalog, `sinceBuild` in its build script),
+  never a newer one, and sets no `untilBuild`: `verifyPlugin` checks the newer IDEs. 2026.2 is the floor because
+  Delva's JVM 22 classes can't load on the Java 21 runtime of older IDEs.
+- **It never bundles the Kotlin standard library or kotlinx-coroutines**, which the IDE provides; a second
+  kotlinx-coroutines in the plugin's class loader breaks the platform's. `checkPluginDistribution` fails a ZIP that
+  holds anything but the plugin's jar and Delva's.
+- **Stores are read through `StoreBackend` only**, which returns the plugin's own types: no Delva type in UI code, and
+  no Swing in the `store` package. Stores are opened as secondaries, and never read or written through the VFS.
+- **It stays a dynamic plugin**: no static state, and every store closed when `DelvaStoresService` is disposed.
+  `verifyPlugin` fails on a plugin that can't be unloaded, and on internal, experimental or scheduled-for-removal API.
+- Its Marketplace description is the part of [its README](../delva-intellij-plugin/README.md) between the plugin
+  description markers, and its change notes are its changelog's section for the version.
 
 ## How the engine stores data
 
@@ -75,7 +101,7 @@ completion scripts are pinned the same way, in `delva-cli/src/test/resources/gol
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| [`ci.yml`](../.github/workflows/ci.yml) | pushes to `main`, pull requests | `check` on Linux and Windows, and builds the published artifacts |
+| [`ci.yml`](../.github/workflows/ci.yml) | pushes to `main`, pull requests | `check` on Linux and Windows, builds the published artifacts, and runs the IntelliJ Plugin Verifier |
 | [`long-tests.yml`](../.github/workflows/long-tests.yml) | Mondays, or by hand | `heapCappedTest` and `crashTest` on Linux and Windows; by hand, also the benchmark report and the long simulations on Linux |
 | [`codeql.yml`](../.github/workflows/codeql.yml) | pushes to `main`, pull requests, Wednesdays | CodeQL code scanning of the Kotlin and Java sources, from a build, and of the workflows |
 | [`release.yml`](../.github/workflows/release.yml) | a `v*` or `cli-kit-v*` tag | releases Delva's or cli-kit's train; see [RELEASING.md](RELEASING.md) |

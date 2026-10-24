@@ -39,16 +39,18 @@ from its seed, golden files and CI.
   | [`project/RELEASING.md`](../project/RELEASING.md) | the release procedure |
   | [`CHANGELOG.md`](../CHANGELOG.md) | one line per notable change to Delva; each version's section becomes its release notes |
   | [`cli-kit/CHANGELOG.md`](../cli-kit/CHANGELOG.md) | the same for cli-kit and cli-kit-testing |
+  | [`delva-intellij-plugin/CHANGELOG.md`](../delva-intellij-plugin/CHANGELOG.md) | the same for the IntelliJ plugin; each version's section becomes its Marketplace change notes |
 
 - **CHANGELOG.md**: for a change users can notice, add one line under `Unreleased`, in its group (`Added`,
   `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`), in `cli-kit/CHANGELOG.md` for a change to cli-kit or
-  cli-kit-testing and in the root `CHANGELOG.md` for anything else. The details belong in the guide, `SPEC.md` or the
-  module's README.
+  cli-kit-testing, in `delva-intellij-plugin/CHANGELOG.md` for a change to the IntelliJ plugin and in the root
+  `CHANGELOG.md` for anything else. The details belong in the guide, `SPEC.md` or the module's README.
 - **Dependencies**: the library depends only on the JDK, the Kotlin standard library and kotlinx-coroutines, and the
-  optional `delva-kotlinx-serialization` module also on kotlinx-serialization-json. Tests use kotlin-test, with JUnit
-  as its runner, and kotlinx-coroutines-test; benchmarks use kotlinx-benchmark; the build uses only JetBrains tooling
-  and Gradle's own plugins. Prefer the JDK or a few lines of code to a new library, and open an issue before proposing
-  any other dependency: pull requests that add one won't be merged.
+  optional `delva-kotlinx-serialization` module also on kotlinx-serialization-json; the IntelliJ plugin only on Delva
+  and the IDE. Tests use kotlin-test, with JUnit as its runner, and kotlinx-coroutines-test, except the plugin's, which
+  use the IntelliJ Platform's test framework on JUnit 4; benchmarks use kotlinx-benchmark; the build uses only
+  JetBrains tooling and Gradle's own plugins. Prefer the JDK or a few lines of code to a new library, and open an issue
+  before proposing any other dependency: pull requests that add one won't be merged.
 - **Style**: [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html) and `.editorconfig`.
   Comments explain why, and stand on their own: no references to issues, tickets or documents outside the repository.
 - CI must pass on Linux and Windows.
