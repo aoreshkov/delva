@@ -24,9 +24,12 @@ The plugin reads the stores of the Delva minor its own version starts with: 0.2.
   get` writes out a larger one.
 - A store inside the project's content would be indexed with it, which only costs time for a store's binary files: the
   tool window offers to exclude it, as **Mark Directory as | Excluded** does.
-- **Search Delva Store…** asks for a JSONPath query and opens the hits in a read-only JSON editor, each with its
-  document id, document key and path. It searches the store selected in the tool window, or, from the Tools menu, a
-  directory it asks for.
+- The **Search** tab searches the selected store by an RFC 9535 JSONPath query or by a key and a value, and lists the
+  hits a hundred at a time, each with its document, where in the document it is and how it starts. A double click or
+  Enter opens a hit in a read-only JSON editor. A JSONPath search can be limited to the documents whose root passes a
+  filter, as `--where` does on the command line, and can list whole documents instead of the nodes it selects;
+  **Explain** shows which index terms narrow it down. A query that no index term narrows would read every document,
+  so it runs only once that's allowed. **Search Delva Store…** in the Tools menu opens the tab.
 
 ## Compatibility
 
@@ -48,6 +51,6 @@ delva init ./sample
 echo '{"order": {"items": [{"sku": "A1", "qty": 0}, {"sku": "B2", "qty": 3}]}}' | delva insert --store ./sample -
 ```
 
-then add `./sample` in the **Delva** tool window, and search it with `$..[?@.qty < 1].sku`.
+then add `./sample` in the **Delva** tool window, and search it on the **Search** tab with `$..[?@.qty < 1].sku`.
 
 [DEVELOPMENT.md](../project/DEVELOPMENT.md#the-intellij-plugin) covers building and testing the plugin.

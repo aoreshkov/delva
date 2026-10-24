@@ -4,19 +4,26 @@ import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.Cursor
 import app.oreshkov.delva.DelvaException
 import app.oreshkov.delva.DocId
+import app.oreshkov.delva.DocumentFilter
 import app.oreshkov.delva.DocumentKeyQuery
 import app.oreshkov.delva.DocumentNotFoundException
+import app.oreshkov.delva.DocumentRejectedException
 import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InvalidJsonPathException
 import app.oreshkov.delva.JsonFormat
 import app.oreshkov.delva.JsonPath
 import app.oreshkov.delva.JsonPathQuery
+import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.JsonStore
+import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.LockHolder
 import app.oreshkov.delva.NodeRef
+import app.oreshkov.delva.QueryRejectedException
+import app.oreshkov.delva.ResultMode
 import app.oreshkov.delva.ResultTooLargeException
 import app.oreshkov.delva.ScanPolicy
 import app.oreshkov.delva.SearchHit
+import app.oreshkov.delva.SearchResult
 import app.oreshkov.delva.SecondaryJsonStore
 import app.oreshkov.delva.StoreNotFoundException
 import app.oreshkov.delva.intellij.DelvaBundle
@@ -24,7 +31,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
 import java.nio.file.Path
 
 /**
@@ -51,32 +63,18 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         require(limit > 0) { "limit must be positive, was $limit" }
         return reading(dir) { store ->
             val cursor = after?.let(Cursor::parse)
-            // One more than asked for tells whether a next page exists, and the last one kept is where it starts.
             val result = if (store.creationOptions.documentKey != null) {
                 store.search(DocumentKeyQuery(limit = limit + 1, after = cursor))
             } else {
                 store.search(JsonPathQuery(ROOT, limit = limit + 1, after = cursor, scan = ScanPolicy.ALLOW_SCAN))
             }
-            result.use {
-                val documents = ArrayList<DocumentEntry>()
-                var next: String? = null
-                var last: SearchHit? = null
-                for (hit in result) {
-                    ensureActive()
-                    if (documents.size == limit) {
-                        next = last!!.cursor.toString()
-                        break
-                    }
-                    documents += DocumentEntry(hit.docId.raw, hit.documentKey, hit.encodedSize)
-                    last = hit
-                }
-                DocumentPage(documents, next)
-            }
+            val (documents, next) = result.use { page(it, limit) { hit -> DocumentEntry(hit.docId.raw, hit.documentKey, hit.encodedSize) } }
+            DocumentPage(documents, next)
         }
     }
 
-    override suspend fun readDocument(dir: Path, docId: Long, maxChars: Int): String? = reading(dir) { store ->
-        store.select(NodeRef(DocId(docId), 0), ROOT).use { result ->
+    override suspend fun readNode(dir: Path, docId: Long, nodePre: Long, maxChars: Int): String? = reading(dir) { store ->
+        store.select(NodeRef(DocId(docId), nodePre), ROOT).use { result ->
             try {
                 result.iterator().next().readJsonAsString(JsonFormat.PRETTY, maxChars)
             } catch (_: ResultTooLargeException) {
@@ -85,24 +83,35 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         }
     }
 
-    override suspend fun searchPath(dir: Path, query: String, limit: Int, maxChars: Int): SearchOutcome {
+    override suspend fun search(dir: Path, query: StoreQuery, after: String?, limit: Int): HitPage {
         require(limit > 0) { "limit must be positive, was $limit" }
-        val path = compile(query)
+        // Compiled before the store is opened, so a mistake in the query is reported as one even where no store is.
+        val pathQuery = (query as? StoreQuery.ByPath)?.toDelva(limit + 1)
         return reading(dir) { store ->
-            // One page more than asked for tells whether more hits are left.
-            store.search(JsonPathQuery(path, limit = limit + 1, scan = ScanPolicy.ALLOW_SCAN)).use { result ->
-                val hits = ArrayList<StoreHit>()
-                var more = false
-                for (hit in result) {
-                    ensureActive()
-                    if (hits.size == limit) {
-                        more = true
-                        break
-                    }
-                    hits += hit.toStoreHit(maxChars)
+            val cursor = after?.let(Cursor::parse)
+            try {
+                val result = when (query) {
+                    is StoreQuery.ByPath -> store.search(pathQuery!!.copy(after = cursor))
+                    is StoreQuery.ByKeyValue -> store.search(query.toDelva(limit + 1, cursor))
                 }
-                SearchOutcome(hits, more)
+                val (hits, next) = result.use { page(it, limit) { hit -> hit.toStoreHit() } }
+                HitPage(hits, next)
+            } catch (e: QueryRejectedException) {
+                if (e.reason != QueryRejectedException.Reason.NEEDS_SCAN) throw e
+                throw StoreAccessException(DelvaBundle.message("search.needsScan"), e)
+            } catch (e: DocumentRejectedException) {
+                // The value is parsed when the search starts; text that isn't JSON most likely meant a string.
+                if (query !is StoreQuery.ByKeyValue || query.valueIsText) throw e
+                throw StoreAccessException(DelvaBundle.message("search.valueNotJson", query.value), e)
             }
+        }
+    }
+
+    override suspend fun explain(dir: Path, query: StoreQuery.ByPath): SearchPlan {
+        val pathQuery = query.toDelva(limit = 1)
+        return reading(dir) { store ->
+            val plan = store.explain(pathQuery)
+            SearchPlan(plan.fullScan, plan.terms, plan.within)
         }
     }
 
@@ -111,6 +120,13 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         null
     } catch (e: InvalidJsonPathException) {
         DelvaBundle.message("query.invalid", e.offset, e.reason)
+    }
+
+    override fun checkFilter(filter: String): String? = try {
+        DocumentFilter.compile(filter)
+        null
+    } catch (e: InvalidJsonPathException) {
+        DelvaBundle.message("filter.invalid", e.offset, e.reason)
     }
 
     override fun release(dir: Path) {
@@ -125,11 +141,51 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         for (store in open) store.close()
     }
 
-    private fun compile(query: String): JsonPath = try {
-        JsonPath.compile(query)
-    } catch (e: InvalidJsonPathException) {
-        throw StoreAccessException(DelvaBundle.message("query.invalid", e.offset, e.reason), e)
+    /**
+     * Up to [limit] of [result]'s hits, each made an entry by [entry], and where the next page starts, or null when no
+     * hits are left. The search asks for one hit more than it keeps, so a page that ends on the last hit says so.
+     */
+    private fun <T> CoroutineScope.page(result: SearchResult, limit: Int, entry: (SearchHit) -> T): Pair<List<T>, String?> {
+        val entries = ArrayList<T>()
+        var last: SearchHit? = null
+        for (hit in result) {
+            ensureActive()
+            if (entries.size == limit) return entries to last!!.cursor.toString()
+            entries += entry(hit)
+            last = hit
+        }
+        return entries to null
     }
+
+    private fun StoreQuery.ByPath.toDelva(limit: Int): JsonPathQuery {
+        val compiled = try {
+            JsonPath.compile(path)
+        } catch (e: InvalidJsonPathException) {
+            throw StoreAccessException(DelvaBundle.message("query.invalid", e.offset, e.reason), e)
+        }
+        val filter = try {
+            where?.let(DocumentFilter::compile)
+        } catch (e: InvalidJsonPathException) {
+            throw StoreAccessException(DelvaBundle.message("filter.invalid", e.offset, e.reason), e)
+        }
+        return JsonPathQuery(
+            compiled,
+            mode = mode(wholeDocuments),
+            limit = limit,
+            scan = if (scan) ScanPolicy.ALLOW_SCAN else ScanPolicy.REJECT,
+            documentFilter = filter,
+        )
+    }
+
+    private fun StoreQuery.ByKeyValue.toDelva(limit: Int, after: Cursor?) = KeyValueQuery(
+        key,
+        if (valueIsText) JsonQueryValue.Str(value) else JsonQueryValue.Json(value),
+        mode = mode(wholeDocuments),
+        limit = limit,
+        after = after,
+    )
+
+    private fun mode(wholeDocuments: Boolean) = if (wholeDocuments) ResultMode.WHOLE_DOCUMENT else ResultMode.CONTAINING_ELEMENT
 
     private suspend fun <T> reading(dir: Path, read: suspend CoroutineScope.(SecondaryJsonStore) -> T): T =
         withContext(Dispatchers.IO) {
@@ -170,13 +226,14 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         return kept ?: throw IllegalStateException("The backend is closed")
     }
 
-    private fun SearchHit.toStoreHit(maxChars: Int): StoreHit {
-        val json = try {
-            readJsonAsString(JsonFormat.PRETTY, maxChars)
-        } catch (_: ResultTooLargeException) {
-            null
+    private fun SearchHit.toStoreHit(): StoreHit {
+        // Writing stops after the preview's bytes, so a large node isn't read to the end for its first line.
+        val preview = PreviewOutput(PREVIEW_BYTES)
+        try {
+            writeJsonTo(preview, JsonFormat.COMPACT)
+        } catch (_: PreviewOutput.Full) {
         }
-        return StoreHit(docId.raw, documentKey, path, json, encodedSize)
+        return StoreHit(docId.raw, node.nodePre, documentKey, path, preview.text(), preview.cut, encodedSize)
     }
 
     private fun describe(holder: LockHolder): String {
@@ -191,5 +248,42 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
 
         /** Selects a document's root: each document once, in a search of every document. */
         val ROOT: JsonPath = JsonPath.compile("$")
+
+        /** UTF-8 bytes of a hit's JSON kept for its preview: more than a list row shows. */
+        const val PREVIEW_BYTES = 400
     }
+}
+
+/** Keeps the first [limit] bytes written to it, and stops the writer with [Full] when more come. */
+private class PreviewOutput(private val limit: Int) : OutputStream() {
+    private val bytes = ByteArrayOutputStream(limit)
+
+    /** Whether more was written than kept. */
+    var cut = false
+        private set
+
+    override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+
+    override fun write(b: ByteArray, off: Int, len: Int) {
+        val room = limit - bytes.size()
+        bytes.write(b, off, minOf(len, room))
+        if (len > room) {
+            cut = true
+            throw Full()
+        }
+    }
+
+    /** The bytes kept, as text: a character the limit cut in two is left out. */
+    fun text(): String {
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPLACE)
+            .onUnmappableCharacter(CodingErrorAction.REPLACE)
+        val out = CharBuffer.allocate(limit)
+        // With endOfInput false, an incomplete sequence at the end stays in the input instead of being replaced.
+        decoder.decode(ByteBuffer.wrap(bytes.toByteArray()), out, !cut)
+        return out.flip().toString()
+    }
+
+    /** Thrown to the writer once the preview is full; it carries no stack trace, as it's no error. */
+    class Full : RuntimeException(null, null, false, false)
 }

@@ -14,9 +14,10 @@ class DelvaStoresServiceTest : BasePlatformTestCase() {
         val dir = FileUtil.createTempDirectory("delva-store", null, true).toPath()
         JsonStore.create(dir).use { writer -> writer.insert("""{"order": {"items": [{"sku": "x1"}, {"sku": "x2"}]}}""") }
 
-        val outcome = DelvaStoresService.getInstance(project).backend.searchPath(dir, "$..sku", limit = 10, maxChars = 1000)
+        val query = StoreQuery.ByPath("$..sku", where = null, wholeDocuments = false, scan = true)
+        val outcome = DelvaStoresService.getInstance(project).backend.search(dir, query, after = null, limit = 10)
 
-        assertEquals(listOf("\"x1\"", "\"x2\""), outcome.hits.map { it.json })
+        assertEquals(listOf("\"x1\"", "\"x2\""), outcome.hits.map { it.preview })
         assertEquals(listOf("$['order']['items'][0]['sku']", "$['order']['items'][1]['sku']"), outcome.hits.map { it.path })
     }
 }

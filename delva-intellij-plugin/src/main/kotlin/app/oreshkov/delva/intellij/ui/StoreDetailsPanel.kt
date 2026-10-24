@@ -1,7 +1,8 @@
 package app.oreshkov.delva.intellij.ui
 
 import app.oreshkov.delva.intellij.DelvaBundle
-import app.oreshkov.delva.intellij.actions.DocumentNavigatable
+import app.oreshkov.delva.intellij.actions.NodeNavigatable
+import app.oreshkov.delva.intellij.actions.StoredNode
 import app.oreshkov.delva.intellij.actions.excludeFromIndexing
 import app.oreshkov.delva.intellij.actions.isIndexed
 import app.oreshkov.delva.intellij.actions.notify
@@ -140,7 +141,7 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
     override fun uiDataSnapshot(sink: DataSink) {
         val dir = shown ?: return
         val document = list.selectedValue ?: return
-        val navigatable = DocumentNavigatable(project, dir, document)
+        val navigatable = NodeNavigatable(project, dir, StoredNode(document))
         sink[CommonDataKeys.NAVIGATABLE] = navigatable
         sink[CommonDataKeys.NAVIGATABLE_ARRAY] = arrayOf(navigatable)
     }
@@ -200,10 +201,11 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
     }
 }
 
-private fun failure(reason: String): JComponent = panel {
+/** [reason] beside an error icon; as plain text, since the label reads HTML and a query has `<` and `&` in it. */
+internal fun failure(reason: String): JComponent = panel {
     row {
         icon(AllIcons.General.Error).align(AlignY.TOP)
-        text(reason)
+        text(StringUtil.escapeXmlEntities(reason))
     }
 }.apply { border = JBUI.Borders.empty(0, 8) }
 
