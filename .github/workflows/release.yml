@@ -1,12 +1,12 @@
 name: Release
 
 # A tag vX.Y.Z (the Delva release train) or cli-kit-vX.Y.Z (the cli-kit train) tests, signs, attests, uploads that
-# train to the Central Portal and drafts its GitHub release; project/RELEASING.md has the setup it needs and the
-# manual steps after it.
+# train to the Central Portal and drafts its GitHub release; a tag delva-tools-vX.Y.Z does the same for the IntelliJ
+# plugin, uploaded to JetBrains Marketplace. project/RELEASING.md has the setup they need and the manual steps after.
 
 on:
   push:
-    tags: ['v*', 'cli-kit-v*']
+    tags: ['v*', 'cli-kit-v*', 'delva-tools-v*']
 
 permissions:
   contents: read
@@ -33,14 +33,14 @@ jobs:
         with:
           cache-disabled: true
 
-      # The cli-kit train runs all of `check` too, so a cli-kit release comes from a commit whose whole build passes.
-      # delva-cli builds on the cli-kit pinned in the catalog, so its tests meet this cli-kit only in the pull request
-      # that moves the pin. The engine's long suites don't touch cli-kit.
+      # The cli-kit and Delva Tools trains run all of `check` too, so their releases come from a commit whose whole
+      # build passes. delva-cli builds on the cli-kit pinned in the catalog, and the plugin on the Delva pinned there,
+      # so neither meets unreleased code here. The engine's long suites touch neither cli-kit nor the plugin.
       - name: All test suites
         shell: bash
         run: |
           case "$GITHUB_REF_NAME" in
-            cli-kit-v*) ./gradlew check --console=plain;;
+            cli-kit-v*|delva-tools-v*) ./gradlew check --console=plain;;
             *) ./gradlew check heapCappedTest crashTest --console=plain;;
           esac
 
@@ -51,11 +51,75 @@ jobs:
           name: release-test-reports-${{ matrix.os }}
           path: '**/build/reports/tests/'
 
-  release:
-    needs: test
+  # The plugin against the lowest IDE it supports and the newest EAP, as in CI.
+  verify-plugin:
+    if: startsWith(github.ref_name, 'delva-tools-v')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Holds the signing key and the Portal token; give it a required reviewer so a release waits for approval.
+    steps:
+      # The IDEs don't fit in the runner's free disk space beside what it comes with.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-disabled: true
+
+      - name: Verify the IntelliJ plugin
+        run: ./gradlew :delva-intellij-plugin:verifyPlugin --console=plain
+
+      - name: Upload Plugin Verifier reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-plugin-verifier-reports
+          path: delva-intellij-plugin/build/reports/pluginVerifier
+
+  # The plugin's ZIP installed in the IDE it builds against and driven through its UI, as in CI.
+  plugin-integration-test:
+    if: startsWith(github.ref_name, 'delva-tools-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-disabled: true
+
+      - name: Run the IntelliJ plugin's integration test
+        run: xvfb-run --auto-servernum ./gradlew :delva-intellij-plugin:integrationTest --console=plain
+
+      - name: Upload the IDE's logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-plugin-integration-test-logs
+          path: |
+            out/ide-tests/tests/*/*/log/
+            delva-intellij-plugin/build/reports/tests/integrationTest/
+
+  release:
+    needs: [test, verify-plugin, plugin-integration-test]
+    # The plugin's jobs run only for a Delva Tools tag. A skipped job would skip this one too, so the condition names
+    # what each train needs.
+    if: >-
+      ${{ !cancelled() && needs.test.result == 'success' &&
+      (!startsWith(github.ref_name, 'delva-tools-v') ||
+      (needs.verify-plugin.result == 'success' && needs.plugin-integration-test.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Holds the signing keys and the Portal and Marketplace tokens; give it a required reviewer so a release waits for
+    # approval.
     environment: release
     permissions:
       contents: write # draft the GitHub release
@@ -74,10 +138,13 @@ jobs:
       # in the Portal, or a release once published, can't simply be undone.
       - name: Check the tag matches the version, and extract the release notes
         run: |
-          # The tag's prefix names the train, as build-logic/src/main/kotlin/ReleaseTrain.kt defines them.
+          # The tag's prefix names the train, as build-logic/src/main/kotlin/ReleaseTrain.kt defines them; Delva Tools
+          # isn't on Maven Central, so it has no stage task.
           case "$GITHUB_REF_NAME" in
             cli-kit-v*) train=cli-kit title=cli-kit property=clikit.version prefix=cli-kit-v
               changelog=cli-kit/CHANGELOG.md stage=stageCliKit;;
+            delva-tools-v*) train=delva-tools title="Delva Tools" property=delvaTools.version prefix=delva-tools-v
+              changelog=delva-intellij-plugin/CHANGELOG.md stage=;;
             *) train=delva title=Delva property=delva.version prefix=v changelog=CHANGELOG.md stage=stageDelva;;
           esac
           version=$(awk -F= -v p="$property" '$1 == p { print $2 }' gradle.properties)
@@ -106,6 +173,7 @@ jobs:
           fi
 
       - name: Build the signed bundle
+        if: env.TRAIN != 'delva-tools'
         env:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
@@ -135,7 +203,22 @@ jobs:
           fi
           sha256sum "delva-cli-$VERSION.zip" "delva-cli-$VERSION.tar" > SHA256SUMS
 
+      # The plugin ships as one ZIP, signed with the plugin key; Marketplace signs it again with JetBrains' own.
+      # verifyPluginSignature fails when there's no signed ZIP, which is what signPlugin leaves without the key.
+      - name: Build the signed plugin
+        if: env.TRAIN == 'delva-tools'
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.PLUGIN_CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PLUGIN_PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PLUGIN_PRIVATE_KEY_PASSWORD }}
+        run: |
+          ./gradlew :delva-intellij-plugin:checkPluginDistribution :delva-intellij-plugin:verifyPluginSignature \
+            --console=plain
+          cd delva-intellij-plugin/build/distributions
+          sha256sum "delva-intellij-plugin-$VERSION-signed.zip" > SHA256SUMS
+
       - name: Attest build provenance
+        if: env.TRAIN != 'delva-tools'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -151,10 +234,17 @@ jobs:
             delva-cli/build/distributions/delva-cli-*.zip
             delva-cli/build/distributions/delva-cli-*.tar
 
+      - name: Attest the plugin's provenance
+        if: env.TRAIN == 'delva-tools'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: delva-intellij-plugin/build/distributions/delva-intellij-plugin-*-signed.zip
+
       # USER_MANAGED: the Portal validates the deployment and waits for it to be released by hand. The upload returns as
       # soon as the bundle lands and validation runs after it, so this step waits for the verdict: a deployment the
       # Portal rejects gets no draft release and no KDoc.
       - name: Upload to the Central Portal and wait for its validation
+        if: env.TRAIN != 'delva-tools'
         env:
           CENTRAL_TOKEN: ${{ secrets.CENTRAL_TOKEN }}
         run: |
@@ -188,6 +278,41 @@ jobs:
           echo "::error::Deployment $id was still $state after 20 minutes"
           exit 1
 
+      # Hidden, as the build script sets: Marketplace reviews the version, and it stays hidden after approval until
+      # it is unhidden by hand. Only a version already on Marketplace can be uploaded; the first is uploaded on the
+      # Marketplace site. A release candidate is never uploaded.
+      - name: Upload to JetBrains Marketplace, hidden
+        if: env.TRAIN == 'delva-tools'
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PLUGIN_PUBLISH_TOKEN }}
+          CERTIFICATE_CHAIN: ${{ secrets.PLUGIN_CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PLUGIN_PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PLUGIN_PRIVATE_KEY_PASSWORD }}
+        run: |
+          case "$VERSION" in
+            *-*)
+              echo "Release candidate: not uploaded to JetBrains Marketplace." >> "$GITHUB_STEP_SUMMARY"
+              exit 0;;
+          esac
+          id=$(grep -m1 -oP '(?<=<id>)[^<]+' delva-intellij-plugin/src/main/resources/META-INF/plugin.xml)
+          status=$(curl --silent --show-error --retry 3 --output /dev/null --write-out '%{http_code}' \
+            --header "Authorization: Bearer $PUBLISH_TOKEN" "https://plugins.jetbrains.com/api/plugins/intellij/$id")
+          case "$status" in
+            200) ;;
+            404)
+              echo "::warning::$id isn't on JetBrains Marketplace yet; upload the signed ZIP on the Marketplace site"
+              echo "\`$id\` isn't on JetBrains Marketplace yet: upload the release's signed ZIP by hand." \
+                >> "$GITHUB_STEP_SUMMARY"
+              exit 0;;
+            *)
+              echo "::error::JetBrains Marketplace answered $status for $id"
+              exit 1;;
+          esac
+          ./gradlew :delva-intellij-plugin:publishPlugin --console=plain
+          # What Marketplace got is the ZIP that was attested and goes on the release.
+          (cd delva-intellij-plugin/build/distributions && sha256sum --check SHA256SUMS)
+          echo "Uploaded \`$id\` $VERSION to JetBrains Marketplace, hidden." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Draft the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -195,21 +320,30 @@ jobs:
           # A version with a hyphen, such as 0.1.0-rc.1, is a pre-release, so it never becomes the latest release.
           prerelease=()
           case "$VERSION" in *-*) prerelease=(--prerelease);; esac
-          # The train's jars, and for Delva the command line's archives.
-          mapfile -t assets < <(find "$STAGING" -name '*.jar' | sort)
-          if [ "$TRAIN" = delva ]; then
-            distributions=delva-cli/build/distributions
-            assets+=("$distributions/delva-cli-$VERSION.zip" "$distributions/delva-cli-$VERSION.tar" \
-              "$distributions/SHA256SUMS")
-          fi
+          # The train's jars, and for Delva the command line's archives; for Delva Tools the signed plugin ZIP.
+          case "$TRAIN" in
+            delva-tools)
+              distributions=delva-intellij-plugin/build/distributions
+              assets=("$distributions/delva-intellij-plugin-$VERSION-signed.zip" "$distributions/SHA256SUMS");;
+            *)
+              mapfile -t assets < <(find "$STAGING" -name '*.jar' | sort)
+              if [ "$TRAIN" = delva ]; then
+                distributions=delva-cli/build/distributions
+                assets+=("$distributions/delva-cli-$VERSION.zip" "$distributions/delva-cli-$VERSION.tar" \
+                  "$distributions/SHA256SUMS")
+              fi;;
+          esac
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag "${prerelease[@]}" \
             --title "$TITLE $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" "${assets[@]}"
 
   # Delva's KDoc on GitHub Pages. The cli-kit train and pre-releases (any tag with a hyphen, such as -rc.1) are skipped,
-  # so the site always shows the newest Delva release.
+  # so the site always shows the newest Delva release. A Delva release skips the plugin's jobs, and a job whose
+  # condition doesn't name the result it waits for is skipped after any skipped job before it.
   pages:
     needs: release
-    if: ${{ startsWith(github.ref_name, 'v') && !contains(github.ref_name, '-') }}
+    if: >-
+      ${{ !cancelled() && needs.release.result == 'success' &&
+      startsWith(github.ref_name, 'v') && !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:

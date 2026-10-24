@@ -21,8 +21,8 @@ releases update the KDoc on GitHub Pages and become the repository's *Latest* re
 
 Delva Tools, the IntelliJ plugin in `delva-intellij-plugin`, rides neither train: it ships to JetBrains Marketplace,
 with its version in `delvaTools.version`, tags `delva-tools-vX.Y.Z` and its own
-[changelog](../delva-intellij-plugin/CHANGELOG.md). It has not been released yet, and nothing below applies to it. Like
-delva-cli with cli-kit, it bundles a released Delva, the `delva` version in the catalog.
+[changelog](../delva-intellij-plugin/CHANGELOG.md), and [its own section](#delva-tools) below. Like delva-cli with
+cli-kit, it bundles a released Delva, the `delva` version in the catalog.
 
 delva-cli builds on a released cli-kit, the `cliKit` version in
 [`libs.versions.toml`](../gradle/libs.versions.toml), never on the cli-kit source beside it, so a Delva release ships
@@ -40,8 +40,9 @@ one once the release is on Maven Central, or open it yourself as the release's l
    server leaves out the user ID until then. Keep the revocation certificate offline.
 3. **Portal token**: a user token from the Central Portal account page, as the Base64 of `username:password`. Tokens
    expire on the date chosen when they are made, so replace the secret before then.
-4. **GitHub environment** `release` (Settings → Environments), with yourself as required reviewer and `v*` and
-   `cli-kit-v*` as the only deployment tags, holding the secrets:
+4. **GitHub environment** `release` (Settings → Environments), with yourself as required reviewer and `v*`,
+   `cli-kit-v*` and `delva-tools-v*` as the only deployment tags, holding these secrets and
+   [Delva Tools'](#one-time-setup-1):
 
    | Secret | Value |
    |---|---|
@@ -148,7 +149,8 @@ gh release delete vX.Y.Z-rc.N --yes
 git push origin :vX.Y.Z-rc.N :rc/delva-X.Y.Z-rc.N
 ```
 
-The tag ruleset allows only repository administrators to create or delete `v*` and `cli-kit-v*` tags.
+The tag ruleset allows only repository administrators to create or delete `v*`, `cli-kit-v*` and `delva-tools-v*`
+tags.
 
 ## By hand
 
@@ -175,6 +177,110 @@ curl --fail --request POST \
 
 Signing runs only for the stage task and only when the key is configured; without it the files are unsigned, which
 the Portal rejects. A release made this way has no provenance attestation.
+
+## Delva Tools
+
+Pushing a `delva-tools-vX.Y.Z` tag runs the same [`release.yml`](../.github/workflows/release.yml), which tests the
+plugin, signs its ZIP, attests it, uploads it to [JetBrains Marketplace](https://plugins.jetbrains.com) hidden and
+drafts the GitHub release. A version's minor is that of the Delva it bundles, so a plugin release that moves to a new
+Delva minor comes after that Delva release and the pull request that moves the catalog's `delva` pin.
+
+### One-time setup
+
+1. **Plugin signing key**: an RSA key and a self-signed certificate, used only to sign the plugin. They are not the
+   PGP key above, which Marketplace has no use for. Marketplace checks the author's signature and adds JetBrains'
+   own.
+
+   ```shell
+   openssl genpkey -aes-256-cbc -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out private_encrypted.pem
+   openssl req -key private_encrypted.pem -new -x509 -days 365 -subj "/CN=Delva Tools" -out chain.crt
+   ```
+
+   The certificate is valid for a year: make a new one from the same key before then, with the second command, and
+   replace its secret. Keep both files offline.
+2. **Marketplace token**: a personal access token from **My Tokens** on your Marketplace profile, shown only once.
+3. The secrets, in the `release` environment. The PEM files go in as they are, not as Base64: `signPlugin` would decode
+   Base64, but `verifyPluginSignature` doesn't.
+
+   | Secret | Value |
+   |---|---|
+   | `PLUGIN_PRIVATE_KEY` | `private_encrypted.pem` |
+   | `PLUGIN_PRIVATE_KEY_PASSWORD` | its passphrase |
+   | `PLUGIN_CERTIFICATE_CHAIN` | `chain.crt` |
+   | `PLUGIN_PUBLISH_TOKEN` | the Marketplace token |
+
+4. The tag ruleset and the `release` environment's deployment tags cover `delva-tools-v*` (see above).
+
+### Cutting a release
+
+1. `gradle.properties`: set `delvaTools.version` to the release version (no `-SNAPSHOT`). The plugin's README: for the
+   first release, replace the early-development note with how to install the plugin from Marketplace.
+2. [The plugin's changelog](../delva-intellij-plugin/CHANGELOG.md): as for the other trains, move the `Unreleased`
+   entries under `## [X.Y.Z] - YYYY-MM-DD` and point the link references at the tag
+   (`[X.Y.Z]: …/releases/tag/delva-tools-vX.Y.Z`, `[Unreleased]: …/compare/delva-tools-vX.Y.Z...HEAD`). That section
+   becomes both the release notes and the plugin's change notes on Marketplace, which the ZIP carries.
+3. Go through the plugin in `runIde`, in the light and the dark theme, with the checklist in
+   [DEVELOPMENT.md](DEVELOPMENT.md#the-intellij-plugin), which covers what no test does.
+4. Open a pull request, merge it once its checks pass, then tag the merged commit and push only the tag:
+
+   ```shell
+   git switch main && git pull --ff-only
+   git tag -s delva-tools-vX.Y.Z -m "Delva Tools X.Y.Z"
+   git push origin delva-tools-vX.Y.Z
+   ```
+
+5. `release.yml` runs `check` on Linux and Windows, the Plugin Verifier and the plugin's integration test. The
+   `release` job then waits for your approval. Once approved, it checks that the tag matches `delvaTools.version` and
+   that the changelog has the version's section; builds the ZIP, checks that it holds only the plugin's jar and
+   Delva's, signs it and verifies the signature, failing if there's no key to sign with; attests its provenance; and
+   uploads it to Marketplace as a **hidden** version. It drafts the GitHub release, titled "Delva Tools X.Y.Z", with
+   the signed ZIP and its `SHA256SUMS`. The run's summary says what was uploaded.
+6. Marketplace reviews the version, and keeps it hidden after approving it. Once it is approved, unhide it: the
+   plugin's page → **Versions** → **Unhide version**.
+7. Publish the GitHub release from the command line, so it doesn't become *Latest* in place of Delva's:
+
+   ```shell
+   gh release edit delva-tools-vX.Y.Z --draft=false --latest=false
+   ```
+
+8. In a second pull request, set `delvaTools.version` to the next `-SNAPSHOT`.
+
+The ZIP on Marketplace carries JetBrains' signature beside the plugin's, so its checksum differs from the release
+asset's; the release asset can be checked against its provenance:
+
+```shell
+gh attestation verify delva-intellij-plugin-X.Y.Z-signed.zip --repo aoreshkov/delva
+```
+
+### The first release
+
+`publishPlugin` can only add a version to a plugin that is already on Marketplace, so for the first release the
+workflow uploads nothing and says so in its summary; everything else runs as above. Upload the signed ZIP from the
+draft release yourself:
+
+1. `gh release download delva-tools-vX.Y.Z --pattern '*-signed.zip'`.
+2. On Marketplace, your profile → **Add new plugin**: the vendor *aoreshkov*, the Apache 2.0 license, the ZIP, and
+   **Hidden** ticked, so the plugin waits for you after approval as later versions do. The plugin id
+   `app.oreshkov.delva` is fixed from then on.
+3. Once the plugin is approved: its page → **Publish Plugin** → **Confirm**, which can't be undone. Then publish the
+   GitHub release as in step 7 above.
+
+### Release candidates
+
+A tag `delva-tools-vX.Y.Z-rc.N`, cut from a throwaway branch `rc/delva-tools-X.Y.Z-rc.N` as for the other trains,
+runs the whole workflow but uploads nothing to Marketplace. Delete its draft release, tag and branch afterwards, as
+[above](#release-candidates).
+
+### By hand
+
+The upload can run locally with the secrets in the environment. `publishPlugin` uploads only the signed ZIP, and fails
+without one rather than upload an unsigned plugin; the version is hidden, as from the workflow:
+
+```shell
+export PRIVATE_KEY="$(cat private_encrypted.pem)" PRIVATE_KEY_PASSWORD=... CERTIFICATE_CHAIN="$(cat chain.crt)"
+export PUBLISH_TOKEN=...
+./gradlew :delva-intellij-plugin:verifyPluginSignature :delva-intellij-plugin:publishPlugin
+```
 
 ## Before every push
 
