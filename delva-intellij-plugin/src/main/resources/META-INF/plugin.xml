@@ -10,12 +10,29 @@
     <resource-bundle>messages.DelvaBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Delva" anchor="right" secondary="true" icon="/icons/delvaToolWindow.svg"
+                    factoryClass="app.oreshkov.delva.intellij.ui.DelvaToolWindowFactory"/>
         <notificationGroup id="Delva" displayType="BALLOON" bundle="messages.DelvaBundle" key="notification.group.delva"/>
     </extensions>
 
     <actions>
-        <action id="app.oreshkov.delva.SearchStore" class="app.oreshkov.delva.intellij.actions.SearchStoreAction">
+        <action id="app.oreshkov.delva.AddStore" class="app.oreshkov.delva.intellij.actions.AddStoreAction"
+                icon="AllIcons.General.Add"/>
+        <action id="app.oreshkov.delva.RemoveStore" class="app.oreshkov.delva.intellij.actions.RemoveStoreAction"
+                icon="AllIcons.General.Remove"/>
+        <action id="app.oreshkov.delva.RefreshStore" class="app.oreshkov.delva.intellij.actions.RefreshStoreAction"
+                icon="AllIcons.Actions.Refresh"/>
+        <action id="app.oreshkov.delva.SearchStore" class="app.oreshkov.delva.intellij.actions.SearchStoreAction"
+                icon="AllIcons.Actions.Find">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+
+        <group id="app.oreshkov.delva.ToolWindow">
+            <reference ref="app.oreshkov.delva.AddStore"/>
+            <reference ref="app.oreshkov.delva.RemoveStore"/>
+            <separator/>
+            <reference ref="app.oreshkov.delva.RefreshStore"/>
+            <reference ref="app.oreshkov.delva.SearchStore"/>
+        </group>
     </actions>
 </idea-plugin>

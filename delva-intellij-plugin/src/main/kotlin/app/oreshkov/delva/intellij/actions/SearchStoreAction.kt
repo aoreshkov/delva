@@ -4,27 +4,28 @@ import app.oreshkov.delva.intellij.DelvaBundle
 import app.oreshkov.delva.intellij.store.DelvaStoresService
 import app.oreshkov.delva.intellij.store.SearchOutcome
 import app.oreshkov.delva.intellij.store.StoreAccessException
+import app.oreshkov.delva.intellij.ui.StoreExplorerPanel
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.fileChooser.FileChooser
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidatorEx
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.testFramework.LightVirtualFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
-/** Asks for a store directory and a JSONPath query, and opens the hits in a read-only JSON editor. */
+/**
+ * Asks for a JSONPath query, and for a store directory unless one is selected in the tool window, and opens the hits
+ * in a read-only JSON editor.
+ */
 internal class SearchStoreAction : DumbAwareAction() {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -35,8 +36,8 @@ internal class SearchStoreAction : DumbAwareAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val stores = DelvaStoresService.getInstance(project)
-        val descriptor = FileChooserDescriptorFactory.singleDir().withTitle(DelvaBundle.message("search.chooseStore"))
-        val dir = FileChooser.chooseFile(descriptor, project, null)?.toNioPathOrNull() ?: return
+        // The store selected in the tool window, or, from the Tools menu, one the person picks.
+        val dir = e.getData(StoreExplorerPanel.SELECTED_STORE) ?: chooseStore(project) ?: return
         val validator = object : InputValidatorEx {
             override fun getErrorText(inputString: String): String? = stores.backend.checkQuery(inputString)
         }

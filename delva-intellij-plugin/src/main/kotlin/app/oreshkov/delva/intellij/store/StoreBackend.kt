@@ -19,6 +19,12 @@ internal interface StoreBackend {
 
     /** Why [query] isn't a JSONPath query the store can run, or null when it is one. */
     fun checkQuery(query: String): String?
+
+    /**
+     * Closes the store in [dir] if this backend has it open, so no file of a store the project no longer lists stays
+     * open. The next read opens it again.
+     */
+    fun release(dir: Path)
 }
 
 internal data class StoreSummary(

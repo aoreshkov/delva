@@ -82,6 +82,18 @@ class EmbeddedStoreBackendTest {
     }
 
     @Test
+    fun `opens a released store again on the next read`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        JsonStore.create(dir).use { writer -> writer.insert("""{"n": 1}""") }
+        assertEquals(1, backend.info(dir).documents)
+
+        backend.release(dir)
+        backend.release(dir)
+        backend.release(temp.root.toPath())
+        assertEquals(1, backend.info(dir).documents)
+    }
+
+    @Test
     fun `refuses reads after close`() {
         val dir = temp.newFolder("store").toPath()
         JsonStore.create(dir).close()
