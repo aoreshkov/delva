@@ -1,7 +1,11 @@
 package app.oreshkov.delva.intellij.store
 
 import app.oreshkov.delva.CorruptionException
+import app.oreshkov.delva.Cursor
 import app.oreshkov.delva.DelvaException
+import app.oreshkov.delva.DocId
+import app.oreshkov.delva.DocumentKeyQuery
+import app.oreshkov.delva.DocumentNotFoundException
 import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InvalidJsonPathException
 import app.oreshkov.delva.JsonFormat
@@ -9,6 +13,7 @@ import app.oreshkov.delva.JsonPath
 import app.oreshkov.delva.JsonPathQuery
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.LockHolder
+import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.ResultTooLargeException
 import app.oreshkov.delva.ScanPolicy
 import app.oreshkov.delva.SearchHit
@@ -34,7 +39,50 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
 
     override suspend fun info(dir: Path): StoreSummary = reading(dir) { store ->
         val info = store.info()
-        StoreSummary(info.approximateDocumentCount, info.deletedDocumentCount, store.writer()?.let(::describe))
+        StoreSummary(
+            info.approximateDocumentCount,
+            info.deletedDocumentCount,
+            store.writer()?.let(::describe),
+            store.creationOptions.documentKey,
+        )
+    }
+
+    override suspend fun documents(dir: Path, after: String?, limit: Int): DocumentPage {
+        require(limit > 0) { "limit must be positive, was $limit" }
+        return reading(dir) { store ->
+            val cursor = after?.let(Cursor::parse)
+            // One more than asked for tells whether a next page exists, and the last one kept is where it starts.
+            val result = if (store.creationOptions.documentKey != null) {
+                store.search(DocumentKeyQuery(limit = limit + 1, after = cursor))
+            } else {
+                store.search(JsonPathQuery(ROOT, limit = limit + 1, after = cursor, scan = ScanPolicy.ALLOW_SCAN))
+            }
+            result.use {
+                val documents = ArrayList<DocumentEntry>()
+                var next: String? = null
+                var last: SearchHit? = null
+                for (hit in result) {
+                    ensureActive()
+                    if (documents.size == limit) {
+                        next = last!!.cursor.toString()
+                        break
+                    }
+                    documents += DocumentEntry(hit.docId.raw, hit.documentKey, hit.encodedSize)
+                    last = hit
+                }
+                DocumentPage(documents, next)
+            }
+        }
+    }
+
+    override suspend fun readDocument(dir: Path, docId: Long, maxChars: Int): String? = reading(dir) { store ->
+        store.select(NodeRef(DocId(docId), 0), ROOT).use { result ->
+            try {
+                result.iterator().next().readJsonAsString(JsonFormat.PRETTY, maxChars)
+            } catch (_: ResultTooLargeException) {
+                null
+            }
+        }
     }
 
     override suspend fun searchPath(dir: Path, query: String, limit: Int, maxChars: Int): SearchOutcome {
@@ -103,6 +151,8 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
                     DelvaBundle.message("store.corrupt", e.message.orEmpty())
                 }
                 throw StoreAccessException(message, e)
+            } catch (e: DocumentNotFoundException) {
+                throw StoreAccessException(DelvaBundle.message("document.notFound", e.docId.raw.toString()), e)
             } catch (e: DelvaException) {
                 throw StoreAccessException(e.message.orEmpty(), e)
             } catch (e: IOException) {
@@ -138,5 +188,8 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
     private companion object {
         /** The Delva minor this plugin bundles, whose store format is the only one it reads. */
         const val BUNDLED_DELVA_MINOR = "0.2"
+
+        /** Selects a document's root: each document once, in a search of every document. */
+        val ROOT: JsonPath = JsonPath.compile("$")
     }
 }

@@ -5,19 +5,15 @@ import app.oreshkov.delva.intellij.store.DelvaStoresService
 import app.oreshkov.delva.intellij.store.SearchOutcome
 import app.oreshkov.delva.intellij.store.StoreAccessException
 import app.oreshkov.delva.intellij.ui.StoreExplorerPanel
-import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
-import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidatorEx
 import com.intellij.openapi.ui.Messages
 import com.intellij.platform.ide.progress.withBackgroundProgress
-import com.intellij.testFramework.LightVirtualFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -66,15 +62,8 @@ internal class SearchStoreAction : DumbAwareAction() {
 
     private fun open(project: Project, dir: Path, query: String, outcome: SearchOutcome) {
         val name = DelvaBundle.message("search.results.name", dir.fileName ?: dir, query)
-        val json = FileTypeManager.getInstance().getFileTypeByExtension("json")
-        val file = LightVirtualFile("$name.json", json, searchResultsText(outcome.hits)).apply { isWritable = false }
-        // Every blocking openFile is deprecated from 2026.3 on, and its suspending successor isn't in 2026.2.
-        OpenFileDescriptor(project, file).navigate(true)
+        open(project, jsonFile(name, searchResultsText(outcome.hits)))
         if (outcome.more) notify(project, DelvaBundle.message("search.results.more", LIMIT), NotificationType.INFORMATION)
-    }
-
-    private fun notify(project: Project, content: String, type: NotificationType) {
-        NotificationGroupManager.getInstance().getNotificationGroup("Delva").createNotification(content, type).notify(project)
     }
 
     private companion object {
