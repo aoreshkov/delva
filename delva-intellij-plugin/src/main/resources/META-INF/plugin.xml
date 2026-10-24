@@ -13,6 +13,8 @@
         <toolWindow id="Delva" anchor="right" secondary="true" icon="/icons/delvaToolWindow.svg"
                     factoryClass="app.oreshkov.delva.intellij.ui.DelvaToolWindowFactory"/>
         <notificationGroup id="Delva" displayType="BALLOON" bundle="messages.DelvaBundle" key="notification.group.delva"/>
+        <!-- The IDE's own report flow, which sends this plugin's exceptions to its JetBrains Marketplace page. -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
     </extensions>
 
     <actions>

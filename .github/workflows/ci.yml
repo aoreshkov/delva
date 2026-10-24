@@ -87,3 +87,33 @@ jobs:
         with:
           name: plugin-verifier-reports
           path: delva-intellij-plugin/build/reports/pluginVerifier
+
+  # The plugin's ZIP installed in the IDE it builds against, which the test downloads, and driven through its UI on a
+  # virtual display.
+  plugin-integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-read-only: 'true'
+
+      - name: Run the IntelliJ plugin's integration test
+        run: xvfb-run --auto-servernum ./gradlew :delva-intellij-plugin:integrationTest --console=plain
+
+      # The IDE's logs and its screenshots of a failed step.
+      - name: Upload the IDE's logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plugin-integration-test-logs
+          path: |
+            out/ide-tests/tests/*/*/log/
+            delva-intellij-plugin/build/reports/tests/integrationTest/

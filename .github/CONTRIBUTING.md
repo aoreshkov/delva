@@ -48,7 +48,8 @@ from its seed, golden files and CI.
 - **Dependencies**: the library depends only on the JDK, the Kotlin standard library and kotlinx-coroutines, and the
   optional `delva-kotlinx-serialization` module also on kotlinx-serialization-json; the IntelliJ plugin only on Delva
   and the IDE. Tests use kotlin-test, with JUnit as its runner, and kotlinx-coroutines-test, except the plugin's, which
-  use the IntelliJ Platform's test framework on JUnit 4; benchmarks use kotlinx-benchmark; the build uses only
+  use the IntelliJ Platform's test framework on JUnit 4, and JetBrains' Starter and Driver on JUnit 5 for its
+  integration test; benchmarks use kotlinx-benchmark; the build uses only
   JetBrains tooling and Gradle's own plugins. Prefer the JDK or a few lines of code to a new library, and open an issue
   before proposing any other dependency: pull requests that add one won't be merged.
 - **Style**: [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html) and `.editorconfig`.

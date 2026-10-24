@@ -19,3 +19,5 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
   **Search Delva Store…** in the Tools menu opens it.
 - The tool window's **Types** tab lists the types assigned in a store and the objects of each; **Compare** shows two
   selected documents or nodes in the IDE's diff viewer; **Verify Store** checks every byte of a store in the background.
+- The plugin has its own logo, and the IDE's error reporter sends an exception in the plugin to its maintainer
+  through JetBrains Marketplace.
