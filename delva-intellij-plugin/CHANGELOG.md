@@ -17,3 +17,5 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
   filter on each document's root, or by a key and value; it lists the hits a page at a time and opens each in a
   read-only JSON editor, and **Explain** shows how the store would find a JSONPath search's documents.
   **Search Delva Store…** in the Tools menu opens it.
+- The tool window's **Types** tab lists the types assigned in a store and the objects of each; **Compare** shows two
+  selected documents or nodes in the IDE's diff viewer; **Verify Store** checks every byte of a store in the background.

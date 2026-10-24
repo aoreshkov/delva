@@ -34,6 +34,21 @@ internal interface StoreBackend {
     /** How the store in [dir] would find the documents [query] searches, without reading any. */
     suspend fun explain(dir: Path, query: StoreQuery.ByPath): SearchPlan
 
+    /** Every type ever assigned in the store in [dir], sorted by name. Throws [StoreAccessException]. */
+    suspend fun types(dir: Path): List<TypeSummary>
+
+    /**
+     * Up to [limit] objects of [type] in the store in [dir], in document order. The first page when [after] is null, else
+     * the page after the one whose [HitPage.next] it is. Throws [StoreAccessException].
+     */
+    suspend fun objectsOfType(dir: Path, type: String, after: String?, limit: Int): HitPage
+
+    /**
+     * Reads everything the store in [dir] can read back and checks it, without changing anything, telling [progress]
+     * how far each step has got. Cancelling the call stops it at the next report. Throws [StoreAccessException].
+     */
+    suspend fun verify(dir: Path, progress: (step: VerifyStep, bytesChecked: Long, bytesTotal: Long) -> Unit): VerifyResult
+
     /** Why [query] isn't a JSONPath query the store can run, or null when it is one. */
     fun checkQuery(query: String): String?
 
@@ -91,10 +106,11 @@ internal sealed interface StoreQuery {
 
 internal data class HitPage(
     val hits: List<StoreHit>,
-    /** Where the next page starts, for [StoreBackend.search], or null when this page is the last. */
+    /** Where the next page starts, for the call that returned this page, or null when this page is the last. */
     val next: String?,
 )
 
+/** A node a search found, or an object of a type. */
 internal data class StoreHit(
     val docId: Long,
     /** The node's number in its document, in pre-order: 0 for the document itself. */
@@ -106,8 +122,60 @@ internal data class StoreHit(
     val preview: String,
     /** Whether [preview] is only the start of the node's JSON. */
     val previewCut: Boolean,
-    val encodedSize: Long,
+    /** Payload bytes that store the node, before compression, or null when the store doesn't say, as for a type's. */
+    val encodedSize: Long?,
 )
+
+internal data class TypeSummary(
+    val name: String,
+    /** How many objects have the type: exact unless an object's type was changed or removed. */
+    val approximateCount: Long,
+)
+
+/** What [StoreBackend.verify] reads, in the order it reads them. */
+internal enum class VerifyStep {
+    /** File headers, log records, and the fragments each commit still in the log names. */
+    LOG,
+
+    /** The index segments. */
+    INDEX,
+
+    /** Every fragment-index entry, against the record it locates. */
+    FRAGMENTS,
+}
+
+internal data class VerifyResult(
+    val filesChecked: Int,
+    val bytesChecked: Long,
+    /** What doesn't check out; a store with none is intact. */
+    val problems: List<VerifyProblem>,
+) {
+    /** The documents the problems make unreadable, as far as the check could tell, in id order. */
+    val damagedDocuments: List<Long> get() = problems.mapNotNull { it.docId }.distinct().sorted()
+}
+
+/** Data reads would fail on: the rest of the store keeps being served. */
+internal data class VerifyProblem(
+    val kind: Kind,
+    /** The file and the byte position in it. */
+    val location: String,
+    /** What is wrong with the bytes. */
+    val detail: String,
+    /** How many bytes the damage spans, or 0 when that isn't known. */
+    val damagedBytes: Long,
+    /** The document it makes unreadable, or null when the check couldn't tell. */
+    val docId: Long?,
+) {
+    /** What the damaged data is. */
+    enum class Kind {
+        FILE,
+        LOG_RECORD,
+        SEGMENT,
+        COMMIT,
+        FRAGMENT_INDEX,
+        KEY_INDEX,
+    }
+}
 
 internal data class SearchPlan(
     /** Whether the search reads every document, as no index term narrows it. */

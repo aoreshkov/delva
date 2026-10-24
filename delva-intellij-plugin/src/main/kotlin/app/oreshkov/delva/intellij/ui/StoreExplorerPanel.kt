@@ -1,6 +1,7 @@
 package app.oreshkov.delva.intellij.ui
 
 import app.oreshkov.delva.intellij.DelvaBundle
+import app.oreshkov.delva.intellij.actions.SelectedNodes
 import app.oreshkov.delva.intellij.actions.addStore
 import app.oreshkov.delva.intellij.store.DelvaStoreList
 import app.oreshkov.delva.intellij.store.DelvaStoresService
@@ -34,9 +35,11 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
     private val list = JBList(model)
     private val details = StoreDetailsPanel(project)
     private val search = StoreSearchPanel(project, this)
+    private val types = StoreTypesPanel(project)
     private val tabs = JBTabbedPane().apply {
         addTab(DelvaBundle.message("explorer.tab.documents"), details)
         addTab(DelvaBundle.message("explorer.tab.search"), search)
+        addTab(DelvaBundle.message("explorer.tab.types"), types)
     }
 
     init {
@@ -76,10 +79,11 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
         }
     }
 
-    /** Reads the selected store again, to show what its writer has done since: its documents and the search's hits. */
+    /** Reads the selected store again, to show what its writer has done since: its documents, hits and types. */
     fun refresh() {
         details.show(list.selectedValue)
         search.refresh()
+        types.refresh()
     }
 
     /** Shows the search of the selected store, ready to type a query. */
@@ -97,6 +101,7 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
     override fun dispose() {
         details.cancel()
         search.cancel()
+        types.cancel()
     }
 
     private fun reloadList() {
@@ -113,11 +118,15 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
     private fun showSelected() {
         details.show(list.selectedValue)
         search.show(list.selectedValue)
+        types.show(list.selectedValue)
     }
 
     companion object {
         val PANEL: DataKey<StoreExplorerPanel> = DataKey.create("app.oreshkov.delva.StoreExplorerPanel")
         val SELECTED_STORE: DataKey<Path> = DataKey.create("app.oreshkov.delva.SelectedStore")
+
+        /** The documents or nodes selected in one of the tool window's lists. */
+        val SELECTED_NODES: DataKey<SelectedNodes> = DataKey.create("app.oreshkov.delva.SelectedNodes")
 
         const val PLACE = "DelvaToolWindow"
         private const val TOOLBAR_GROUP = "app.oreshkov.delva.ToolWindow"

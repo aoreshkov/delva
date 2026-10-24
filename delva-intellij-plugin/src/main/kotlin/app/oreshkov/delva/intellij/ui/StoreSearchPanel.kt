@@ -1,7 +1,6 @@
 package app.oreshkov.delva.intellij.ui
 
 import app.oreshkov.delva.intellij.DelvaBundle
-import app.oreshkov.delva.intellij.actions.NodeNavigatable
 import app.oreshkov.delva.intellij.actions.StoredNode
 import app.oreshkov.delva.intellij.store.DelvaStoresService
 import app.oreshkov.delva.intellij.store.HitPage
@@ -10,7 +9,6 @@ import app.oreshkov.delva.intellij.store.StoreAccessException
 import app.oreshkov.delva.intellij.store.StoreHit
 import app.oreshkov.delva.intellij.store.StoreQuery
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.application.EDT
@@ -32,8 +30,6 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
-import com.intellij.util.EditSourceOnDoubleClickHandler
-import com.intellij.util.EditSourceOnEnterKeyHandler
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +39,6 @@ import org.jetbrains.annotations.TestOnly
 import java.nio.file.Path
 import javax.swing.JComponent
 import javax.swing.JList
-import javax.swing.ListSelectionModel
 
 /**
  * Searches the selected store, by JSONPath or by a key and value, and lists the hits a page at a time, each opened in
@@ -88,11 +83,7 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
 
     init {
         form.registerValidators(parent)
-        list.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        list.cellRenderer = HitRenderer()
-        // Both open what the data context's navigatable points at: the selected hit.
-        EditSourceOnDoubleClickHandler.install(list)
-        EditSourceOnEnterKeyHandler.install(list)
+        configureNodeList(list, HitRenderer())
 
         addToTop(BorderLayoutPanel().addToTop(form).addToBottom(status))
         addToCenter(ScrollPaneFactory.createScrollPane(list, true))
@@ -183,11 +174,7 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     }
 
     override fun uiDataSnapshot(sink: DataSink) {
-        val dir = shown ?: return
-        val hit = list.selectedValue ?: return
-        val navigatable = NodeNavigatable(project, dir, StoredNode(hit))
-        sink[CommonDataKeys.NAVIGATABLE] = navigatable
-        sink[CommonDataKeys.NAVIGATABLE_ARRAY] = arrayOf(navigatable)
+        sink.selectedNodes(project, shown ?: return, list.selectedValuesList.map { StoredNode(it) })
     }
 
     private fun run(query: StoreQuery) {
@@ -250,7 +237,7 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     }
 
     /** Shows [text] under the form, laid out as [content]. */
-    private fun showStatus(text: String, content: JComponent? = if (text.isEmpty()) null else message(text)) {
+    private fun showStatus(text: String, content: JComponent? = if (text.isEmpty()) null else statusMessage(text)) {
         statusText = text
         status.removeAll()
         if (content != null) status.addToCenter(content)
@@ -354,7 +341,7 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     }
 }
 
-private fun message(text: String): JComponent = panel { row { text(StringUtil.escapeXmlEntities(text)) } }
+internal fun statusMessage(text: String): JComponent = panel { row { text(StringUtil.escapeXmlEntities(text)) } }
 
 /** How the store would find a JSONPath search's documents, as `delva explain` puts it: what each line names and says. */
 private fun planLines(plan: SearchPlan): List<Pair<String, String>> = listOf(
@@ -371,7 +358,7 @@ private fun planView(plan: SearchPlan): JComponent = panel {
 }
 
 /** A hit as its document's key, or its id in a store without keys, then where it is in the document and how it starts. */
-private class HitRenderer : ColoredListCellRenderer<StoreHit>() {
+internal class HitRenderer : ColoredListCellRenderer<StoreHit>() {
     override fun customizeCellRenderer(list: JList<out StoreHit>, value: StoreHit?, index: Int, selected: Boolean, hasFocus: Boolean) {
         if (value == null) return
         append(value.documentKey ?: DelvaBundle.message("explorer.documents.id", value.docId.toString()))

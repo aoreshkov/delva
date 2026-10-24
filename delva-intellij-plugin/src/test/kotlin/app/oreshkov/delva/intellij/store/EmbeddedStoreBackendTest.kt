@@ -14,6 +14,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.RandomAccessFile
+import kotlin.io.path.listDirectoryEntries
+import kotlin.random.Random
 
 class EmbeddedStoreBackendTest {
     @get:Rule
@@ -136,7 +139,7 @@ class EmbeddedStoreBackendTest {
         assertTrue(hit.previewCut)
         assertTrue(hit.preview, hit.preview.startsWith("\"x😀😀"))
         assertTrue(hit.preview, text.startsWith(hit.preview.removePrefix("\"")))
-        assertTrue(hit.encodedSize >= 800)
+        assertTrue(hit.encodedSize!! >= 800)
     }
 
     @Test
@@ -243,6 +246,67 @@ class EmbeddedStoreBackendTest {
         JsonStore.create(dir).close()
         backend.close()
         assertThrows(IllegalStateException::class.java) { runBlocking { backend.info(dir) } }
+    }
+
+    @Test
+    fun `lists types and pages their objects, each with its document's key and its path`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        @OptIn(ExperimentalDelvaApi::class)
+        JsonStore.create(dir, CreationOptions().withDocumentKey("$.id")).use { writer ->
+            // Keys whose JSON has escapes, as the backend reads each key as JSON.
+            for (id in listOf(""""b\"2"""", """"a\\1"""", """"cé3"""")) {
+                writer.insert("""{"id": $id, "order": {"lines": 2}}""", mapOf("$.order" to "Order"))
+            }
+            writer.insert("""{"id": "d4", "customer": {}}""", mapOf("$.customer" to "Customer"))
+        }
+
+        assertEquals(listOf(TypeSummary("Customer", 1), TypeSummary("Order", 3)), backend.types(dir))
+        val first = backend.objectsOfType(dir, "Order", after = null, limit = 2)
+        val second = backend.objectsOfType(dir, "Order", first.next, limit = 2)
+        assertNull("a page that ends with the last object is the last", second.next)
+        val orders = first.hits + second.hits
+        assertEquals("in document order", listOf("b\"2", "a\\1", "cé3"), orders.map { it.documentKey })
+        assertTrue(orders.all { it.path == "$['order']" && it.preview == """{"lines":2}""" && it.encodedSize == null })
+        assertEquals(listOf("{}"), backend.objectsOfType(dir, "Customer", null, 10).hits.map { it.preview })
+        assertEquals(emptyList<StoreHit>(), backend.objectsOfType(dir, "Nobody", null, 10).hits)
+    }
+
+    @Test
+    fun `verifies a store, reporting each step's progress`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        JsonStore.create(dir).use { writer -> repeat(20) { writer.insert("""{"n": $it}""") } }
+
+        val steps = mutableListOf<VerifyStep>()
+        val result = backend.verify(dir) { step, checked, total ->
+            assertTrue("$checked of $total", checked >= 0 && total >= 0)
+            if (steps.lastOrNull() != step) steps += step
+        }
+        assertEquals(VerifyStep.entries, steps)
+        assertEquals(emptyList<VerifyProblem>(), result.problems)
+        assertTrue(result.filesChecked > 0 && result.bytesChecked > 0)
+    }
+
+    @Test
+    fun `reports damage verify finds`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        val random = Random(7)
+        JsonStore.create(dir).use { writer ->
+            // Text that doesn't compress, so the documents' fragments fill most of what the data file holds.
+            repeat(20) { writer.insert("""{"n": $it, "pad": "${(1..400).map { 'a' + random.nextInt(26) }.joinToString("")}"}""") }
+        }
+        // The data file is allocated ahead and its unwritten end is zeros; a byte halfway through what was written is
+        // inside a document's fragment.
+        RandomAccessFile(dir.resolve("data").listDirectoryEntries("*.frag").single().toFile(), "rw").use { file ->
+            val start = ByteArray(1 shl 20).also { file.readFully(it) }
+            val position = start.indexOfLast { it != 0.toByte() } / 2L
+            file.seek(position)
+            file.write(start[position.toInt()].toInt() xor 0xFF)
+        }
+
+        val result = backend.verify(dir) { _, _, _ -> }
+        assertTrue("${result.problems}", result.problems.isNotEmpty())
+        assertTrue(result.problems.all { it.location.isNotEmpty() && it.detail.isNotEmpty() })
+        assertTrue("the damaged document is named", result.damagedDocuments.isNotEmpty())
     }
 
     private fun path(query: String, where: String? = null, wholeDocuments: Boolean = false, scan: Boolean = true) =

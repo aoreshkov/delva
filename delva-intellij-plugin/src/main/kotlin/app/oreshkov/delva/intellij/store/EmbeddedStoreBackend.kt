@@ -25,7 +25,11 @@ import app.oreshkov.delva.ScanPolicy
 import app.oreshkov.delva.SearchHit
 import app.oreshkov.delva.SearchResult
 import app.oreshkov.delva.SecondaryJsonStore
+import app.oreshkov.delva.SelectedNode
 import app.oreshkov.delva.StoreNotFoundException
+import app.oreshkov.delva.VerifyIssue
+import app.oreshkov.delva.VerifyIssueKind
+import app.oreshkov.delva.VerifyPhase
 import app.oreshkov.delva.intellij.DelvaBundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -113,6 +117,37 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
             val plan = store.explain(pathQuery)
             SearchPlan(plan.fullScan, plan.terms, plan.within)
         }
+    }
+
+    override suspend fun types(dir: Path): List<TypeSummary> = reading(dir) { store ->
+        store.listTypes().map { TypeSummary(it.name, it.approximateCount) }
+    }
+
+    override suspend fun objectsOfType(dir: Path, type: String, after: String?, limit: Int): HitPage {
+        require(limit > 0) { "limit must be positive, was $limit" }
+        return reading(dir) { store ->
+            // Paged by the last object, not by Delva's cursor, which only the page it came with can hand out: asking for
+            // one object more than kept tells whether the page is the last.
+            val nodes = store.objectsOfType(type, after?.let(::parseNodeRef), limit + 1)
+            val kept = nodes.take(limit)
+            val keyPath = store.creationOptions.documentKey?.let(JsonPath::compile)
+            val keys = HashMap<Long, String?>()
+            val hits = kept.map { node ->
+                ensureActive()
+                val key = keyPath?.let { path -> keys.getOrPut(node.docId.raw) { store.documentKey(node.docId, path) } }
+                val (preview, cut) = store.select(node, ROOT).use { result ->
+                    val selected: SelectedNode = result.iterator().next()
+                    preview { out -> selected.writeJsonTo(out, JsonFormat.COMPACT) }
+                }
+                StoreHit(node.docId.raw, node.nodePre, key, store.pathOf(node), preview, cut, encodedSize = null)
+            }
+            HitPage(hits, if (nodes.size > limit) kept.last().let { "${it.docId.raw}:${it.nodePre}" } else null)
+        }
+    }
+
+    override suspend fun verify(dir: Path, progress: (VerifyStep, Long, Long) -> Unit): VerifyResult = reading(dir) { store ->
+        val report = store.verify { phase, checked, total -> progress(phase.toStep(), checked, total) }
+        VerifyResult(report.filesChecked, report.bytesChecked, report.issues.map { it.toProblem() })
     }
 
     override fun checkQuery(query: String): String? = try {
@@ -227,13 +262,54 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
     }
 
     private fun SearchHit.toStoreHit(): StoreHit {
+        val (preview, cut) = preview { out -> writeJsonTo(out, JsonFormat.COMPACT) }
+        return StoreHit(docId.raw, node.nodePre, documentKey, path, preview, cut, encodedSize)
+    }
+
+    /** The start of the JSON [write] writes, and whether it was cut off there. */
+    private fun preview(write: (OutputStream) -> Unit): Pair<String, Boolean> {
         // Writing stops after the preview's bytes, so a large node isn't read to the end for its first line.
         val preview = PreviewOutput(PREVIEW_BYTES)
         try {
-            writeJsonTo(preview, JsonFormat.COMPACT)
+            write(preview)
         } catch (_: PreviewOutput.Full) {
         }
-        return StoreHit(docId.raw, node.nodePre, documentKey, path, preview.text(), preview.cut, encodedSize)
+        return preview.text() to preview.cut
+    }
+
+    /** The key of the document [docId], which the string at [keyPath] holds, or null if it's longer than keys get. */
+    private fun SecondaryJsonStore.documentKey(docId: DocId, keyPath: JsonPath): String? =
+        select(NodeRef(docId, 0), keyPath).use { result ->
+            val selected = result.iterator()
+            if (!selected.hasNext()) return@use null
+            try {
+                unquote(selected.next().readJsonAsString(JsonFormat.COMPACT, MAX_KEY_CHARS))
+            } catch (_: ResultTooLargeException) {
+                null
+            }
+        }
+
+    private fun parseNodeRef(text: String): NodeRef {
+        val (docId, nodePre) = text.split(':').map(String::toLong)
+        return NodeRef(DocId(docId), nodePre)
+    }
+
+    private fun VerifyPhase.toStep(): VerifyStep = when (this) {
+        VerifyPhase.LOG -> VerifyStep.LOG
+        VerifyPhase.INDEX -> VerifyStep.INDEX
+        VerifyPhase.FRAGMENTS -> VerifyStep.FRAGMENTS
+    }
+
+    private fun VerifyIssue.toProblem(): VerifyProblem {
+        val kind = when (kind) {
+            VerifyIssueKind.FILE -> VerifyProblem.Kind.FILE
+            VerifyIssueKind.LOG_RECORD -> VerifyProblem.Kind.LOG_RECORD
+            VerifyIssueKind.SEGMENT -> VerifyProblem.Kind.SEGMENT
+            VerifyIssueKind.COMMIT -> VerifyProblem.Kind.COMMIT
+            VerifyIssueKind.FRAGMENT_INDEX -> VerifyProblem.Kind.FRAGMENT_INDEX
+            VerifyIssueKind.KEY_INDEX -> VerifyProblem.Kind.KEY_INDEX
+        }
+        return VerifyProblem(kind, location, detail, damagedBytes, document?.raw)
     }
 
     private fun describe(holder: LockHolder): String {
@@ -251,7 +327,34 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
 
         /** UTF-8 bytes of a hit's JSON kept for its preview: more than a list row shows. */
         const val PREVIEW_BYTES = 400
+
+        /** Characters of a document key's JSON read at most; far more than a list row or a tab title shows. */
+        const val MAX_KEY_CHARS = 64 * 1024
     }
+}
+
+/** The string the JSON string literal [json] stands for. */
+private fun unquote(json: String): String {
+    require(json.length >= 2 && json.first() == '"' && json.last() == '"') { "Not a JSON string: $json" }
+    val text = StringBuilder(json.length - 2)
+    var i = 1
+    while (i < json.length - 1) {
+        val c = json[i++]
+        if (c != '\\') {
+            text.append(c)
+            continue
+        }
+        when (val escaped = json[i++]) {
+            'b' -> text.append('\b')
+            'f' -> text.append('\u000C')
+            'n' -> text.append('\n')
+            'r' -> text.append('\r')
+            't' -> text.append('\t')
+            'u' -> text.append(json.substring(i, i + 4).toInt(16).toChar()).also { i += 4 }
+            else -> text.append(escaped)
+        }
+    }
+    return text.toString()
 }
 
 /** Keeps the first [limit] bytes written to it, and stops the writer with [Full] when more come. */
