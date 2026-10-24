@@ -3,7 +3,6 @@
 // because the IDE sets them: its Java 25 runtime, its Kotlin standard library and coroutines, and its JUnit 4 test
 // framework.
 
-import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
@@ -35,7 +34,7 @@ kotlin {
 
 // The integration test runs a real IDE with the built plugin ZIP installed, through JetBrains' Starter and Driver
 // frameworks, from a JVM of its own: unlike the unit tests, it sees the plugin as a user gets it.
-val integrationTest: SourceSet by sourceSets.creating
+val integrationTest: SourceSet = sourceSets.create("integrationTest")
 
 dependencies {
     implementation(libs.delva) {
@@ -117,22 +116,21 @@ intellijPlatform {
             markdownToHTML(readme.substringAfter(start).substringBefore(end))
         }
 
-        // The change notes are this version's section of CHANGELOG.md, or Unreleased's for a snapshot.
-        val changelog = project.changelog
-        changeNotes = provider {
-            with(changelog) {
-                renderItem(
-                    (getOrNull(project.version.toString()) ?: getUnreleased()).withHeader(false).withEmptySections(false),
-                    Changelog.OutputType.HTML,
-                )
-            }
-        }
+        // The change notes are this version's section of CHANGELOG.md, or Unreleased's for a snapshot: the IntelliJ
+        // Platform plugin's convention when the changelog plugin is applied.
 
         ideaVersion {
             sinceBuild = "262"
             // JetBrains recommends leaving the upper bound open and verifying each new IDE instead.
             untilBuild = provider { null }
         }
+    }
+    // signPlugin and publishPlugin read the key, its certificate chain and the Marketplace token from the environment
+    // (PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN, PUBLISH_TOKEN), so the build holds no secret.
+    publishing {
+        // An upload stays hidden after Marketplace approves it, until a person unhides it: the version goes public
+        // together with its GitHub release, as a Central deployment waits to be published.
+        hidden = true
     }
     pluginVerification {
         ides {
@@ -171,6 +169,27 @@ intellijPlatformTesting.testIdeUi.register("integrationTest") {
         systemProperty("delva.integrationTestDir", layout.buildDirectory.dir("integrationTest").get().asFile.path)
         // Starter reports each run to Allure as well, by default into the module's own directory.
         systemProperty("allure.results.directory", layout.buildDirectory.dir("integrationTest/allure-results").get().asFile.path)
+    }
+}
+
+// The plugin's own verifyPluginSignature names the signed ZIP by its path alone, so Gradle won't run it after signPlugin
+// in one build; taking signPlugin's output makes it depend on the task that writes the file.
+tasks.verifyPluginSignature {
+    inputArchiveFile = tasks.signPlugin.flatMap { it.signedArchiveFile }
+}
+
+// publishPlugin on its own uploads the signed ZIP only when signPlugin did work in the same build: after an up-to-date
+// signPlugin, or one skipped for want of a key, it uploads the unsigned ZIP. Here it always takes the signed one, and
+// fails without it.
+tasks.publishPlugin {
+    // The changelog is edited by hand in a release's pull request; patchChangelog, which the IntelliJ Platform plugin
+    // runs before a publish, would rewrite it in the working tree.
+    setDependsOn(dependsOn - "patchChangelog")
+    val signedZip = tasks.signPlugin.flatMap { it.signedArchiveFile }
+    archiveFiles.setFrom(signedZip)
+    doFirst {
+        val file = signedZip.get().asFile
+        check(file.isFile) { "${file.name} doesn't exist: an unsigned plugin isn't published" }
     }
 }
 
