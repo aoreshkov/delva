@@ -327,7 +327,7 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
             if (file.size() < LogFormat.HEADER_BYTES) return null
             val bytes = ByteArray(LogFormat.HEADER_BYTES)
             file.readFully(0, bytes, 0, bytes.size)
-            LogFormat.readHeader(bytes)
+            LogFormat.readHeader(bytes, path.toString())
         }
     } catch (_: IOException) {
         null

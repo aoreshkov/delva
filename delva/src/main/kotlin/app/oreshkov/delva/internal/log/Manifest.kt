@@ -161,6 +161,13 @@ internal class Manifest(
          * version that can't read a store tells it from a damaged one: a MANIFEST whose checksum holds and whose
          * version isn't one of [SUPPORTED_VERSIONS] is another format ([UnsupportedFormatException]), never damage, and
          * is never passed over for an older MANIFEST.
+         *
+         * Delva 0.1 and 0.2 don't: they take a MANIFEST of another format for a damaged one and fall back to the one
+         * before it, and a writer then deletes every file that one doesn't list. So an upgrade, a version rewriting a
+         * store in a new format, must never leave a MANIFEST of format 1 beside one of the new format, not even across a
+         * crash: it deletes them once its first new MANIFEST is durable and before `CURRENT` names it. A crash between
+         * the two leaves `CURRENT` naming a missing MANIFEST, which 0.1 and 0.2 refuse, as every MANIFEST left is one
+         * they don't read, and which the upgrading version's fallback passes over to its new one.
          */
         const val FORMAT_VERSION: Int = 1
 

@@ -136,7 +136,12 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
             return false
         }
         bytesChecked += LogFormat.HEADER_BYTES
-        val header = LogFormat.readHeader(bytes)
+        val header = try {
+            LogFormat.readHeader(bytes, name)
+        } catch (e: CorruptionException) {
+            issue(VerifyIssueKind.FILE, "$name@0", e.detail, LogFormat.HEADER_BYTES.toLong())
+            return false
+        }
         if (header == null || header.control != file.control || header.fileNo != file.fileNo || header.laneId != file.laneId) {
             issue(VerifyIssueKind.FILE, "$name@0", "the header isn't this file's", LogFormat.HEADER_BYTES.toLong())
             return false
