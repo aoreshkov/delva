@@ -24,6 +24,31 @@ public class CorruptionException(
 ) : DelvaException("Corrupt data at $location: $detail", cause)
 
 /**
+ * The store in [directory] is in a format version this version of Delva doesn't read: another version of Delva wrote
+ * it. Nothing is wrong with the store, and nothing in it was changed; a version of Delva that reads [version] opens
+ * it. [JsonStore.probe] tells the format version without opening the store.
+ */
+public class UnsupportedFormatException(
+    /** The store's directory. */
+    public val directory: Path,
+    /** The format version the store is in. */
+    public val version: Int,
+    /** The format versions this version of Delva reads, ascending. */
+    public val supportedVersions: List<Int>,
+) : DelvaException(buildUnsupportedMessage(directory, version, supportedVersions))
+
+private fun buildUnsupportedMessage(directory: Path, version: Int, supported: List<Int>): String {
+    val writer = when {
+        supported.isEmpty() -> "another"
+        version > supported.max() -> "a newer"
+        version < supported.min() -> "an older"
+        else -> "another"
+    }
+    val reads = if (supported.size == 1) "format version ${supported[0]}" else "format versions ${supported.joinToString(", ")}"
+    return "The store at $directory is in format version $version, written by $writer version of Delva; this one reads $reads"
+}
+
+/**
  * The engine hit an unrecoverable error (for example a failed `fsync`) and refuses every further operation.
  * Reopening the store runs recovery.
  */

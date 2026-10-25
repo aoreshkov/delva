@@ -16,6 +16,7 @@ import app.oreshkov.delva.StoreClosedException
 import app.oreshkov.delva.StoreExistsException
 import app.oreshkov.delva.StoreLockedException
 import app.oreshkov.delva.StoreNotFoundException
+import app.oreshkov.delva.UnsupportedFormatException
 import app.oreshkov.delva.WriteConflictException
 import java.io.IOException
 import java.nio.file.AccessDeniedException
@@ -40,6 +41,7 @@ internal object Failures {
         QueryLimitException::class to ExitStatus.DATA_ERR,
         QueryRejectedException::class to ExitStatus.DATA_ERR,
         CreationOptionsMismatchException::class to ExitStatus.DATA_ERR,
+        UnsupportedFormatException::class to ExitStatus.DATA_ERR,
         ResultTooLargeException::class to ExitStatus.DATA_ERR,
         CorruptionException::class to ExitStatus.IO_ERR,
         EngineFailedException::class to ExitStatus.IO_ERR,

@@ -8,7 +8,9 @@ import app.oreshkov.delva.DelvaException
 import app.oreshkov.delva.EngineFailedException
 import app.oreshkov.delva.LockHolder
 import app.oreshkov.delva.StoreClosedException
+import app.oreshkov.delva.StoreFormat
 import app.oreshkov.delva.StoreNotFoundException
+import app.oreshkov.delva.UnsupportedFormatException
 import app.oreshkov.delva.internal.bits.DocIdSet
 import app.oreshkov.delva.internal.bits.LongHashSet
 import app.oreshkov.delva.internal.compress.DictionaryFiles
@@ -576,6 +578,27 @@ internal class SecondaryEngine private constructor(
             return engine
         }
 
+        /**
+         * The format of the store in [dir], read from its newest MANIFEST the way [open] finds it: without the lock and
+         * never through `CURRENT`, so beside a writer too. Null when [dir] holds no store. Reads nothing else and
+         * changes nothing.
+         */
+        fun probe(dir: Path, io: FileSystemIo): StoreFormat? {
+            val readOnly = ReadOnlyFileSystemIo(io, WRITER_FILES)
+            var attempts = 0
+            while (true) {
+                try {
+                    newestManifest(readOnly, dir) ?: return null
+                    // A MANIFEST decodes only in the format version this version writes.
+                    return StoreFormat(Manifest.FORMAT_VERSION, Manifest.SUPPORTED_VERSIONS)
+                } catch (e: UnsupportedFormatException) {
+                    return StoreFormat(e.version, e.supportedVersions)
+                } catch (e: Changed) {
+                    if (++attempts >= MAX_ATTEMPTS) throw IOException("the store in $dir changed faster than it could be read", e.failure)
+                }
+            }
+        }
+
         /** The highest MANIFEST number in [dir], read or not; null when there is none. */
         private fun highestManifestNo(io: FileSystemIo, dir: Path): Long? = io.list(dir).mapNotNull { ManifestStore.manifestNo(it) }.maxOrNull()
 
@@ -599,7 +622,7 @@ internal class SecondaryEngine private constructor(
                         if (size > MAX_MANIFEST_BYTES) throw CorruptionException(path.toString(), "$size bytes")
                         ByteArray(size.toInt()).also { file.readFully(0, it, 0, it.size) }
                     }
-                    val manifest = Manifest.decode(bytes, path.toString())
+                    val manifest = Manifest.decode(bytes, path)
                     if (manifest.manifestNo != no) throw CorruptionException(path.toString(), "holds MANIFEST ${manifest.manifestNo}")
                     return manifest
                 } catch (e: CorruptionException) {

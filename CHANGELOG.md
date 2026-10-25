@@ -10,8 +10,16 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ### Added
 
+- `delva`: `JsonStore.probe` (experimental) reads a store's format version without opening it, and tells whether
+  this version of Delva reads it.
 - `delva-cli`: built on cli-kit 0.3.0, so help lists `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR_FORCE` and `COLUMNS` under
   Environment.
+
+### Changed
+
+- `delva`: a store in a format version this version of Delva doesn't read throws `UnsupportedFormatException`, with
+  the version found and the versions read, instead of `CorruptionException`, and is left as it was.
+- `delva-cli`: a store in a format version `delva` doesn't read exits with status 65 instead of 74.
 
 ## [0.2.0] - 2026-10-19
 

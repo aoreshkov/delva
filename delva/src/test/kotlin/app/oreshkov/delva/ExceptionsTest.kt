@@ -43,6 +43,24 @@ class ExceptionsTest {
     }
 
     @Test
+    fun `another format version says which side is newer and what this version reads`() {
+        val dir = Path.of("db")
+        assertEquals(
+            "The store at db is in format version 3, written by a newer version of Delva; this one reads format versions 1, 2",
+            UnsupportedFormatException(dir, 3, listOf(1, 2)).message,
+        )
+        assertEquals(
+            "The store at db is in format version 1, written by an older version of Delva; this one reads format version 2",
+            UnsupportedFormatException(dir, 1, listOf(2)).message,
+        )
+        assertEquals(
+            "The store at db is in format version 2, written by another version of Delva; this one reads format versions 1, 3",
+            UnsupportedFormatException(dir, 2, listOf(1, 3)).message,
+        )
+        assertIs<DelvaException>(UnsupportedFormatException(dir, 2, listOf(1)))
+    }
+
+    @Test
     fun `a rejected query carries its reason`() {
         val e = QueryRejectedException(QueryRejectedException.Reason.NOT_INDEXED, "the key \"k\" isn't indexed by this store")
         assertEquals("Query rejected: the key \"k\" isn't indexed by this store", e.message)

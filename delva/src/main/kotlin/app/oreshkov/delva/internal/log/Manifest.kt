@@ -3,6 +3,7 @@ package app.oreshkov.delva.internal.log
 import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.Normalization
+import app.oreshkov.delva.UnsupportedFormatException
 import app.oreshkov.delva.internal.bytes.ByteReader
 import app.oreshkov.delva.internal.bytes.Crc32c
 import app.oreshkov.delva.internal.bytes.GrowableBytes
@@ -150,7 +151,22 @@ internal class Manifest(
     }
 
     companion object {
+        /**
+         * The store's format version: the version of every file format of the store, not only the MANIFEST's. Any
+         * change to how a file of the store is read changes it too, so that the MANIFEST, which every way of opening a
+         * store reads first, refuses a store of another format before anything else of it is read or changed.
+         *
+         * Every format version keeps what finds and checks a MANIFEST: the names `CURRENT` and `MANIFEST-n`, the magic
+         * and this field in its first six bytes, and the CRC32C over everything before it in its last four. So a
+         * version that can't read a store tells it from a damaged one: a MANIFEST whose checksum holds and whose
+         * version isn't one of [SUPPORTED_VERSIONS] is another format ([UnsupportedFormatException]), never damage, and
+         * is never passed over for an older MANIFEST.
+         */
         const val FORMAT_VERSION: Int = 1
+
+        /** The format versions this version reads, ascending. */
+        val SUPPORTED_VERSIONS: List<Int> = listOf(FORMAT_VERSION)
+
         private const val MAGIC = 0x464D5644 // "DVMF" read little-endian
         private const val KIND_CONTROL = 1
         private const val KIND_LANE = 2
@@ -159,14 +175,19 @@ internal class Manifest(
         private const val WATERMARK_BYTES = 24
         private val NORMALIZATIONS = Normalization.entries
 
-        fun decode(bytes: ByteArray, source: String): Manifest {
+        /**
+         * Decodes the MANIFEST file [path] holds as [bytes]. Throws [UnsupportedFormatException] for an intact MANIFEST
+         * of another format version, and [CorruptionException] for anything else that isn't a valid MANIFEST.
+         */
+        fun decode(bytes: ByteArray, path: Path): Manifest {
+            val source = path.toString()
             if (bytes.size < 8) throw CorruptionException(source, "${bytes.size} bytes")
             val body = bytes.size - 4
             if (Crc32c.of(bytes, 0, body) != LittleEndian.getInt(bytes, body)) throw CorruptionException(source, "checksum mismatch")
             val r = ByteReader(bytes, 0, body, source)
             if (r.readIntLE() != MAGIC) throw CorruptionException(source, "not a MANIFEST")
             val version = r.readShortLE()
-            if (version != FORMAT_VERSION) throw CorruptionException(source, "unsupported format version $version")
+            if (version !in SUPPORTED_VERSIONS) throw UnsupportedFormatException(path.parent ?: path, version, SUPPORTED_VERSIONS)
             r.readShortLE()
             val manifestNo = r.readLongLE()
             val fragmentBytes = r.readIntLE()
@@ -263,7 +284,8 @@ internal class Manifest(
  * synced and renamed, then `CURRENT` is replaced the same way and the directory synced. The replace of `CURRENT` is
  * retried for a moment while another process has it open, which on Windows makes it fail ([replace]). MANIFEST
  * numbers are never written twice: an open continues above the highest on disk ([highestOnDisk]). Loading falls back
- * from a damaged or missing current MANIFEST to another one only if every file it lists still exists.
+ * from a damaged or missing current MANIFEST to another one only if every file it lists still exists, and never from one of another format version
+ * ([UnsupportedFormatException]), which only another version of Delva can read.
  */
 internal class ManifestStore(private val io: FileSystemIo, private val dir: Path) {
     /** The MANIFEST written or loaded last; kept on disk as the fallback. */
@@ -374,7 +396,7 @@ internal class ManifestStore(private val io: FileSystemIo, private val dir: Path
     private fun decodeAt(no: Long): Manifest {
         val path = dir.resolve(nameOf(no))
         if (!io.exists(path)) throw CorruptionException(path.toString(), "missing")
-        val manifest = Manifest.decode(readAll(path), path.toString())
+        val manifest = Manifest.decode(readAll(path), path)
         if (manifest.manifestNo != no) throw CorruptionException(path.toString(), "holds MANIFEST ${manifest.manifestNo}")
         return manifest
     }

@@ -1,6 +1,8 @@
 package app.oreshkov.delva.internal.log
 
 import app.oreshkov.delva.CorruptionException
+import app.oreshkov.delva.UnsupportedFormatException
+import app.oreshkov.delva.internal.bits.DocIdSet
 import app.oreshkov.delva.internal.bytes.ByteReader
 import app.oreshkov.delva.internal.bytes.Crc32c
 import app.oreshkov.delva.internal.bytes.GrowableBytes
@@ -12,8 +14,11 @@ import app.oreshkov.delva.internal.compress.FragmentCodecs
 import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.log.FragmentView
+import app.oreshkov.delva.internal.lsm.SegmentFormat
 import app.oreshkov.delva.internal.payload.FragmentContext
 import app.oreshkov.delva.internal.payload.FragmentKind
+import app.oreshkov.delva.internal.payload.PayloadFormat
+import app.oreshkov.delva.internal.types.TypeDictionary
 import app.oreshkov.delva.testkit.Golden
 import app.oreshkov.delva.testkit.toHex
 import java.nio.file.Path
@@ -24,6 +29,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+private val MANIFEST_PATH: Path = Path.of("db", "MANIFEST-000006")
 
 class LogFormatTest {
     private fun commit(): CommitInfo = CommitInfo().apply {
@@ -112,7 +119,7 @@ class LogFormatTest {
         body.readCommit(read)
         assertEquals("ké\u0000y", read.key?.toString(Charsets.UTF_8))
         val keyedManifest = Manifest(1, 4096, 8192, false, nextFileNo = 2, nextDocId = 1, lastLsn = 0, files = emptyList(), documentKey = "$['the id']")
-        assertEquals("$['the id']", Manifest.decode(keyedManifest.encode(), "test").creationOptions().documentKey)
+        assertEquals("$['the id']", Manifest.decode(keyedManifest.encode(), MANIFEST_PATH).creationOptions().documentKey)
 
         val typeDef = record { ControlRecords.writeTypeDef(it, 11, 2, "Orderé") }
         body.open(typeDef, LogFormat.RECORD_HEADER_BYTES, lengthOf(typeDef), RecordType.TYPEDEF)
@@ -239,20 +246,57 @@ class LogFormatTest {
         assertEquals(listOf(7L, 9L, FragmentKind.SUBTREE.toLong(), 3L, 3L, 2L), listOf(view.docId, view.pre, view.kind.toLong(), view.context.parentPre, view.context.ownerObjectPre, view.payloadLength.toLong()))
 
         val manifest = Manifest(6, 1024, 4096, false, 10, 43, 9, listOf(ManifestFile(2, true, 0, true), ManifestFile(4, false, 0, false, 512, 64)), 7, 8, 5, 6, listOf(ManifestSegment(9, 2, 100), ManifestSegment(3, 3, 64)), listOf(ManifestWatermark(40, 4, 64)))
-        val decoded = Manifest.decode(manifest.encode(), "test")
+        val decoded = Manifest.decode(manifest.encode(), MANIFEST_PATH)
         assertEquals(listOf(6L, 1024L, 10L, 43L, 9L, 7L, 8L), listOf(decoded.manifestNo, decoded.fragmentBytes.toLong(), decoded.nextFileNo, decoded.nextDocId, decoded.lastLsn, decoded.indexedUpToLsn, decoded.abortedFileNo))
         assertEquals(512L, decoded.files[1].committedEnd)
         assertEquals(64L, decoded.files[1].discardedBytes)
         assertEquals(listOf(listOf(9L, 2L, 100L), listOf(3L, 3L, 64L)), decoded.segments.map { listOf(it.fileNo, it.index.toLong(), it.fileBytes) })
         assertEquals(5L, decoded.typeDictionaryFileNo)
         assertEquals(6L, decoded.deletedFileNo)
-        assertFailsWith<CorruptionException> { Manifest.decode(Manifest(6, 1024, 4096, false, 10, 43, 9, emptyList(), deletedFileNo = 10).encode(), "test") }
+        assertFailsWith<CorruptionException> { Manifest.decode(Manifest(6, 1024, 4096, false, 10, 43, 9, emptyList(), deletedFileNo = 10).encode(), MANIFEST_PATH) }
         assertEquals(listOf(40L, 4L, 64L), decoded.watermarks.single().let { listOf(it.docId, it.fileNo, it.offset) })
-        assertFailsWith<CorruptionException> { Manifest.decode(Manifest(6, 1024, 4096, false, 10, 43, 9, emptyList(), indexedUpToLsn = 10).encode(), "test") }
+        assertFailsWith<CorruptionException> { Manifest.decode(Manifest(6, 1024, 4096, false, 10, 43, 9, emptyList(), indexedUpToLsn = 10).encode(), MANIFEST_PATH) }
         assertFalse(decoded.hashTerms)
         val damaged = manifest.encode().also { it[20] = (it[20] + 1).toByte() }
-        assertFailsWith<CorruptionException> { Manifest.decode(damaged, "test") }
-        assertFailsWith<CorruptionException> { Manifest.decode(ByteArray(3), "test") }
+        assertFailsWith<CorruptionException> { Manifest.decode(damaged, MANIFEST_PATH) }
+        assertFailsWith<CorruptionException> { Manifest.decode(ByteArray(3), MANIFEST_PATH) }
+    }
+
+    @Test
+    fun `an intact MANIFEST of another format version is another format, and a damaged one is damage`() {
+        val bytes = Manifest(6, 1024, 4096, false, 10, 43, 9, emptyList()).encode()
+        for (version in listOf(0, Manifest.FORMAT_VERSION + 1, 0xFFFF)) {
+            val e = assertFailsWith<UnsupportedFormatException> { Manifest.decode(withFormatVersion(bytes, version), MANIFEST_PATH) }
+            assertEquals(MANIFEST_PATH.parent, e.directory)
+            assertEquals(version, e.version)
+            assertEquals(listOf(Manifest.FORMAT_VERSION), e.supportedVersions)
+        }
+        // The same version field changed without the checksum: a bit flipped in a MANIFEST of this format.
+        val flipped = bytes.copyOf().also { it[4] = (it[4].toInt() xor 2).toByte() }
+        assertEquals("checksum mismatch", assertFailsWith<CorruptionException> { Manifest.decode(flipped, MANIFEST_PATH) }.detail)
+    }
+
+    /**
+     * Every format version the store's files are written in, by file. A change to one changes the store's format, so
+     * [Manifest.FORMAT_VERSION] must change with it, or an older Delva would read the store's MANIFEST and then misread
+     * or refuse its other files as damage; then update this list.
+     */
+    @Test
+    fun `a file format changes only with the store's format version`() {
+        val versions = mapOf(
+            "store (MANIFEST)" to Manifest.FORMAT_VERSION,
+            "log files" to LogFormat.FORMAT_VERSION,
+            "segments" to SegmentFormat.FORMAT_VERSION,
+            "payloads" to PayloadFormat.FORMAT_VERSION,
+            "compression dictionaries" to DictionaryFiles.FORMAT_VERSION,
+            "type dictionary" to TypeDictionary.FORMAT_VERSION,
+            "docId bitmaps" to DocIdSet.FORMAT_VERSION,
+        )
+        val store1 = mapOf(
+            "store (MANIFEST)" to 1, "log files" to 2, "segments" to 2, "payloads" to 1, "compression dictionaries" to 1,
+            "type dictionary" to 1, "docId bitmaps" to 1,
+        )
+        assertEquals(store1, versions)
     }
 
     private fun lengthOf(record: ByteArray): Int = (record[4].toInt() and 0xFF) or ((record[5].toInt() and 0xFF) shl 8)

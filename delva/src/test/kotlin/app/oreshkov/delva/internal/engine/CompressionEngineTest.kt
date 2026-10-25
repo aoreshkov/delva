@@ -56,7 +56,7 @@ class CompressionEngineTest {
 
     private fun listedDictionaries(fs: SimulatedFileSystemIo): List<Int> {
         val current = String(fs.bytes(dir.resolve("CURRENT")), Charsets.US_ASCII).trim()
-        return Manifest.decode(fs.bytes(dir.resolve(current)), current).dictionaries
+        return Manifest.decode(fs.bytes(dir.resolve(current)), dir.resolve(current)).dictionaries
     }
 
     @Test

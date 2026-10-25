@@ -558,6 +558,11 @@ without the other.
 - `fragmentBytes`, `hashTerms`, normalization, the document key ([3.3](#33-document-keys)) and the index controls of
   [4.1](#41-query) are fixed when a store is created and recorded in it. Opening the store uses them, and a request to open it with other values fails. Opening
   a directory that holds no store fails without changing it, unless creating a store there was asked for.
+- A store records the **format version** its files are written in. Opening a store in a format version this version
+  of Delva doesn't read, as its writer or as a secondary, or resetting it, fails with `UnsupportedFormatException`,
+  which names the version found and the versions read, and changes nothing. Another format version is never reported
+  as damage, nor damage as another format version. `JsonStore.probe` reads a store's format version without opening
+  it: it takes no lock and changes nothing, so it also works beside the writer.
 - A store that isn't open can be **reset**: it keeps the options it was created with and loses every document,
   deletion and type, leaving it as it was just after it was created — docIds start again at 1, so a docId, node or
   cursor from before the reset may name a new document afterwards. A crash during a reset leaves the store either as
