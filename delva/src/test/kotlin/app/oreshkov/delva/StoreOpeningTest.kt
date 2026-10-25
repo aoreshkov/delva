@@ -1,9 +1,15 @@
 package app.oreshkov.delva
 
+import app.oreshkov.delva.internal.log.LogFiles
+import app.oreshkov.delva.internal.log.LogFormat
 import app.oreshkov.delva.internal.log.withFormatVersion
+import app.oreshkov.delva.internal.log.withLogFormatVersion
 import java.io.OutputStream
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.util.HexFormat
@@ -252,6 +258,44 @@ class StoreOpeningTest {
             store.blocking().insert("""{"a":1}""")
         }
         assertTrue(assertNotNull(JsonStore.probe(dir)).supported)
+    }
+
+    @Test
+    fun `a log file of another format version is refused, never deleted as one whose header was cut off`() {
+        val dir = root.resolve("foreign-log")
+        JsonStore.create(dir).use { it.blocking().insert("""{"a":1}""") }
+        // Numbered above every file the MANIFEST lists, and not listed yet: being created when the writer stopped.
+        val unlisted = dir.resolve(LogFiles.DATA_DIR).resolve(LogFiles.laneName(1000, LogFormat.LANE_SMALL))
+        val header = ByteArray(LogFormat.HEADER_BYTES)
+        LogFormat.writeHeader(header, control = false, fileNo = 1000, createdLsn = 0, laneId = LogFormat.LANE_SMALL)
+
+        // A whole header of another version was written by another version of Delva.
+        unlisted.writeBytes(withLogFormatVersion(header, LogFormat.FORMAT_VERSION + 1))
+        var before = contents(dir)
+        val e = assertFailsWith<CorruptionException> { JsonStore.open(dir) }
+        assertEquals(unlisted.toString(), e.location)
+        assertEquals("log format version ${LogFormat.FORMAT_VERSION + 1} where the store's format has ${LogFormat.FORMAT_VERSION}", e.detail)
+        assertEquals(before, contents(dir))
+
+        // A header that isn't whole never became durable, so nothing was appended to the file, and an open deletes it.
+        unlisted.writeBytes(header.copyOf().also { it[16] = 1 })
+        JsonStore.open(dir).close()
+        assertFalse(unlisted.exists())
+
+        // A listed file of another version; secondaries read control files' headers, which writers read too.
+        val listed = dir.resolve(LogFiles.CONTROL_DIR).listDirectoryEntries().filter { LogFiles.parseControl(it.fileName.toString()) != null }.max()
+        FileChannel.open(listed, StandardOpenOption.READ, StandardOpenOption.WRITE).use { channel ->
+            val bytes = ByteBuffer.allocate(LogFormat.HEADER_BYTES)
+            channel.read(bytes, 0)
+            channel.write(ByteBuffer.wrap(withLogFormatVersion(bytes.array(), LogFormat.FORMAT_VERSION + 1)), 0)
+        }
+        before = contents(dir)
+        for (open in listOf<() -> AutoCloseable>({ JsonStore.open(dir) }, { JsonStore.openSecondary(dir) })) {
+            val listedError = assertFailsWith<CorruptionException> { open().close() }
+            assertEquals(listed.toString(), listedError.location)
+            assertEquals(e.detail, listedError.detail)
+        }
+        assertEquals(before, contents(dir))
     }
 
     @Test

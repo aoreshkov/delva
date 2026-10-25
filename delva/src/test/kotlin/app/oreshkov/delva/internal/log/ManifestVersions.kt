@@ -11,3 +11,9 @@ internal fun withFormatVersion(bytes: ByteArray, version: Int): ByteArray = byte
     LittleEndian.putShort(it, 4, version.toShort())
     LittleEndian.putInt(it, it.size - 4, Crc32c.of(it, 0, it.size - 4))
 }
+
+/** The log file header [header] as another version of Delva could have written it: log format version [version], whole. */
+internal fun withLogFormatVersion(header: ByteArray, version: Int): ByteArray = header.copyOf().also {
+    LittleEndian.putShort(it, 4, version.toShort())
+    LittleEndian.putInt(it, 56, Crc32c.of(it, 0, 56))
+}

@@ -232,12 +232,12 @@ class LogFormatTest {
         assertEquals(4L to 3, LogFiles.parseLane(LogFiles.laneName(4, 3)))
         val gcHeader = ByteArray(LogFormat.HEADER_BYTES)
         LogFormat.writeHeader(gcHeader, control = false, fileNo = 12, createdLsn = 0, laneId = LogFormat.LANE_GC)
-        assertEquals(LogFormat.LANE_GC, LogFormat.readHeader(gcHeader)!!.laneId)
+        assertEquals(LogFormat.LANE_GC, LogFormat.readHeader(gcHeader, "gc")!!.laneId)
         // A GC-lane flag with another lane id isn't a valid header.
         LogFormat.writeHeader(gcHeader, control = false, fileNo = 12, createdLsn = 0, laneId = 2)
         gcHeader[6] = (gcHeader[6].toInt() or LogFormat.FLAG_GC_LANE).toByte()
         LittleEndian.putInt(gcHeader, 56, Crc32c.of(gcHeader, 0, 56))
-        assertNull(LogFormat.readHeader(gcHeader))
+        assertNull(LogFormat.readHeader(gcHeader, "gc"))
 
         val key = "k".toByteArray()
         val fragment = record { FragmentRecords.write(it, 7, 9, FragmentKind.SUBTREE, 0, FragmentContext().set(3, 3, key, 0, 1, 0), byteArrayOf(0, 1), 0, 2, stored) }
@@ -274,6 +274,19 @@ class LogFormatTest {
         // The same version field changed without the checksum: a bit flipped in a MANIFEST of this format.
         val flipped = bytes.copyOf().also { it[4] = (it[4].toInt() xor 2).toByte() }
         assertEquals("checksum mismatch", assertFailsWith<CorruptionException> { Manifest.decode(flipped, MANIFEST_PATH) }.detail)
+    }
+
+    @Test
+    fun `an intact log header of another format version is refused, and a damaged one is no header`() {
+        val header = ByteArray(LogFormat.HEADER_BYTES)
+        LogFormat.writeHeader(header, control = true, fileNo = 3, createdLsn = 1, laneId = 0)
+        for (version in listOf(0, LogFormat.FORMAT_VERSION + 1, 0xFFFF)) {
+            val e = assertFailsWith<CorruptionException> { LogFormat.readHeader(withLogFormatVersion(header, version), "ctl-000003.log") }
+            assertEquals("ctl-000003.log", e.location)
+            assertEquals("log format version $version where the store's format has ${LogFormat.FORMAT_VERSION}", e.detail)
+        }
+        // The same version field changed without the checksum: torn, or a bit flipped; either way not a header.
+        assertNull(LogFormat.readHeader(header.copyOf().also { it[4] = (it[4].toInt() xor 1).toByte() }, "ctl-000003.log"))
     }
 
     /**
@@ -370,7 +383,7 @@ class LogFormatTest {
         assertEquals(RecordReader.RECORD, reader.next())
         assertEquals(RecordType.SEAL, reader.type)
         assertEquals(RecordReader.END, reader.next())
-        assertNotNull(LogFormat.readHeader(fs.bytes(Path.of("d/f")).copyOf(LogFormat.HEADER_BYTES)))
-        assertNull(LogFormat.readHeader(ByteArray(LogFormat.HEADER_BYTES)))
+        assertNotNull(LogFormat.readHeader(fs.bytes(Path.of("d/f")).copyOf(LogFormat.HEADER_BYTES), "d/f"))
+        assertNull(LogFormat.readHeader(ByteArray(LogFormat.HEADER_BYTES), "zeros"))
     }
 }

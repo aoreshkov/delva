@@ -149,7 +149,7 @@ internal class Replay(
             val header = ByteArray(LogFormat.HEADER_BYTES)
             if (handle.size() < header.size) throw CorruptionException(path.toString(), "invalid file header")
             handle.readFully(0, header, 0, header.size)
-            val createdLsn = (LogFormat.readHeader(header) ?: throw CorruptionException(path.toString(), "invalid file header")).createdLsn
+            val createdLsn = (LogFormat.readHeader(header, path.toString()) ?: throw CorruptionException(path.toString(), "invalid file header")).createdLsn
             if (createdLsn != lsn + 1) throw CorruptionException(path.toString(), "starts at LSN $createdLsn, expected ${lsn + 1}")
         }
         reader.open(handle, from, handle.size())

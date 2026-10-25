@@ -1,5 +1,6 @@
 package app.oreshkov.delva.internal.log
 
+import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.internal.bytes.Crc32c
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.bytes.LittleEndian
@@ -57,8 +58,15 @@ internal object LogFormat {
     /** A validated file header. */
     class Header(val control: Boolean, val fileNo: Long, val createdLsn: Long, val laneId: Int)
 
-    /** Parses a header; null when the bytes aren't a valid header (torn or never written). */
-    fun readHeader(bytes: ByteArray): Header? {
+    /**
+     * Parses the header of log file [location]; null when the bytes aren't a whole header (torn or never written).
+     *
+     * A header whose checksum and magic hold but whose version isn't [FORMAT_VERSION] was written whole, by another
+     * version of Delva, so it throws [CorruptionException] instead: a null makes recovery delete a file it doesn't list
+     * as one created but never written. It's damage rather than another format, because the store's MANIFEST, read
+     * first, has a format version that fixes this one.
+     */
+    fun readHeader(bytes: ByteArray, location: String): Header? {
         if (bytes.size < HEADER_BYTES) return null
         if (LittleEndian.getInt(bytes, 56) != Crc32c.of(bytes, 0, 56)) return null
         val magic = LittleEndian.getInt(bytes, 0)
@@ -69,7 +77,8 @@ internal object LogFormat {
             magic == MAGIC_LANE && flags == laneFlags(laneId) -> false
             else -> return null
         }
-        if (LittleEndian.getShort(bytes, 4).toInt() != FORMAT_VERSION) return null
+        val version = LittleEndian.getShort(bytes, 4).toInt() and 0xFFFF
+        if (version != FORMAT_VERSION) throw CorruptionException(location, "log format version $version where the store's format has $FORMAT_VERSION")
         return Header(control, LittleEndian.getLong(bytes, 8), LittleEndian.getLong(bytes, 16), laneId)
     }
 

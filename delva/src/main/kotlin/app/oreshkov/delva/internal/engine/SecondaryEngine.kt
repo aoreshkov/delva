@@ -345,7 +345,7 @@ internal class SecondaryEngine private constructor(
         if (handle.size() < LogFormat.HEADER_BYTES) throw CorruptionException(path, "invalid file header")
         val bytes = ByteArray(LogFormat.HEADER_BYTES)
         handle.readFully(0, bytes, 0, bytes.size)
-        val header = LogFormat.readHeader(bytes)
+        val header = LogFormat.readHeader(bytes, path)
         if (header == null || header.fileNo != file.fileNo || header.control != file.control || header.laneId != file.laneId) throw CorruptionException(path, "invalid file header")
         return header
     }
