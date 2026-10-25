@@ -162,13 +162,15 @@ public interface JsonStore : ReadableJsonStore {
     /**
      * Three ways to get a store's writer, one per intent, so that a mistyped path never quietly becomes a new, empty
      * store: [open] for a store that exists, [create] for a new one, and [openOrCreate] where either will do. And
-     * [openSecondary] to read a store beside its writer.
+     * [openSecondary] to read a store beside its writer, and [probe] to tell whether this version of Delva reads a
+     * store.
      *
      * Each of the first three locks the directory until the store is closed ([StoreLockedException] if it's already
      * open, naming the process that has it open when it can tell) and recovers the store from its log. Each throws
-     * [CorruptionException] when the store's metadata or control log is damaged, [IllegalArgumentException] when
-     * [StoreOptions.encoderBudgetBytes] is below twice the store's fragment size, and [java.io.IOException] when the
-     * files can't be accessed.
+     * [UnsupportedFormatException] when another version of Delva wrote the store in a format this one doesn't read, and
+     * then leaves it as it was; [CorruptionException] when the store's metadata or control log is damaged;
+     * [IllegalArgumentException] when [StoreOptions.encoderBudgetBytes] is below twice the store's fragment size; and
+     * [java.io.IOException] when the files can't be accessed.
      */
     public companion object {
         /**
@@ -208,9 +210,10 @@ public interface JsonStore : ReadableJsonStore {
          * are never mapped, whatever [StoreOptions.mmapReads] says. The store must be on a local file system of the
          * writer's host. While open, it holds a file handle for each log and index file of the state it reads.
          *
-         * Throws [StoreNotFoundException] when [dir] holds no store, and then reads nothing; [CorruptionException] when
-         * the store's metadata, or a part of its log the writer had synced, is damaged; and [java.io.IOException] when
-         * the files can't be read, or the writer changed them faster than they could be read.
+         * Throws [StoreNotFoundException] when [dir] holds no store, and then reads nothing; [UnsupportedFormatException]
+         * when the store is in a format this version of Delva doesn't read; [CorruptionException] when the store's
+         * metadata, or a part of its log the writer had synced, is damaged; and [java.io.IOException] when the files
+         * can't be read, or the writer changed them faster than they could be read.
          */
         @ExperimentalDelvaApi
         public fun openSecondary(dir: Path, options: StoreOptions = StoreOptions()): SecondaryJsonStore =
@@ -232,13 +235,29 @@ public interface JsonStore : ReadableJsonStore {
          * the store's are left alone.
          *
          * Throws [StoreNotFoundException] when [dir] holds no store, and then changes nothing; [StoreLockedException]
-         * when the store is open; [CorruptionException] when no MANIFEST of the store can be read, so its creation
-         * options are lost (delete the directory and [create] the store again); and [java.io.IOException] when the
-         * files can't be accessed.
+         * when the store is open; [UnsupportedFormatException] when the store is in a format this version of Delva
+         * doesn't read, and then changes nothing; [CorruptionException] when no MANIFEST of the store can be read, so
+         * its creation options are lost (delete the directory and [create] the store again); and
+         * [java.io.IOException] when the files can't be accessed.
          */
         public fun reset(dir: Path): CreationOptions = reset(dir, JdkFileSystemIo(mmapReads = false))
 
         internal fun reset(dir: Path, io: FileSystemIo): CreationOptions = StoreReset.run(dir, io)
+
+        /**
+         * The format of the store in [dir], or null when [dir] holds no store; it tells whether this version of Delva
+         * opens the store ([StoreFormat.supported]) without opening it. It reads only the store's metadata, takes no
+         * lock and changes nothing, so it works beside a writer, as [openSecondary] does.
+         *
+         * Throws [CorruptionException] when the store's metadata is damaged, so its format can't be told, and
+         * [java.io.IOException] when the files can't be read, or the writer changed them faster than they could be
+         * read.
+         */
+        @ExperimentalDelvaApi
+        public fun probe(dir: Path): StoreFormat? = probe(dir, JdkFileSystemIo(mmapReads = false))
+
+        @ExperimentalDelvaApi
+        internal fun probe(dir: Path, io: FileSystemIo): StoreFormat? = SecondaryEngine.probe(dir, io)
 
         internal fun open(dir: Path, options: EngineOptions, io: FileSystemIo, opening: Opening = Opening.OPEN_OR_CREATE): JsonStore =
             CoroutineJsonStore(Engine.open(dir, options, io, opening), options.store.ioParallelism)

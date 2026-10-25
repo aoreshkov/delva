@@ -242,7 +242,8 @@ versions of its own, under the [policy in its README](../cli-kit/README.md#versi
 
 Until 1.0, the public API and the on-disk format can change in incompatible ways between minor versions. A store
 written by one version is not guaranteed to be readable by another; the format version in the store's metadata makes
-such a mismatch an error rather than a misread.
+such a mismatch an `UnsupportedFormatException` rather than a misread, and `JsonStore.probe` (experimental) tells
+whether a store opens without opening it ([SPEC §8](SPEC.md#8-consistency)).
 
 Two opt-in markers qualify the API within a release:
 

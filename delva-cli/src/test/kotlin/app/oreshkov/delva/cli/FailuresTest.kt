@@ -8,6 +8,7 @@ import app.oreshkov.delva.DelvaException
 import app.oreshkov.delva.LockHolder
 import app.oreshkov.delva.QueryRejectedException
 import app.oreshkov.delva.StoreLockedException
+import app.oreshkov.delva.UnsupportedFormatException
 import java.io.IOException
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
@@ -53,6 +54,14 @@ class FailuresTest {
         val failure = Failures.translate(mismatch)
         assertEquals(ExitStatus.DATA_ERR, failure?.status)
         assertEquals(mismatch.message, failure?.message)
+    }
+
+    @Test
+    fun `a store of another format version is a data error, not a damaged store`() {
+        val unsupported = UnsupportedFormatException(Path.of("db"), 2, listOf(1))
+        val failure = Failures.translate(unsupported)
+        assertEquals(ExitStatus.DATA_ERR, failure?.status)
+        assertEquals(unsupported.message, failure?.message)
     }
 
     @Test

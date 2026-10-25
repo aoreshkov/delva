@@ -877,7 +877,7 @@ internal class Engine private constructor(
          * [StoreNotFoundException]; [Opening.CREATE] throws [StoreExistsException] for a directory that has one.
          */
         fun open(dir: Path, options: EngineOptions, io: FileSystemIo, opening: Opening = Opening.OPEN_OR_CREATE): Engine =
-            open(dir, io, opening) { options }
+            open(dir, io, opening) { _ -> options }
 
         /**
          * Opens the existing store in [dir] like [open] with [Opening.OPEN], with the options [options] makes of the
@@ -886,10 +886,14 @@ internal class Engine private constructor(
          * MANIFEST write of the process that holds it.
          */
         fun openStored(dir: Path, io: FileSystemIo, options: (CreationOptions) -> EngineOptions): Engine =
-            open(dir, io, Opening.OPEN) { options(ManifestStore(io, dir).peek()?.creationOptions() ?: throw StoreNotFoundException(dir)) }
+            open(dir, io, Opening.OPEN) { stored -> options(stored ?: throw StoreNotFoundException(dir)) }
 
-        /** [options] runs under the lock. */
-        private inline fun open(dir: Path, io: FileSystemIo, opening: Opening, options: () -> EngineOptions): Engine {
+        /**
+         * [options] runs under the lock, given the [CreationOptions] of the store in [dir], or null when there is none.
+         * They're read before recovery creates or changes anything, so a store of another format version is left as it
+         * was ([app.oreshkov.delva.UnsupportedFormatException]).
+         */
+        private inline fun open(dir: Path, io: FileSystemIo, opening: Opening, options: (CreationOptions?) -> EngineOptions): Engine {
             val current = dir.resolve(ManifestStore.CURRENT)
             // An existence check reads directory metadata only; it doesn't open the file.
             if (opening == Opening.OPEN && !io.exists(current)) throw StoreNotFoundException(dir)
@@ -898,7 +902,8 @@ internal class Engine private constructor(
             try {
                 // Checked again under the lock: another process may have created the store since.
                 if (opening == Opening.CREATE && io.exists(current)) throw StoreExistsException(dir)
-                val engine = Engine(options(), io, dir, lock)
+                val stored = if (io.exists(current)) ManifestStore(io, dir).peek()?.creationOptions() else null
+                val engine = Engine(options(stored), io, dir, lock)
                 engine.recover()
                 return engine
             } catch (t: Throwable) {

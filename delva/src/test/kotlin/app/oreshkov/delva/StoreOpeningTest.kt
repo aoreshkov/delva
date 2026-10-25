@@ -1,23 +1,35 @@
 package app.oreshkov.delva
 
+import app.oreshkov.delva.internal.log.withFormatVersion
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.DigestInputStream
+import java.security.MessageDigest
+import java.util.HexFormat
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
+import kotlin.io.path.inputStream
 import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.readBytes
+import kotlin.io.path.walk
+import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * `create`, `open` and `openOrCreate`: one function per intent, so that a mistyped path is an error rather than a
- * new, empty store, and so that opening a store never needs the options it was created with.
+ * new, empty store, and so that opening a store never needs the options it was created with. And a store of another
+ * format version: refused as such by every way of opening, never taken for damage, and told by `probe`.
  */
 class StoreOpeningTest {
     private val root: Path = Files.createTempDirectory("delva-opening")
@@ -163,5 +175,94 @@ class StoreOpeningTest {
         foreign.resolve("notes.txt").writeText("not a store")
         assertFailsWith<StoreNotFoundException> { JsonStore.reset(foreign) }
         assertEquals(listOf("notes.txt"), foreign.listDirectoryEntries().map { it.fileName.toString() })
+    }
+
+    /** A closed store with a document, its MANIFESTs then rewritten as format version [version] where [which] says. */
+    private fun storeOfVersion(name: String, version: Int, which: (Path) -> Boolean = { true }): Path {
+        val dir = root.resolve(name)
+        JsonStore.create(dir).use { it.blocking().insert("""{"a":1}""") }
+        for (manifest in dir.listDirectoryEntries("MANIFEST-*").filter(which)) manifest.writeBytes(withFormatVersion(manifest.readBytes(), version))
+        return dir
+    }
+
+    /** Every file under [dir] with a hash of its bytes, to tell that nothing changed; log files are 64 MiB each. */
+    private fun contents(dir: Path): Map<String, String> = dir.walk().associate { file ->
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input -> DigestInputStream(input, digest).transferTo(OutputStream.nullOutputStream()) }
+        dir.relativize(file).toString() to HexFormat.of().formatHex(digest.digest())
+    }
+
+    @Test
+    fun `a store of another format version is refused by every way of opening, and left exactly as it was`() {
+        val dir = storeOfVersion("newer", 2)
+        val before = contents(dir)
+
+        val e = assertFailsWith<UnsupportedFormatException> { JsonStore.open(dir) }
+        assertEquals(dir, e.directory)
+        assertEquals(2, e.version)
+        assertEquals(listOf(1), e.supportedVersions)
+        assertEquals("The store at $dir is in format version 2, written by a newer version of Delva; this one reads format version 1", e.message)
+        assertFailsWith<UnsupportedFormatException> { JsonStore.openOrCreate(dir) }
+        assertFailsWith<UnsupportedFormatException> { JsonStore.openSecondary(dir) }
+        assertFailsWith<UnsupportedFormatException> { JsonStore.reset(dir) }
+        assertFailsWith<StoreExistsException> { JsonStore.create(dir) }
+        assertEquals(before, contents(dir))
+
+        val format = assertNotNull(JsonStore.probe(dir))
+        assertEquals(2, format.version)
+        assertEquals(listOf(1), format.supportedVersions)
+        assertFalse(format.supported)
+        assertEquals(before, contents(dir))
+
+        val older = assertFailsWith<UnsupportedFormatException> { JsonStore.open(storeOfVersion("older", 0)) }
+        assertTrue("written by an older version of Delva" in older.message!!, older.message)
+    }
+
+    @Test
+    fun `a current MANIFEST of another format version is never passed over for an older one`() {
+        // The current MANIFEST is the highest-numbered one; the one before it stays as a fallback for damage.
+        val dir = root.resolve("upgraded")
+        JsonStore.create(dir).use { it.blocking().insert("""{"a":1}""") }
+        val manifests = dir.listDirectoryEntries("MANIFEST-*").sorted()
+        assertTrue(manifests.size > 1, "no fallback MANIFEST: $manifests")
+        val current = manifests.last()
+        current.writeBytes(withFormatVersion(current.readBytes(), 2))
+
+        assertFailsWith<UnsupportedFormatException> { JsonStore.open(dir) }
+        assertFailsWith<UnsupportedFormatException> { JsonStore.openSecondary(dir) }
+        assertFailsWith<UnsupportedFormatException> { JsonStore.reset(dir) }
+        assertFalse(assertNotNull(JsonStore.probe(dir)).supported)
+    }
+
+    @Test
+    fun `probe tells a store's format without opening it, beside its writer too`() {
+        val missing = root.resolve("missing")
+        assertNull(JsonStore.probe(missing))
+        assertFalse(missing.exists())
+        val foreign = root.resolve("documents").createDirectories()
+        foreign.resolve("notes.txt").writeText("not a store")
+        assertNull(JsonStore.probe(foreign))
+        assertEquals(listOf("notes.txt"), foreign.listDirectoryEntries().map { it.fileName.toString() })
+
+        val dir = root.resolve("current")
+        JsonStore.create(dir).use { store ->
+            val format = assertNotNull(JsonStore.probe(dir))
+            assertEquals(1, format.version)
+            assertTrue(format.supported)
+            store.blocking().insert("""{"a":1}""")
+        }
+        assertTrue(assertNotNull(JsonStore.probe(dir)).supported)
+    }
+
+    @Test
+    fun `a damaged MANIFEST is damage, not another format`() {
+        val dir = root.resolve("damaged")
+        JsonStore.create(dir).use { it.blocking().insert("""{"a":1}""") }
+        for (manifest in dir.listDirectoryEntries("MANIFEST-*")) {
+            manifest.writeBytes(manifest.readBytes().also { it[4] = (it[4].toInt() xor 2).toByte() })
+        }
+        assertFailsWith<CorruptionException> { JsonStore.probe(dir) }
+        assertFailsWith<CorruptionException> { JsonStore.open(dir) }
+        assertFailsWith<CorruptionException> { JsonStore.openSecondary(dir) }
     }
 }

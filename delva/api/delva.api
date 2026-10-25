@@ -539,6 +539,7 @@ public final class app/oreshkov/delva/JsonStore$Companion {
 	public static synthetic fun openOrCreate$default (Lapp/oreshkov/delva/JsonStore$Companion;Ljava/nio/file/Path;Lapp/oreshkov/delva/CreationOptions;Lapp/oreshkov/delva/StoreOptions;ILjava/lang/Object;)Lapp/oreshkov/delva/JsonStore;
 	public final fun openSecondary (Ljava/nio/file/Path;Lapp/oreshkov/delva/StoreOptions;)Lapp/oreshkov/delva/SecondaryJsonStore;
 	public static synthetic fun openSecondary$default (Lapp/oreshkov/delva/JsonStore$Companion;Ljava/nio/file/Path;Lapp/oreshkov/delva/StoreOptions;ILjava/lang/Object;)Lapp/oreshkov/delva/SecondaryJsonStore;
+	public final fun probe (Ljava/nio/file/Path;)Lapp/oreshkov/delva/StoreFormat;
 	public final fun reset (Ljava/nio/file/Path;)Lapp/oreshkov/delva/CreationOptions;
 }
 
@@ -770,6 +771,13 @@ public final class app/oreshkov/delva/StoreExistsException : app/oreshkov/delva/
 	public final fun getDirectory ()Ljava/nio/file/Path;
 }
 
+public final class app/oreshkov/delva/StoreFormat {
+	public final fun getSupported ()Z
+	public final fun getSupportedVersions ()Ljava/util/List;
+	public final fun getVersion ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class app/oreshkov/delva/StoreInfo {
 	public final fun getApproximateDocumentCount ()J
 	public final fun getDeletedDocumentCount ()J
@@ -828,6 +836,13 @@ public final class app/oreshkov/delva/TypePage {
 	public final fun getCursor ()Lapp/oreshkov/delva/Cursor;
 	public final fun getNodes ()Ljava/util/List;
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/UnsupportedFormatException : app/oreshkov/delva/DelvaException {
+	public fun <init> (Ljava/nio/file/Path;ILjava/util/List;)V
+	public final fun getDirectory ()Ljava/nio/file/Path;
+	public final fun getSupportedVersions ()Ljava/util/List;
+	public final fun getVersion ()I
 }
 
 public final class app/oreshkov/delva/VerifyIssue {

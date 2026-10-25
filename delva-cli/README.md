@@ -56,7 +56,7 @@ They follow `sysexits.h`:
 | 0 | success |
 | 1 | `compare`: the values differ; `verify`: the store is damaged; a query run with `--exit-status`: nothing found; `delete` or `reset`: declined at the prompt |
 | 2 | usage error |
-| 65 | rejected data: a document, query or option value |
+| 65 | rejected data: a document, query or option value, or a store in a format version this `delva` doesn't read |
 | 66 | a missing store, file or document, or a write conflict |
 | 74 | an I/O error or a damaged store, or standard output that took only part of the output, as when `head` stops reading |
 | 75 | a write to a store another process has open, naming that process |
