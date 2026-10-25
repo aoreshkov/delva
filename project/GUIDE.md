@@ -245,6 +245,13 @@ written by one version is not guaranteed to be readable by another; the format v
 such a mismatch an `UnsupportedFormatException` rather than a misread, and `JsonStore.probe` (experimental) tells
 whether a store opens without opening it ([SPEC §8](SPEC.md#8-consistency)).
 
+Delva can be embedded in an IntelliJ Platform plugin for IDEs from 2026.2, the first that run on a JDK Delva needs.
+The plugin must use the IDE's Kotlin standard library and kotlinx-coroutines rather than bundle its own, since a
+second kotlinx-coroutines breaks the platform's: set `kotlin.stdlib.default.dependency=false` and exclude both from
+the Delva dependency, as [Delva Tools](../delva-intellij-plugin/README.md) does. The IDE's kotlinx-coroutines can be
+older than the one Delva is built with, so the IntelliJ Plugin Verifier, which checks the bundled Delva jar against
+each IDE, is what says whether a Delva release runs in it.
+
 Two opt-in markers qualify the API within a release:
 
 - `@ExperimentalDelvaApi` marks what is new and may still change, in signature or behaviour, in a minor release. Using
