@@ -7,6 +7,8 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
 ### Added
 
 - The **Delva** tool window lists a project's stores, saved in `.idea/delva.xml`, and shows what the selected one
@@ -21,3 +23,6 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
   selected documents or nodes in the IDE's diff viewer; **Verify Store** checks every byte of a store in the background.
 - The plugin has its own logo, and the IDE's error reporter sends an exception in the plugin to its maintainer
   through JetBrains Marketplace.
+
+[Unreleased]: https://github.com/aoreshkov/delva/compare/delva-tools-v0.2.0...HEAD
+[0.2.0]: https://github.com/aoreshkov/delva/releases/tag/delva-tools-v0.2.0
