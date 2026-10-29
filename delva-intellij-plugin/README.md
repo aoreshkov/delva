@@ -2,7 +2,7 @@
 
 An IntelliJ Platform plugin for Delva.
 
-> Early development: nothing is published to JetBrains Marketplace yet.
+Install it from JetBrains Marketplace: in **Settings | Plugins | Marketplace**, search for "Delva Tools".
 
 <!-- Plugin description -->
 Tools for [Delva](https://github.com/aoreshkov/delva), the embedded JSON document database for the JVM: list a project's
