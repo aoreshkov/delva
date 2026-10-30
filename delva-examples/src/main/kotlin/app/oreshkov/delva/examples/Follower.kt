@@ -10,7 +10,6 @@ package app.oreshkov.delva.examples
 
 import app.oreshkov.delva.BlockingReadableJsonStore
 import app.oreshkov.delva.BlockingSecondaryJsonStore
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.KeyValueQuery
 import kotlin.time.Duration
 import kotlin.time.TimeSource
@@ -23,7 +22,6 @@ fun hitCount(store: BlockingReadableJsonStore, query: KeyValueQuery): Long = sto
  * [poll]; returns whether that happened within [timeout]. A refresh that finds nothing new costs a look at the store's
  * metadata, so a short [poll] is cheap.
  */
-@OptIn(ExperimentalDelvaApi::class)
 fun awaitHits(reader: BlockingSecondaryJsonStore, query: KeyValueQuery, atLeast: Long, poll: Duration, timeout: Duration): Boolean {
     val deadline = TimeSource.Monotonic.markNow() + timeout
     while (true) {

@@ -3,7 +3,6 @@ package app.oreshkov.delva.cli
 import app.oreshkov.clikit.CommandContext
 import app.oreshkov.clikit.CommandFailure
 import app.oreshkov.clikit.ExitStatus
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.ReadableJsonStore
 import app.oreshkov.delva.SecondaryJsonStore
@@ -32,12 +31,10 @@ internal inline fun <T> CommandContext.withStore(options: StoreOptions = StoreOp
  * long-running service, has the store open, and leaves the store exactly as it found it. It reads what the writer had
  * written when the command started. A mistyped path is `no store at …` and exit 66, as with [withStore].
  */
-@OptIn(ExperimentalDelvaApi::class)
 internal inline fun <T> CommandContext.withReader(options: StoreOptions = StoreOptions(), block: (ReadableJsonStore, Path) -> T): T =
     withSecondary(options, block)
 
 /** [withReader], for a command that also asks the secondary what only a secondary knows, such as its writer. */
-@OptIn(ExperimentalDelvaApi::class)
 internal inline fun <T> CommandContext.withSecondary(options: StoreOptions = StoreOptions(), block: (SecondaryJsonStore, Path) -> T): T {
     val dir = storeDir()
     return JsonStore.openSecondary(dir, options).use { block(it, dir) }

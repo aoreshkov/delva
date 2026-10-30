@@ -16,7 +16,6 @@ package app.oreshkov.delva
  *
  * Closing it releases its file handles; the space of files its writer deleted meanwhile comes back then. Thread-safe.
  */
-@ExperimentalDelvaApi
 @SubclassOptInRequired(DelvaImplementationApi::class)
 public interface SecondaryJsonStore : ReadableJsonStore {
     /**
@@ -45,7 +44,6 @@ public interface SecondaryJsonStore : ReadableJsonStore {
 }
 
 /** The operations of [SecondaryJsonStore] without coroutines, obtained from [SecondaryJsonStore.blocking]. Thread-safe. */
-@ExperimentalDelvaApi
 @SubclassOptInRequired(DelvaImplementationApi::class)
 public interface BlockingSecondaryJsonStore : BlockingReadableJsonStore {
     /** See [SecondaryJsonStore.refresh]. */
