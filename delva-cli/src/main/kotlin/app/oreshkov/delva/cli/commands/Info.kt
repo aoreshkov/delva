@@ -30,7 +30,6 @@ import kotlin.io.path.isRegularFile
  * Every number comes from memory or a directory listing; nothing is scanned, so it answers as fast for a store of a
  * terabyte as for an empty one.
  */
-@OptIn(ExperimentalDelvaApi::class)
 internal val info = CommandHandler { context ->
     context.withSecondary { store, dir ->
         val summary = Summary(dir, store.info(), store.listTypes(), store.creationOptions, diskBytes(dir), store.writer())

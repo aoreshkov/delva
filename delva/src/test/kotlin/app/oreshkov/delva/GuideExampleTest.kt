@@ -49,7 +49,6 @@ class GuideExampleTest {
         JsonStore.openOrCreate(path).use { store ->
             store.blocking().insert("""{"name":"ada"}""")
 
-            @OptIn(ExperimentalDelvaApi::class)
             JsonStore.openSecondary(path).use { reader ->
                 val db = reader.blocking()
                 assertEquals(1L, db.count(KeyValueQuery("name", JsonQueryValue.Str("ada"))))

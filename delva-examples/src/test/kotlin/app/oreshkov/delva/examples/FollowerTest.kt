@@ -1,6 +1,5 @@
 package app.oreshkov.delva.examples
 
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.KeyValueQuery
@@ -25,7 +24,6 @@ class FollowerTest {
     @AfterTest
     fun cleanUp() = dir.deleteRecursively()
 
-    @OptIn(ExperimentalDelvaApi::class)
     @Test
     fun `a secondary waits for documents its writer is still writing`() {
         val path = dir.resolve("store")

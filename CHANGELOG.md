@@ -17,6 +17,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ### Changed
 
+- `delva`: secondaries are no longer experimental: `JsonStore.openSecondary`, `SecondaryJsonStore`,
+  `BlockingSecondaryJsonStore` and `StoreInfo.secondary` need no opt-in.
 - `delva`: a store in a format version this version of Delva doesn't read throws `UnsupportedFormatException`, with
   the version found and the versions read, instead of `CorruptionException`, and is left as it was.
 - `delva-cli`: a store in a format version `delva` doesn't read exits with status 65 instead of 74.

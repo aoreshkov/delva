@@ -215,11 +215,9 @@ public interface JsonStore : ReadableJsonStore {
          * metadata, or a part of its log the writer had synced, is damaged; and [java.io.IOException] when the files
          * can't be read, or the writer changed them faster than they could be read.
          */
-        @ExperimentalDelvaApi
         public fun openSecondary(dir: Path, options: StoreOptions = StoreOptions()): SecondaryJsonStore =
             openSecondary(dir, options, JdkFileSystemIo(mmapReads = false))
 
-        @ExperimentalDelvaApi
         internal fun openSecondary(dir: Path, options: StoreOptions, io: FileSystemIo): SecondaryJsonStore =
             CoroutineSecondaryJsonStore(SecondaryEngine.open(dir, io) { creation -> EngineOptions(creation, options) }, options.ioParallelism)
 

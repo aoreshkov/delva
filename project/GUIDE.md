@@ -20,13 +20,12 @@ open, leaving it as `create` left it, with the same `CreationOptions`.
 
 ## Reading beside the writer
 
-Other processes can read the store meanwhile with `JsonStore.openSecondary` (experimental): a `SecondaryJsonStore`
-offers every read, takes no lock and never writes. It reads what the writer had written when it opened, and
-`refresh()` catches up with what it wrote since; results already open keep the state they started on. Code that only
-reads can take a `ReadableJsonStore`, which both kinds of store are:
+Other processes can read the store meanwhile with `JsonStore.openSecondary`: a `SecondaryJsonStore` offers every read,
+takes no lock and never writes. It reads what the writer had written when it opened, and `refresh()` catches up with
+what it wrote since; results already open keep the state they started on. Code that only reads can take a
+`ReadableJsonStore`, which both kinds of store are:
 
 ```kotlin
-@OptIn(ExperimentalDelvaApi::class)
 JsonStore.openSecondary(Path.of("data/store")).use { reader ->
     val db = reader.blocking()
     println(db.count(KeyValueQuery("name", JsonQueryValue.Str("ada"))))

@@ -16,7 +16,6 @@ public class StoreInfo internal constructor(
     secondary: Boolean,
 ) {
     /** Whether this describes a [SecondaryJsonStore]: the state its last refresh read. */
-    @ExperimentalDelvaApi
     public val secondary: Boolean = secondary
 
     override fun toString(): String =
