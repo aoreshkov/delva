@@ -24,7 +24,7 @@ name is `app.oreshkov.delva`. It is published to Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("app.oreshkov.delva:delva:0.2.0")
+    implementation("app.oreshkov.delva:delva:0.3.0")
 }
 ```
 
