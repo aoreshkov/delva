@@ -28,6 +28,10 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva`: opening a store no longer deletes a log file of another format version as one whose creation a crash cut
   off; it throws `CorruptionException` and leaves the file as it was.
 
+## [0.3.0-rc.1] - 2026-10-31
+
+- Release candidate for 0.3.0, to prove the release path; not published.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added
