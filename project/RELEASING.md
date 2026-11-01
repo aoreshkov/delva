@@ -183,7 +183,9 @@ the Portal rejects. A release made this way has no provenance attestation.
 Pushing a `delva-tools-vX.Y.Z` tag runs the same [`release.yml`](../.github/workflows/release.yml), which tests the
 plugin, signs its ZIP, attests it, uploads it to [JetBrains Marketplace](https://plugins.jetbrains.com) hidden and
 drafts the GitHub release. A version's minor is that of the Delva it bundles, so a plugin release that moves to a new
-Delva minor comes after that Delva release and the pull request that moves the catalog's `delva` pin.
+Delva minor comes after that Delva release and the pull request that moves the catalog's `delva` pin together with
+`delvaTools.version`. Dependabot proposes only Delva's patch releases, since a new minor on its own fails
+`checkPluginDistribution`.
 
 ### One-time setup
 
