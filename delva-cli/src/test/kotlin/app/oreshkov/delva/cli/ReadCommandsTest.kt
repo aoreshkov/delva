@@ -209,9 +209,28 @@ class ReadCommandsTest {
 
         val scan = program.record("search", "path", "$..sku")
         assertEquals(ExitStatus.USAGE, scan.status)
-        assertContains(scan.stderr, "--scan")
+        assertContains(scan.stderr, "error: no index term narrows the search for $..sku, so it would read every document; add --scan")
+        assertFalse("ScanPolicy" in scan.stderr || "Query rejected" in scan.stderr, scan.stderr)
         assertEquals(ExitStatus.OK, run("search", "path", "$..sku", "--scan").status)
         assertEquals(ExitStatus.USAGE, program.record("search", "path", "$[").status)
+    }
+
+    @Test
+    fun `a search the store refuses is worded in delva's options, with the status its remedy calls for`() {
+        // Too long to search, with or without --scan; get --path takes it on one document.
+        val long = "$" + "[0]".repeat(31) + "[?@.a == 1]"
+        val tooLong = program.record("search", "path", long, "--scan")
+        assertEquals(ExitStatus.USAGE, tooLong.status)
+        assertContains(tooLong.stderr, "error: $long has 32 segments; a search takes at most 31; delva get <doc> --path")
+        assertFalse("Query rejected" in tooLong.stderr, tooLong.stderr)
+
+        // Only a store created with other options answers a key it doesn't index.
+        val excluding = root.resolve("excluding")
+        JsonStore.create(excluding, CreationOptions(fragmentBytes = 4096, excludedKeys = setOf("status"))).use { it.blocking().insert("""{"status":"open"}""") }
+        val notIndexed = DelvaProgram.create(mapOf("DELVA_STORE" to excluding.toString())::get).record("search", "kv", "status", "open", "-S")
+        assertEquals(ExitStatus.DATA_ERR, notIndexed.status)
+        assertContains(notIndexed.stderr, "error: the key \"status\" isn't indexed by this store; what a store indexes is fixed when it is created, and delva info shows it")
+        assertFalse("CreationOptions" in notIndexed.stderr, notIndexed.stderr)
     }
 
     @Test

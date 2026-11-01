@@ -82,16 +82,15 @@ internal class QueryTerm(val term: ByteArray, val lossy: Boolean, val literal: L
                 is JsonQueryValue.Json -> parseLiteral(utf8(value.literal, "query literal"), maxDepth, normalization)
             }
             if ((literal is Literal.Obj || literal is Literal.Arr) && !hashTerms) {
-                throw QueryRejectedException(QueryRejectedException.Reason.NOT_INDEXED, "object and array query values need a store created with hash terms")
+                throw QueryRejectedException(QueryRejectedException.Reason.NOT_INDEXED, "object and array values aren't indexed by this store")
             }
             if (!policy.indexesKey(keyBytes, 0, keyBytes.size)) {
-                throw QueryRejectedException(QueryRejectedException.Reason.NOT_INDEXED, "the key \"$key\" isn't indexed by this store (CreationOptions.indexedKeys, CreationOptions.excludedKeys)")
+                throw QueryRejectedException(QueryRejectedException.Reason.NOT_INDEXED, "the key \"$key\" isn't indexed by this store")
             }
             if (literal is Literal.Str && !policy.indexesString(literal.utf8.size.toLong())) {
                 throw QueryRejectedException(
                     QueryRejectedException.Reason.NOT_INDEXED,
-                    "string values of ${literal.utf8.size} bytes aren't indexed by this store " +
-                        "(CreationOptions.minIndexedStringBytes ${policy.minStringBytes}, maxIndexedStringBytes ${policy.maxStringBytes})",
+                    "string values of ${literal.utf8.size} bytes aren't indexed by this store, which indexes strings of ${indexedLengths(policy)}",
                 )
             }
             val out = GrowableBytes(keyBytes.size + 40)
@@ -206,6 +205,13 @@ internal class QueryTerm(val term: ByteArray, val lossy: Boolean, val literal: L
             }
         }
     }
+}
+
+/** The string lengths [policy] indexes, as `at least 4 bytes`, `at most 200 bytes` or `4 to 200 bytes`. */
+private fun indexedLengths(policy: IndexPolicy): String = when {
+    policy.maxStringBytes == Int.MAX_VALUE -> "at least ${policy.minStringBytes} bytes"
+    policy.minStringBytes == 0 -> "at most ${policy.maxStringBytes} bytes"
+    else -> "${policy.minStringBytes} to ${policy.maxStringBytes} bytes"
 }
 
 /** Canonical hash of a [Literal], without recursion: a literal may nest as deep as `maxDepth` allows. */
