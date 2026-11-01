@@ -7,6 +7,8 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
 ### Added
 
 - **Add Store…** warns when a directory holds no store, or one in a format this version doesn't read, and suggests
@@ -34,5 +36,6 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 - The plugin has its own logo, and the IDE's error reporter sends an exception in the plugin to its maintainer
   through JetBrains Marketplace.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/delva-tools-v0.2.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/delva-tools-v0.3.0...HEAD
+[0.3.0]: https://github.com/aoreshkov/delva/releases/tag/delva-tools-v0.3.0
 [0.2.0]: https://github.com/aoreshkov/delva/releases/tag/delva-tools-v0.2.0
