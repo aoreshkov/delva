@@ -215,7 +215,8 @@ class JsonPathSearchTest {
                 assertNull(store.explain(query).terms)
                 val e = assertFailsWith<QueryRejectedException>(text) { store.search(query) }
                 assertEquals(QueryRejectedException.Reason.NEEDS_SCAN, e.reason, text)
-                assertContains(e.message!!, "ALLOW_SCAN")
+                assertEquals("no index term narrows the search for $text", e.detail, text)
+                assertEquals(text, e.query, text)
                 assertEquals(1, hits(store.search(query.copy(scan = ScanPolicy.ALLOW_SCAN))).size, text)
             }
         }

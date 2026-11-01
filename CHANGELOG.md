@@ -8,6 +8,19 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
+### Added
+
+- `delva`: `QueryRejectedException.detail` is what the store found, without the message's prefix, and
+  `QueryRejectedException.query` the text of the refused JSONPath query.
+
+### Changed
+
+- `delva`: a `QueryRejectedException` message states what the store found and no longer names a remedy in the API;
+  the KDoc of each `QueryRejectedException.Reason` gives it.
+- `delva-cli`: a refused search names `delva`'s own remedy, such as `--scan`, `delva get --path` or `delva info`,
+  instead of the library's API; a range too wide and a query of more than 31 segments exit with status 2 instead of
+  65, as a search that needs `--scan` does.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added
