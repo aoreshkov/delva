@@ -53,8 +53,8 @@ settings plugin adds the JetBrains repositories after Maven Central. `./gradlew 
 sandbox IDE with the plugin installed. The rules that the build doesn't spell out:
 
 - **It bundles a released Delva**, the `delva` version in [`libs.versions.toml`](../gradle/libs.versions.toml), and so
-  reads exactly that release's store format. Its own minor is that release's, which `checkPluginDistribution`
-  checks, and the minor its messages name is generated from the same version. To try a Delva change in the plugin
+  reads exactly the store formats that release reads. Its own minor is that release's, which `checkPluginDistribution`
+  checks; its messages name store formats, not Delva versions. To try a Delva change in the plugin
   before it is released, build on the source instead: `./gradlew :delva-intellij-plugin:check -Pdelva.delvaFromSource=true`.
 - **It builds against the lowest IDE it supports** (`intellijIdea` in the catalog, `sinceBuild` in its build script),
   never a newer one, and sets no `untilBuild`: `verifyPlugin` checks the newer IDEs. 2026.2 is the floor because
@@ -77,7 +77,8 @@ What no test covers is how the plugin looks and feels. Before a release, a perso
 light and the dark theme:
 
 1. **Settings | Plugins** shows the Delva Tools logo, and the **Delva** tool window its icon on the right stripe.
-2. **Add Store…** lists a store; its summary shows, and the list is still there after the IDE restarts.
+2. **Add Store…** lists a store, and warns on a directory without a store; its summary shows, and the list is still
+   there after the IDE restarts.
 3. **Documents**: **Show more documents** pages; a double click opens a read-only JSON editor; a store inside the
    project offers to exclude itself from indexing.
 4. **Search**: a JSONPath query with a filter, a key–value search, **Explain**, the refusal of a query that would read

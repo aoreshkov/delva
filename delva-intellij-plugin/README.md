@@ -11,7 +11,8 @@ stores on disk, see what each holds, browse and open their documents and typed o
 JSONPath, compare two documents and verify a store from the IDE, even while an application has a store open.
 
 Stores are read-only in the IDE: they are opened as Delva *secondaries*, which take no lock and never write.
-The plugin reads the stores of the Delva minor its own version starts with: 0.2.x reads stores of Delva 0.2.
+The plugin reads the store formats its bundled Delva reads: 0.3.x bundles Delva 0.3.0, which reads stores of Delva 0.1
+to 0.3.
 <!-- Plugin description end -->
 
 ## What it does
@@ -45,7 +46,7 @@ The plugin reads the stores of the Delva minor its own version starts with: 0.2.
 | | |
 |---|---|
 | IDEs | IntelliJ-based IDEs 2026.2 and newer. Delva's classes need Java 22, and 2026.2 is the first IDE line on Java 25. |
-| Stores | Those of the Delva release the plugin bundles. Until Delva 1.0 a minor can change the store format, so the plugin's minor follows Delva's: 0.2.x reads stores of Delva 0.2. |
+| Stores | Those in the formats the Delva release the plugin bundles reads. Until Delva 1.0 a minor can change the store format, so the plugin's minor names the Delva it bundles: 0.3.x bundles Delva 0.3.0, which reads stores of Delva 0.1 to 0.3. **Add Store…** warns about a store in another format. |
 
 ## Reporting problems
 

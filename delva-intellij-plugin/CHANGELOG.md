@@ -7,6 +7,16 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ## [Unreleased]
 
+### Added
+
+- **Add Store…** warns when a directory holds no store, or one in a format this version doesn't read, and suggests
+  **Verify Store** for a damaged one.
+
+### Changed
+
+- Built on Delva 0.3.0.
+- A store in another format names its format and the formats the plugin reads, rather than a Delva version.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

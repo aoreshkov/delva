@@ -14,8 +14,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.OutputStream
 import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.DigestInputStream
+import java.security.MessageDigest
+import java.util.HexFormat
+import java.util.zip.CRC32C
+import kotlin.io.path.inputStream
 import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.readBytes
+import kotlin.io.path.writeBytes
 import kotlin.random.Random
 
 class EmbeddedStoreBackendTest {
@@ -307,6 +319,72 @@ class EmbeddedStoreBackendTest {
         assertTrue("${result.problems}", result.problems.isNotEmpty())
         assertTrue(result.problems.all { it.location.isNotEmpty() && it.detail.isNotEmpty() })
         assertTrue("the damaged document is named", result.damagedDocuments.isNotEmpty())
+    }
+
+    @Test
+    fun `names the format of a store another version of Delva wrote, and leaves it exactly as it was`() {
+        val newer = storeInFormat("newer", 2)
+        val before = contents(newer)
+
+        val e = assertThrows(StoreAccessException::class.java) { runBlocking { backend.info(newer) } }
+        assertEquals("This store is in format 2, which a newer version of Delva writes; this plugin reads format 1.", e.message)
+        assertEquals(before, contents(newer))
+
+        val older = assertThrows(StoreAccessException::class.java) { runBlocking { backend.info(storeInFormat("older", 0)) } }
+        assertEquals("This store is in format 0, which an older version of Delva writes; this plugin reads format 1.", older.message)
+    }
+
+    @Test
+    fun `probes whether a directory holds a store it reads`() = runBlocking {
+        assertEquals(StoreProbe.NoStore, backend.probe(temp.newFolder("empty").toPath()))
+
+        val current = temp.newFolder("current").toPath()
+        JsonStore.create(current).use { writer -> writer.insert("""{"n": 1}""") }
+        assertEquals(StoreProbe.Readable(1), backend.probe(current))
+
+        val newer = storeInFormat("newer", 2)
+        val before = contents(newer)
+        val other = backend.probe(newer)
+        assertEquals(StoreProbe.OtherFormat(2, listOf(1)), other)
+        assertTrue((other as StoreProbe.OtherFormat).message, other.message.startsWith("This store is in format 2, which a newer"))
+        assertEquals(before, contents(newer))
+
+        val damaged = temp.newFolder("damaged").toPath()
+        JsonStore.create(damaged).use { writer -> writer.insert("""{"n": 1}""") }
+        for (manifest in damaged.listDirectoryEntries("MANIFEST-*")) {
+            val bytes = manifest.readBytes()
+            bytes[bytes.size / 2] = (bytes[bytes.size / 2].toInt() xor 0xFF).toByte()
+            manifest.writeBytes(bytes)
+        }
+        val probe = backend.probe(damaged)
+        assertTrue("$probe", probe is StoreProbe.Damaged && probe.message.startsWith("The store is damaged: "))
+    }
+
+    /**
+     * A closed store with a document, whose MANIFESTs are then rewritten as another version of Delva could have written
+     * them: format [version] in the u16 after the magic, little-endian, and a CRC32C of everything before the last four
+     * bytes in those bytes, so the MANIFEST reads as another format rather than as damage.
+     */
+    private fun storeInFormat(name: String, version: Int): Path {
+        val dir = temp.newFolder(name).toPath()
+        runBlocking { JsonStore.create(dir).use { writer -> writer.insert("""{"n": 1}""") } }
+        for (manifest in dir.listDirectoryEntries("MANIFEST-*")) {
+            val bytes = ByteBuffer.wrap(manifest.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
+            bytes.putShort(4, version.toShort())
+            val crc = CRC32C().apply { update(bytes.array(), 0, bytes.capacity() - 4) }
+            bytes.putInt(bytes.capacity() - 4, crc.value.toInt())
+            manifest.writeBytes(bytes.array())
+        }
+        return dir
+    }
+
+    /** A SHA-256 of every file under [dir], by its path in [dir], to tell that nothing changed. */
+    private fun contents(dir: Path): Map<String, String> = Files.walk(dir).use { files ->
+        files.filter(Files::isRegularFile).toList().associate { file ->
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input -> DigestInputStream(input, digest).transferTo(OutputStream.nullOutputStream()) }
+            dir.relativize(file).toString() to HexFormat.of().formatHex(digest.digest())
+        }
     }
 
     private fun path(query: String, where: String? = null, wholeDocuments: Boolean = false, scan: Boolean = true) =
