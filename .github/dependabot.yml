@@ -29,6 +29,11 @@ updates:
       # Libraries released from this repository, such as cli-kit for delva-cli and Delva for the IntelliJ plugin, are
       # proposed as soon as they ship.
       exclude: ["app.oreshkov.*"]
+    ignore:
+      # The IntelliJ plugin's minor is that of the Delva it bundles, so a new Delva minor alone fails
+      # checkPluginDistribution: it moves together with delvaTools.version, by hand. Patch releases still come.
+      - dependency-name: "app.oreshkov.delva:delva"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
     groups:
       gradle:
         patterns: ["*"]
