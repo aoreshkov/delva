@@ -1,5 +1,6 @@
 package app.oreshkov.delva.intellij.store
 
+import app.oreshkov.delva.intellij.DelvaBundle
 import java.nio.file.Path
 
 /**
@@ -7,6 +8,12 @@ import java.nio.file.Path
  * a backend that runs the project's own Delva version out of process can take this one's place.
  */
 internal interface StoreBackend {
+    /**
+     * Whether [dir] holds a store this backend reads, from the store's metadata alone: it opens nothing and changes
+     * nothing. Throws [StoreAccessException] when the files can't be read.
+     */
+    suspend fun probe(dir: Path): StoreProbe
+
     /** What the store in [dir] holds, as of now. Throws [StoreAccessException]. */
     suspend fun info(dir: Path): StoreSummary
 
@@ -60,6 +67,24 @@ internal interface StoreBackend {
      * open. The next read opens it again.
      */
     fun release(dir: Path)
+}
+
+/** What [StoreBackend.probe] found in a directory. */
+internal sealed interface StoreProbe {
+    /** The directory holds no store. */
+    data object NoStore : StoreProbe
+
+    /** A store in format [version], which this backend reads. */
+    data class Readable(val version: Int) : StoreProbe
+
+    /** A store in format [version], which this backend doesn't read: it reads only [readable], ascending. */
+    data class OtherFormat(val version: Int, val readable: List<Int>) : StoreProbe {
+        /** Why the store can't be read, for a person. */
+        val message: String get() = otherFormatMessage(version, readable)
+    }
+
+    /** A store whose metadata is damaged, so its format can't be told; [message] says how. */
+    data class Damaged(val message: String) : StoreProbe
 }
 
 internal data class StoreSummary(
@@ -188,3 +213,13 @@ internal data class SearchPlan(
 
 /** A store couldn't be read; [message] says why, for a person. */
 internal class StoreAccessException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/**
+ * Why a store in format [version] can't be read by a backend that reads only the formats [readable]. It names formats,
+ * not Delva versions: the format decides what reads a store, and several Delva minors may write the same one.
+ */
+internal fun otherFormatMessage(version: Int, readable: List<Int>): String {
+    val newer = version > (readable.maxOrNull() ?: Int.MIN_VALUE)
+    val key = if (newer) "store.newerFormat" else "store.olderFormat"
+    return DelvaBundle.message(key, version, readable.size, readable.joinToString(", "))
+}

@@ -27,7 +27,11 @@ internal class SearchStoreAction : DumbAwareAction() {
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(DelvaToolWindowFactory.ID) ?: return
         toolWindow.activate {
             val panel = toolWindow.contentManager.contents.firstNotNullOfOrNull { it.component as? StoreExplorerPanel }
-            if (panel != null && (panel.selectedStore != null || addStore(project, panel) != null)) panel.showSearch()
+            when {
+                panel == null -> {}
+                panel.selectedStore != null -> panel.showSearch()
+                else -> addStore(project, panel) { panel.showSearch() }
+            }
         }
     }
 }

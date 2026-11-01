@@ -80,32 +80,6 @@ val bundledDelvaVersion = if (delvaFromSource) providers.gradleProperty("delva.v
 /** The minor of a version: `0.2` of `0.2.1` or of `0.2.0-SNAPSHOT`. */
 fun minorOf(version: String): String = version.split('.', '-').take(2).joinToString(".")
 
-// The plugin names the Delva minor it reads in its messages; the constant comes from the version it bundles, so the two
-// can't disagree.
-val generateBundledDelva = tasks.register("generateBundledDelva") {
-    description = "Generates the constant that names the Delva minor the plugin bundles."
-    val minor = minorOf(bundledDelvaVersion.get())
-    val outputDirectory = layout.buildDirectory.dir("generated/sources/bundledDelva/kotlin")
-    inputs.property("minor", minor)
-    outputs.dir(outputDirectory)
-    doLast {
-        val file = outputDirectory.get().file("app/oreshkov/delva/intellij/store/BundledDelva.kt").asFile
-        file.parentFile.mkdirs()
-        file.writeText(
-            """
-            |package app.oreshkov.delva.intellij.store
-            |
-            |/** The Delva minor this plugin bundles, whose store format is the only one it reads. */
-            |internal const val BUNDLED_DELVA_MINOR: String = "$minor"
-            |""".trimMargin(),
-        )
-    }
-}
-
-kotlin.sourceSets.main {
-    kotlin.srcDir(generateBundledDelva)
-}
-
 intellijPlatform {
     pluginConfiguration {
         // The Marketplace description is the README's, between its plugin description markers.

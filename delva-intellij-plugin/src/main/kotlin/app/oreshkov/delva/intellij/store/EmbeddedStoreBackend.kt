@@ -27,6 +27,7 @@ import app.oreshkov.delva.SearchResult
 import app.oreshkov.delva.SecondaryJsonStore
 import app.oreshkov.delva.SelectedNode
 import app.oreshkov.delva.StoreNotFoundException
+import app.oreshkov.delva.UnsupportedFormatException
 import app.oreshkov.delva.VerifyIssue
 import app.oreshkov.delva.VerifyIssueKind
 import app.oreshkov.delva.VerifyPhase
@@ -52,6 +53,21 @@ import java.nio.file.Path
 internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
     private val stores = HashMap<Path, SecondaryJsonStore>()
     private var closed = false
+
+    override suspend fun probe(dir: Path): StoreProbe = withContext(Dispatchers.IO) {
+        try {
+            val format = JsonStore.probe(dir)
+            when {
+                format == null -> StoreProbe.NoStore
+                format.supported -> StoreProbe.Readable(format.version)
+                else -> StoreProbe.OtherFormat(format.version, format.supportedVersions)
+            }
+        } catch (e: CorruptionException) {
+            StoreProbe.Damaged(DelvaBundle.message("store.corrupt", e.message.orEmpty()))
+        } catch (e: IOException) {
+            throw StoreAccessException(DelvaBundle.message("store.io", dir, e.message.orEmpty()), e)
+        }
+    }
 
     override suspend fun info(dir: Path): StoreSummary = reading(dir) { store ->
         val info = store.info()
@@ -234,14 +250,10 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
                 read(store)
             } catch (e: StoreNotFoundException) {
                 throw StoreAccessException(DelvaBundle.message("store.notFound", dir), e)
+            } catch (e: UnsupportedFormatException) {
+                throw StoreAccessException(otherFormatMessage(e.version, e.supportedVersions), e)
             } catch (e: CorruptionException) {
-                // Delva reports a store of another format version the way it reports damage; only the detail tells.
-                val message = if (e.detail.startsWith("unsupported format version")) {
-                    DelvaBundle.message("store.otherVersion", BUNDLED_DELVA_MINOR)
-                } else {
-                    DelvaBundle.message("store.corrupt", e.message.orEmpty())
-                }
-                throw StoreAccessException(message, e)
+                throw StoreAccessException(DelvaBundle.message("store.corrupt", e.message.orEmpty()), e)
             } catch (e: DocumentNotFoundException) {
                 throw StoreAccessException(DelvaBundle.message("document.notFound", e.docId.raw.toString()), e)
             } catch (e: DelvaException) {

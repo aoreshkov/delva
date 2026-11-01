@@ -6,9 +6,9 @@ kotlinxBenchmark = "0.5.0"
 dokka = "2.2.0"
 # The released cli-kit that delva-cli builds on and a Delva release ships; its own train's version is clikit.version.
 cliKit = "0.3.0"
-# The released Delva that delva-intellij-plugin bundles, and so the only store format it reads; its own train's version
-# is delva.version.
-delva = "0.2.0"
+# The released Delva that delva-intellij-plugin bundles, and so the store formats it reads; its own train's version is
+# delva.version.
+delva = "0.3.0"
 # delva-intellij-plugin builds against the lowest IDE it supports, never a newer one: 2026.2 is the first on Java 25,
 # and Delva's JVM 22 classes can't load on the Java 21 runtime of older IDEs.
 intellijIdea = "2026.2.3"
