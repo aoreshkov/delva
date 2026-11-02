@@ -17,7 +17,8 @@ public sealed interface ParseResult {
         /**
          * Warnings for the command line: first each command selected by a former name or deprecated, then, in
          * command-line order and then the variables' and the settings', each option typed by a former name or
-         * deprecated, once per spelling, and what the converters said about values they called
+         * deprecated, once per spelling, each [Option.Single] the command line gave different values, after the last of
+         * them, and what the converters said about values they called
          * [ConversionResult.Unset], each after the option, argument, variable or setting it came from; last, each
          * setting whose key no option of the tree declares. [Program] prints them as warnings; the parser itself never
          * prints.
@@ -138,6 +139,10 @@ public class OptionValues internal constructor(
  * Supported, because these are the forms users already have in their fingers:
  * `--long value`, `--long=value`, `-s value`, `-svalue`, bundled short flags `-abc`, `--` to end
  * option parsing, and a repeated option that accumulates.
+ *
+ * An [Option.Single] given more than once takes the last value, since POSIX reads options in the order given, and a
+ * wrapper or an alias that puts a default first relies on it. When the values differ, the option is warned about in
+ * [ParseResult.Invocation.notices], by how many times it was given and never by its values.
  *
  * Not supported, deliberately: abbreviated long options (`--acc` for `--account`), which turn a
  * new option into a breaking change for anyone who was abbreviating; and interspersed options
@@ -319,6 +324,37 @@ public class Parser @ExperimentalCliKitApi constructor(
 
         /** `given 'x', which counts as not set` for an [operand] given only unset values; `null` otherwise. */
         fun whyAbsent(operand: Operand): String? = unset[operand]?.let { "$it, which counts as not set" }
+
+        /**
+         * A single-value option's values on the command line since its last unset one: how many there were, whether
+         * any text differs from the [first], and the [name] and place of the last, which is the one used.
+         */
+        private data class Occurrences(val count: Int, val first: String, val differ: Boolean, val name: String, val at: Int)
+
+        /** Only the command line counts: a variable or a setting fills in an option it left out, and never repeats one. */
+        private val occurrences = mutableMapOf<Option.Single<*>, Occurrences>()
+
+        /** Notes that [option], named [name] in messages, was given [text] by the token at [at]. */
+        fun occurred(option: Option.Single<*>, name: String, text: String, at: Int) {
+            occurrences[option] = occurrences[option]
+                ?.let { it.copy(count = it.count + 1, differ = it.differ || text != it.first, name = name, at = at) }
+                ?: Occurrences(count = 1, first = text, differ = false, name = name, at = at)
+        }
+
+        /** Forgets the values [option] was given so far: an unset value overrides them, and has a notice of its own. */
+        fun forget(option: Option.Single<*>) {
+            occurrences -= option
+        }
+
+        /**
+         * Warns about each single-value option given different values, at the last one's place. The warning names no
+         * value: one could be a secret, and the warning lands in the logs of runs that succeed.
+         */
+        fun warnRepeats() {
+            for (repeat in occurrences.values.filter { it.differ }) {
+                notices += IndexedValue(repeat.at, "${repeat.name} was given ${repeat.count} times; the last one is used")
+            }
+        }
     }
 
     @Suppress("ReturnCount")
@@ -381,6 +417,7 @@ public class Parser @ExperimentalCliKitApi constructor(
             }
             index++
         }
+        collected.warnRepeats()
 
         // Before any variable is read and any rule checked, so that, like `--help`, help works whatever they say.
         if (command === StandardOptions.help) return helpFor(path, collected.positionals.map { it.value })
@@ -561,6 +598,7 @@ public class Parser @ExperimentalCliKitApi constructor(
                 if (spec is Option.Single<*>) {
                     collected.singles -= spec
                     collected.singleTexts -= spec
+                    collected.forget(spec)
                 }
                 collected.unset(spec, "given '$value'", name, conversion.notice, at)
                 return null
@@ -570,6 +608,7 @@ public class Parser @ExperimentalCliKitApi constructor(
             is Option.Single<*> -> {
                 collected.singles[spec] = converted
                 collected.singleTexts[spec] = value
+                collected.occurred(spec, name, value, at)
             }
             is Option.Repeated<*> -> collected.repeated.getOrPut(spec) { mutableListOf() } += converted
             is Option.Flag -> Unit
