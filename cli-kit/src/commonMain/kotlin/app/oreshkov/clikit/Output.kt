@@ -25,6 +25,21 @@ package app.oreshkov.clikit
  * Everything but [text] — tables, properties, notices, warnings, errors, log lines — goes through
  * [TerminalText.escape], so data shown in them can't drive the terminal; [text] is the payload, and
  * is written as it is.
+ *
+ * A line break in the message of a notice, a warning, an error or a log line starts a continuation line, indented to
+ * where the message starts and marked with the border style's vertical line, `│` or `|`:
+ *
+ * ```
+ * 2026-11-01T19:02:13.897Z DEBUG REQUEST: https://example.com/game/startup
+ *                                │ METHOD: POST
+ * ```
+ *
+ * Every line of an entry after its first starts with spaces and the marker, and the first one with the stamp, the
+ * level, `warning:`, `error:` or the notice's own text, so text from outside the program can't pass for an entry of
+ * its own (a notice's continuation starts with the marker at column 0). A stack trace that [log] adds under [verbose]
+ * follows as its own lines, each starting with a class name, `Caused by:`, `Suppressed:` or spaces, with every
+ * message in it kept on one line. Each entry, continuations and stack trace included, is one write to stderr, so
+ * entries written from several threads don't interleave.
  */
 public class Output(
     private val io: TerminalIo,
@@ -84,7 +99,7 @@ public class Output(
     /** Decoration: what happened, how long it took, what was skipped. Never the payload. */
     public fun notice(message: String) {
         if (quiet) return
-        io.errLine(io.styler.dim(TerminalText.escape(message)))
+        io.errEntry("", message, lineStyle = io.styler::dim)
     }
 
     /**
@@ -92,13 +107,13 @@ public class Output(
      * status says something failed. Unlike notices and warnings, never silenced by [quiet].
      */
     public fun error(message: String) {
-        io.errLine(io.styler.red("error: ") + TerminalText.escape(message))
+        io.errEntry("error: ", message, labelStyle = io.styler::red)
     }
 
     /** A warning on stderr, `warning: <message>`; silenced by [quiet]. */
     public fun warn(message: String) {
         if (quiet) return
-        io.errLine(io.styler.yellow("warning: ") + TerminalText.escape(message))
+        io.errEntry("warning: ", message, labelStyle = io.styler::yellow)
     }
 
     /**
@@ -110,7 +125,8 @@ public class Output(
      * [quiet]; debug lines only with [verbose] and not under [quiet]. An [error] adds its message, and with [verbose]
      * its stack trace.
      *
-     * The line, stack trace included, is one write, so lines logged from several threads don't interleave.
+     * A line break in [message] or in [error]'s message starts a continuation line under the message, as the class
+     * KDoc shows. The entry, continuations and stack trace included, is one write, as every entry is.
      */
     public fun log(level: LogLevel, message: String, error: Throwable? = null, stamp: String? = null) {
         val shown = when (level) {
@@ -121,7 +137,7 @@ public class Output(
         if (!shown) return
         val styler = io.styler
         val label = level.name.padEnd(LogLevel.WIDTH)
-        val line = buildString {
+        val head = buildString {
             if (stamp != null) append(styler.dim(stamp)).append(' ')
             append(
                 when (level) {
@@ -131,14 +147,17 @@ public class Output(
                     LogLevel.DEBUG -> styler.dim(label)
                 },
             )
-            append(' ').append(TerminalText.escape(message))
-            if (error != null) {
-                append(": ").append(TerminalText.escape(error.message ?: error::class.simpleName.orEmpty()))
-                if (verbose) append('\n').append(TerminalText.stackTrace(error))
-            }
+            append(' ')
+        }
+        val column = (stamp?.let { Styler.displayWidth(it) + 1 } ?: 0) + LogLevel.WIDTH + 1
+        // Joined before the split, so a line break in the error's message is marked like one in the message.
+        val text = if (error == null) message else message + ": " + (error.message ?: error::class.simpleName.orEmpty())
+        val entry = buildString {
+            append(TerminalText.entry(head, text, column, io.borderStyle.vertical))
+            if (error != null && verbose) append('\n').append(TerminalText.stackTrace(error))
             append('\n')
         }
-        io.err(line)
+        io.err(entry)
     }
 
     /** A progress line for a long step, silent under [quiet] and when stderr's reader is not a terminal. */
@@ -149,6 +168,20 @@ public class Output(
         public fun fixed(header: String, align: Align = Align.Left): Column =
             Column(header, align = align, flexible = false)
     }
+}
+
+/**
+ * [message] on stderr after [label], such as `error: `, in one write: a line break in it starts a continuation line
+ * under the message, marked with the border style's vertical line (see [TerminalText.entry]). [labelStyle] styles the
+ * label, and [lineStyle] each line of the message on its own.
+ */
+internal fun TerminalIo.errEntry(
+    label: String,
+    message: String,
+    labelStyle: (String) -> String = { it },
+    lineStyle: (String) -> String = { it },
+) {
+    err(TerminalText.entry(labelStyle(label), message, Styler.displayWidth(label), borderStyle.vertical, lineStyle) + "\n")
 }
 
 /** The level of an [Output.log] line: the kit's own, so a program maps its logger's levels onto it. */

@@ -24,10 +24,9 @@ public interface TerminalIo {
         out("\n")
     }
 
-    /** [text], then a line break, on stderr. */
+    /** [text], then a line break, on stderr, in one [err] call, so lines written from several threads don't interleave. */
     public fun errLine(text: String = "") {
-        err(text)
-        err("\n")
+        err(text + "\n")
     }
 
     /** Whether stdout is an interactive terminal — the one question colour and progress turn on. */

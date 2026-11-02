@@ -140,7 +140,7 @@ public class SystemTerminalIo(
             try {
                 registration.action()
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                errLine(styler.red("error: ") + "while stopping: " + TerminalText.escape(e.message ?: e::class.simpleName.orEmpty()))
+                errEntry("error: ", "while stopping: " + (e.message ?: e::class.simpleName.orEmpty()), styler::red)
             }
         }
         return registrations.isNotEmpty()

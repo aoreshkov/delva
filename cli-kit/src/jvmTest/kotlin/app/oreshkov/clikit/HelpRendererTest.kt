@@ -193,6 +193,7 @@ class HelpRendererTest {
             "completion-zsh.sh",
             "completion-fish.sh",
             "completion-powershell.ps1",
+            "log-multiline.txt",
         )
         Golden.assertNoOrphans(asserted)
     }

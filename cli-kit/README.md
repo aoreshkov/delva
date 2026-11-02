@@ -20,7 +20,8 @@ even Delva, and knows no command of any program's: a program declares its own tr
 - Tables, compact or indented JSON for `--json` output, and a byte-stream payload.
 - Terminal I/O that keeps the payload on stdout and everything decorative on stderr, with colour decided once and ANSI
   enabled on a legacy Windows console; prompts, confirmations, secrets, progress, log lines and `--quiet`. Control
-  characters in table cells, notices and errors are shown as `\u001B`, never sent to the terminal.
+  characters in table cells, notices and errors are shown as `\u001B`, never sent to the terminal, and a line break
+  in a notice, warning, error or log line starts a continuation marked `│`, so a request dump stays readable.
 - A `Program` runner that answers `--help`, [`help <command>`](#a-help-command), `--version`, usage errors (exit
   status 2) and configuration errors (78), hands every other command
   to the handler the program registered for it, turns an expected failure (`CommandFailure`) into its exit status

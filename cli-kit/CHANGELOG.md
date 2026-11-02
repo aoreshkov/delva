@@ -12,6 +12,14 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 - With stdout and stderr merged on one reader, as under `2>&1`, notices, warnings and errors keep their place among the
   payload's lines instead of arriving before it: every write to stderr first delivers what stdout holds.
+- A line break in a notice, a warning, an error or a log line starts a continuation line, indented under the message
+  and marked `│` (or `|`), instead of showing as `\u000A`. Each such entry is one write to stderr, so entries from
+  several threads don't interleave, and `TerminalIo.errLine` now writes its text and line break in one `err` call.
+
+### Security
+
+- A stack trace printed under `--verbose` keeps each exception's message on one line, so a line break in a message
+  can no longer start a line that passes for a log entry.
 
 ## [0.3.0] - 2026-10-21
 

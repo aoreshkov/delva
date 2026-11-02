@@ -2,10 +2,10 @@ package app.oreshkov.clikit.testing
 
 import app.oreshkov.clikit.BorderStyle
 import app.oreshkov.clikit.InterruptRegistry
+import app.oreshkov.clikit.Output
 import app.oreshkov.clikit.Styler
 import app.oreshkov.clikit.TableRenderer
 import app.oreshkov.clikit.TerminalIo
-import app.oreshkov.clikit.TerminalText
 
 /**
  * Captures both streams, for tests.
@@ -76,7 +76,8 @@ public class RecordingTerminalIo(
             try {
                 registration.action()
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                errLine(styler.red("error: ") + "while stopping: " + TerminalText.escape(e.message ?: e::class.simpleName.orEmpty()))
+                // Through Output, so a message with line breaks renders as the real terminal renders it.
+                Output(this, machineReadable = false).error("while stopping: " + (e.message ?: e::class.simpleName.orEmpty()))
             }
         }
         return registrations.isNotEmpty()

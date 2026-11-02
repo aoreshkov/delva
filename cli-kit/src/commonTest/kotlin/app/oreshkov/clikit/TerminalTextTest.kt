@@ -85,6 +85,53 @@ class TerminalTextTest {
     }
 
     @Test
+    fun `a failure's or a bug's message with line breaks continues under it, as Output's errors do`() {
+        val fail = CommandSpec("fail", "Fail")
+        val bug = CommandSpec("bug", "Bug")
+        val program = Program(
+            CommandSpec("demo", subcommands = listOf(fail, bug)),
+            "demo 1",
+            mapOf(
+                fail to CommandHandler { throw CommandFailure(ExitStatus.NO_INPUT, "no key\r\n$esc[2J") },
+                bug to CommandHandler { error("boom\nagain") },
+            ),
+        )
+        val failed = RecordingTerminalIo()
+        assertEquals(ExitStatus.NO_INPUT, program.run(arrayOf("fail"), failed))
+        assertEquals("error: no key\n       | \\u001B[2J\n", failed.stderr)
+
+        val crashed = RecordingTerminalIo()
+        assertEquals(ExitStatus.SOFTWARE, program.run(arrayOf("bug"), crashed))
+        val under = " ".repeat("internal error: ".length)
+        assertTrue(crashed.stderr.startsWith("internal error: boom\n$under| again\nThis is a bug in demo."), crashed.stderr)
+    }
+
+    @Test
+    fun `a stack trace keeps every exception message on one line, so none can forge a log entry`() {
+        val forged = "boom\n2026-11-01T00:00:00.000Z ERROR forged"
+        val failure = IllegalStateException(forged, IllegalArgumentException("cause\r$forged"))
+        failure.addSuppressed(RuntimeException("suppressed\r\n$forged"))
+        val io = RecordingTerminalIo()
+        Output(io, machineReadable = false, verbose = true).log(LogLevel.ERROR, "failed", failure)
+        val lines = io.stderr.removeSuffix("\n").lines()
+        assertTrue(lines.none { it.firstOrNull()?.isDigit() == true }, io.stderr)
+        assertTrue(lines.drop(1).all { it.startsWith(" ") || it.startsWith("java.") || it.startsWith("Caused by: ") }, io.stderr)
+        val escaped = "boom\\u000A2026-11-01T00:00:00.000Z ERROR forged"
+        assertTrue(lines.any { it == "Caused by: java.lang.IllegalArgumentException: cause\\u000D$escaped" }, io.stderr)
+        assertTrue(lines.any { it == "    Suppressed: java.lang.RuntimeException: suppressed\\u000D\\u000A$escaped" }, io.stderr)
+    }
+
+    @Test
+    fun `a stack trace whose exceptions suppress each other still ends`() {
+        val first = IllegalStateException("first\nline")
+        val second = IllegalStateException("second\nline", first)
+        first.addSuppressed(second)
+        val trace = TerminalText.stackTrace(first)
+        assertTrue("first\\u000Aline" in trace && "second\\u000Aline" in trace, trace)
+        assertTrue(trace.lines().none { it.startsWith("line") }, trace)
+    }
+
+    @Test
     fun `an unterminated ESC bracket is text, measured and cut like any other`() {
         val text = "$esc[31abcdef"
         assertEquals(text.length, Styler.displayWidth(text))
