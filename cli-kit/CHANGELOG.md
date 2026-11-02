@@ -8,6 +8,11 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+### Changed
+
+- With stdout and stderr merged on one reader, as under `2>&1`, notices, warnings and errors keep their place among the
+  payload's lines instead of arriving before it: every write to stderr first delivers what stdout holds.
+
 ## [0.3.0] - 2026-10-21
 
 ### Added

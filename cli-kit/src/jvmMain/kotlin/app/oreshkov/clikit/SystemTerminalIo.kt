@@ -27,6 +27,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * so a command that exits through a failing path still delivers what it wrote. stdout is its own
  * buffered stream on file descriptor 1 rather than `System.out`, which flushes on every write.
  *
+ * Every [err] delivers what stdout holds before it writes, so with both streams on one reader, as
+ * under `2>&1`, the lines arrive in the order they were written. C stdio doesn't do this, and a C
+ * program's stderr overtakes its buffered stdout there. The difference is deliberate: [Output] puts
+ * the payload's context on stderr, such as the cursor of the next page, and context that has drifted
+ * away from its payload says something false. Notices are few next to payload lines, so the payload
+ * stays block-buffered. The order holds for writes from one thread: a line that another thread
+ * writes to stderr can still land inside a payload line written in several calls.
+ *
  * [payload] takes the payload as UTF-8 bytes, for values too large to hold as a string. Down a pipe
  * and at a UTF-8 terminal they go through as they are; at a terminal with another charset they are
  * decoded and written as text, so the bytes and the text of one command reach the screen alike.
@@ -144,7 +152,12 @@ public class SystemTerminalIo(
         if (interactive) stdout.flush()
     }
 
+    /**
+     * Writes [text] to stderr at once, after what stdout holds; see the class KDoc. A failed flush of stdout doesn't
+     * throw: `PrintStream` records it, and [stdoutState] reports it once the run ends.
+     */
     override fun err(text: String) {
+        stdout.flush()
         stderr.print(text)
         stderr.flush()
     }
