@@ -132,6 +132,17 @@ A query whose filters don't narrow the documents down — `$..sku`, say — is r
 unless the query allows a full scan with `ScanPolicy.ALLOW_SCAN`. `count(query, atMost)` tells how many hits a
 search has without reading them, and stops at `atMost`.
 
+The patterns of `match` and `search` are I-Regexp (RFC 9485), which has no inline flags, no `\d` and no lookaround.
+A pattern written into the query that can never match is still valid RFC 9535, so the query compiles and finds
+nothing, but its `warnings` (experimental) say why; show them to whoever wrote the query. To match either case, list
+both in a class: `'[Aa]1'`.
+
+```kotlin
+@OptIn(ExperimentalDelvaApi::class)
+val warnings = JsonPath.compile("$..[?match(@.sku, '(?i)a1')]").warnings.map { "offset ${it.offset}: ${it.reason}" }
+println(warnings.single())   // offset 18: '(?i)a1' isn't I-Regexp (RFC 9485), so match() is false for every value: …
+```
+
 ## Document filters
 
 A **document filter** (experimental) limits a search to the documents whose root meets a condition: an RFC 9535 filter

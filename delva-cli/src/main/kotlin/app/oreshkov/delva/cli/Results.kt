@@ -10,8 +10,10 @@ import app.oreshkov.clikit.Output
 import app.oreshkov.clikit.field
 import app.oreshkov.clikit.payloadStream
 import app.oreshkov.clikit.writeObject
+import app.oreshkov.delva.DocumentFilter
 import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonFormat
+import app.oreshkov.delva.JsonPath
 import app.oreshkov.delva.SearchHit
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
@@ -42,6 +44,17 @@ internal fun CommandContext.jsonFormat(): JsonFormat {
 /** The exit status of a query that found [found] results: 0, or 1 for nothing when `--exit-status` asks for it. */
 internal fun CommandContext.queryStatus(found: Boolean): Int =
     if (!found && values[DelvaCommands.exitStatus]) ExitStatus.FAILURE else ExitStatus.OK
+
+/**
+ * The warnings of the [query] and the [filter] a command was given, on stderr before anything else: a `match` or
+ * `search` whose pattern can never match still runs and finds nothing, which reads like an answer. They don't change
+ * the exit status, since the query ran, and they don't touch stdout, so `--json` output keeps its shape.
+ */
+@OptIn(ExperimentalDelvaApi::class)
+internal fun CommandContext.warnAbout(query: JsonPath?, filter: DocumentFilter? = null) {
+    query?.warnings?.forEach { output.warn("the query at offset ${it.offset}: ${it.reason}") }
+    filter?.warnings?.forEach { output.warn("${DelvaCommands.where.long} at offset ${it.offset}: ${it.reason}") }
+}
 
 /**
  * Search hits, as they are read: a table whose last column is a short preview of each hit's JSON, or JSON Lines

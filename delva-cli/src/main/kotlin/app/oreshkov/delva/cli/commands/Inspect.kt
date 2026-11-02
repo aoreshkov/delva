@@ -16,12 +16,14 @@ import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.cli.DelvaCommands
 import app.oreshkov.delva.cli.ValueArgs
 import app.oreshkov.delva.cli.queryStatus
+import app.oreshkov.delva.cli.warnAbout
 import app.oreshkov.delva.cli.withReader
 
 /** `delva explain <query> [--where <filter>]`: how a JSONPath search would find its documents, without reading any. */
 @OptIn(ExperimentalDelvaApi::class)
 internal val explain = CommandHandler { context ->
     val query = context.values.required(DelvaCommands.explainQuery)
+    context.warnAbout(query, context.values[DelvaCommands.where])
     context.withReader { store, _ ->
         val plan = store.blocking().explain(JsonPathQuery(query, documentFilter = context.values[DelvaCommands.where]))
         if (context.output.machineReadable) {

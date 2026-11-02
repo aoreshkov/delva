@@ -10,8 +10,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The RFC 9535 parser and type checker, and the I-Regexp translation; the compliance suite is in JsonPathSelectTest. */
@@ -20,7 +18,7 @@ class JsonPathParserTest {
 
     @Test
     fun `segments and selectors parse into the tree`() {
-        val q = JsonPathParser.parse("$.a..b[0, -1, 1:5:2, ::-1, *, 'c', ?@.d]")
+        val q = JsonPathParser.parse("$.a..b[0, -1, 1:5:2, ::-1, *, 'c', ?@.d]").tree
         assertEquals(3, q.segments.size)
         assertFalse(q.segments[1].selectors.isEmpty())
         assertTrue(q.segments[1].descendant)
@@ -37,7 +35,7 @@ class JsonPathParserTest {
 
     @Test
     fun `singular queries are exactly the RFC's, blank space inside brackets included`() {
-        fun singular(text: String) = ((JsonPathParser.parse("$[?$text == 1]").segments[0].selectors[0] as Selector.Filter).expr as LogicalExpr.Comparison).left
+        fun singular(text: String) = ((JsonPathParser.parse("$[?$text == 1]").tree.segments[0].selectors[0] as Selector.Filter).expr as LogicalExpr.Comparison).left
         assertIs<ValueExpr.Query>(singular("@.a['b'][0][-1]"))
         assertIs<ValueExpr.Query>(singular("$ .a [0]"))
         assertTrue("singular" in message("$[?@[ 'a' ] == 1]"))
@@ -88,9 +86,9 @@ class JsonPathParserTest {
     @Test
     fun `a document filter is a logical expression on its own`() {
         fun filterMessage(text: String) = assertFailsWith<InvalidJsonPathException>(text) { DocumentFilter.compile(text) }
-        assertIs<LogicalExpr.And>(JsonPathParser.parseFilter(" @.a == 1 && \$.b[?@.c] \n"))
-        assertIs<LogicalExpr.Exists>(JsonPathParser.parseFilter("$.a"))
-        assertIs<LogicalExpr.Not>(JsonPathParser.parseFilter("!(@.a == 1 || match(@.b, 'x.*'))"))
+        assertIs<LogicalExpr.And>(JsonPathParser.parseFilter(" @.a == 1 && \$.b[?@.c] \n").tree)
+        assertIs<LogicalExpr.Exists>(JsonPathParser.parseFilter("$.a").tree)
+        assertIs<LogicalExpr.Not>(JsonPathParser.parseFilter("!(@.a == 1 || match(@.b, 'x.*'))").tree)
         assertEquals(6, filterMessage("@.a ==").offset)
         assertEquals(9, filterMessage("@.a == 1 )").offset)
         assertEquals(0, filterMessage("").offset)
@@ -112,9 +110,13 @@ class JsonPathParserTest {
         assertFalse(JsonPath.compile("$.a") == JsonPath.compile("$['a']"))
     }
 
+    private fun valid(re: String): IRegexp.Compiled = assertIs<IRegexp.Compiled>(IRegexp.compile(re), re)
+
+    private fun invalid(re: String): IRegexp.Invalid = assertIs<IRegexp.Invalid>(IRegexp.compile(re), re)
+
     @Test
     fun `I-Regexp is checked and translated`() {
-        fun matches(re: String, s: String) = assertNotNull(IRegexp.compile(re), re).matches(s)
+        fun matches(re: String, s: String) = valid(re).matches(s)
         assertTrue(matches("a.c", "abc"))
         assertFalse(matches("a.c", "a\nc"))
         assertFalse(matches("a.c", "a\rc"))
@@ -127,35 +129,103 @@ class JsonPathParserTest {
         assertTrue(matches("\\.\\*\\{\\}\\|", ".*{}|"))
         assertTrue(matches("[&]", "&"))
         assertTrue(matches("😀.", "😀😀"))
-        assertTrue(assertNotNull(IRegexp.compile("b")).find("abc"))
-        assertFalse(assertNotNull(IRegexp.compile("b$")).find("ab\n"))
-        for (invalid in listOf("(", ")", "a**", "*", "a{", "a{1,2", "[", "[]", "[a", "\\d", "\\w", "\\1", "(?:a)", "a{2,1}", "\\p{Xx}", "[a-\\p{L}]", "a|*", "]", "}")) {
-            assertNull(IRegexp.compile(invalid), invalid)
+        assertTrue(valid("b").find("abc"))
+        assertFalse(valid("b$").find("ab\n"))
+        assertTrue(matches("a{2}b{1,}c{0,1}", "aabbc"))
+        assertTrue(matches("[a-a]", "a"))
+        for (re in listOf("(", ")", "a**", "*", "a{", "a{1,2", "[", "[]", "[a", "\\d", "\\w", "\\1", "(?:a)", "a{2,1}", "\\p{Xx}", "[a-\\p{L}]", "a|*", "]", "}", "[z-a]")) {
+            invalid(re)
         }
+    }
+
+    @Test
+    fun `an invalid pattern says what is wrong, and where`() {
+        fun assertInvalid(re: String, index: Int, reason: String) {
+            val invalid = invalid(re)
+            assertEquals(index, invalid.index, "index of the problem in '$re'")
+            assertContains(invalid.reason, reason, message = "reason for '$re'")
+        }
+        assertInvalid("(?i)dracula", 0, "(?i) is an inline flag, which I-Regexp doesn't have; to match either case, list both in a class, as in [Dd]")
+        assertInvalid("x(?-s:y)", 1, "(?-s: is an inline flag")
+        assertInvalid("(?m)", 0, "inline flag, which I-Regexp doesn't have")
+        assertInvalid("a(?=b)", 1, "(?= is lookahead")
+        assertInvalid("(?!b)", 0, "(?! is lookahead")
+        assertInvalid("(?<=b)a", 0, "(?<= is lookbehind")
+        assertInvalid("(?<!b)a", 0, "(?<! is lookbehind")
+        assertInvalid("(?<n>a)", 0, "(?< names a group")
+        assertInvalid("(?P<n>a)", 0, "(?P names a group")
+        assertInvalid("(?:a)", 0, "(?: makes a group non-capturing")
+        assertInvalid("(?>a)", 0, "(?> is an atomic group")
+        assertInvalid("(?", 0, "'?' has nothing before it to repeat")
+        assertInvalid("ab\\d", 2, "\\d isn't an I-Regexp escape; for a digit, use [0-9] or \\p{Nd}")
+        assertInvalid("\\D", 0, "[^0-9]")
+        assertInvalid("\\w", 0, "word character")
+        assertInvalid("\\W", 0, "[^A-Za-z0-9_]")
+        assertInvalid("\\s", 0, "blank space")
+        assertInvalid("\\S", 0, "other than blank space")
+        assertInvalid("\\bx", 0, "no word boundaries")
+        assertInvalid("\\Ax", 0, "'^' and '$' anchor")
+        assertInvalid("\\u00e9", 0, "write the character itself")
+        assertInvalid("(a)\\1", 3, "backreference")
+        assertInvalid("\\q", 0, "\\q isn't an I-Regexp escape")
+        assertInvalid("a\\", 1, "ends in a '\\'")
+        assertInvalid("\\p{IsLatin}", 0, "\\p{IsLatin} names no Unicode general category")
+        assertInvalid("\\P{Lu", 0, "\\P{ has no '}'")
+        assertInvalid("\\pL", 0, "\\p is followed by a category in braces")
+        assertInvalid("a**", 2, "a quantifier can't follow another")
+        assertInvalid("a*?", 2, "no lazy (*?) or possessive (*+) quantifiers")
+        assertInvalid("a{2}+", 4, "a quantifier can't follow another")
+        assertInvalid("*a", 0, "'*' has nothing before it to repeat; a literal '*' is written \\*")
+        assertInvalid("a|+", 2, "'+' has nothing before it")
+        assertInvalid("(?)", 0, "'?' has nothing before it")
+        assertInvalid("{2}", 0, "'{' has nothing before it")
+        assertInvalid("a{", 1, "a repetition is {n}, {n,} or {n,m}")
+        assertInvalid("a{,3}", 1, "a repetition is {n}, {n,} or {n,m}")
+        assertInvalid("a{1,2", 1, "the repetition has no '}'")
+        assertInvalid("a{5,2}", 1, "the repetition {5,2} has its minimum above its maximum")
+        assertInvalid("a{1234567890}", 2, "at most 9 digits")
+        assertInvalid("a(b", 1, "the group has no ')'")
+        assertInvalid("ab)", 2, "')' closes no group")
+        assertInvalid("x[ab", 1, "the class has no ']'")
+        assertInvalid("x[a-", 1, "the class has no ']'")
+        assertInvalid("[]a]", 1, "a class has at least one character")
+        assertInvalid("[a-b-c]", 4, "a '-' that isn't first or last in a class")
+        assertInvalid("[a-\\p{L}]", 3, "a range ends at a character, not at a category")
+        assertInvalid("[z-a]", 1, "the range z-a runs backwards")
+        assertInvalid("[\\t-\\n]x[c-b]", 9, "the range c-b runs backwards")
+        assertInvalid("[[]", 1, "a literal '[' in a class is written \\[")
+        assertInvalid("a]", 1, "a literal ']' is written \\]")
+        assertInvalid("}", 0, "a literal '}' is written \\}")
+        assertInvalid("a\uD800", 1, "an unpaired surrogate")
+        assertInvalid("[\uDC00]", 1, "an unpaired surrogate")
+        // A paired surrogate is one character, in a class and outside one.
+        assertTrue(valid("[😀-😂]+").matches("😁😀"))
     }
 
     @Test
     fun `a regular expression that backtracks too much fails the query`() {
         // Recent JDKs memoize `(a+)+b`; a bounded repetition of `.*` still backtracks exponentially.
-        val evil = assertNotNull(IRegexp.compile("(.*a){12}b"))
+        val evil = valid("(.*a){12}b")
         assertFailsWith<QueryLimitException> { evil.matches("a".repeat(30) + "c") }
     }
 
     @Test
     fun `groups nest at most MAX_GROUP_DEPTH deep, and deeper patterns aren't valid`() {
         fun nested(depth: Int) = "(".repeat(depth) + "a" + ")".repeat(depth)
-        assertTrue(assertNotNull(IRegexp.compile(nested(IRegexp.MAX_GROUP_DEPTH))).matches("a"))
-        assertNull(IRegexp.compile(nested(IRegexp.MAX_GROUP_DEPTH + 1)))
-        assertNull(IRegexp.compile(nested(32_000)))
-        assertNull(IRegexp.compile("(".repeat(32_000)))
+        assertTrue(valid(nested(IRegexp.MAX_GROUP_DEPTH)).matches("a"))
+        val deeper = invalid(nested(IRegexp.MAX_GROUP_DEPTH + 1))
+        assertEquals(IRegexp.MAX_GROUP_DEPTH, deeper.index)
+        assertEquals("groups nest at most ${IRegexp.MAX_GROUP_DEPTH} deep", deeper.reason)
+        invalid(nested(32_000))
+        invalid("(".repeat(32_000))
     }
 
     @Test
     fun `a match that runs out of stack fails the query, not the thread`() {
         // The JDK's matcher recurses once per repetition of a group.
-        val pattern = assertNotNull(IRegexp.compile("(a|b)*"))
+        val pattern = valid("(a|b)*")
         val subject = "ab".repeat(500_000)
         assertContains(assertFailsWith<QueryLimitException> { pattern.matches(subject) }.message!!, "stack")
-        assertContains(assertFailsWith<QueryLimitException> { assertNotNull(IRegexp.compile("(a|b)*c")).find(subject) }.message!!, "stack")
+        assertContains(assertFailsWith<QueryLimitException> { valid("(a|b)*c").find(subject) }.message!!, "stack")
     }
 }

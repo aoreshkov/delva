@@ -8,8 +8,9 @@ import app.oreshkov.delva.internal.path.IRegexp
  * compiled on each use and held only while it's used. Not thread-safe.
  */
 internal class PatternCache(private val maxEntries: Int = MAX_ENTRIES, private val maxChars: Int = MAX_CHARS) {
-    private val compiled = object : LinkedHashMap<String, IRegexp.Compiled?>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, IRegexp.Compiled?>): Boolean = size > maxEntries
+    // Invalid patterns are held too: a document that repeats one costs one translation, as a valid one does.
+    private val compiled = object : LinkedHashMap<String, IRegexp.Result>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, IRegexp.Result>): Boolean = size > maxEntries
     }
 
     /** Patterns held; for tests. */
@@ -17,7 +18,7 @@ internal class PatternCache(private val maxEntries: Int = MAX_ENTRIES, private v
 
     /** [text] compiled, or null when it isn't valid I-Regexp. */
     fun compile(text: String): IRegexp.Compiled? =
-        if (text.length > maxChars) IRegexp.compile(text) else compiled.getOrPut(text) { IRegexp.compile(text) }
+        (if (text.length > maxChars) IRegexp.compile(text) else compiled.getOrPut(text) { IRegexp.compile(text) }) as? IRegexp.Compiled
 
     companion object {
         const val MAX_ENTRIES = 64

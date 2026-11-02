@@ -177,6 +177,12 @@ class GuideExampleTest {
             val all = blocking.search(JsonPathQuery(JsonPath.compile("$..sku"), scan = ScanPolicy.ALLOW_SCAN)).use { it.iterator().asSequence().count() }
             assertEquals(2, all)
 
+            @OptIn(ExperimentalDelvaApi::class)
+            val warnings = JsonPath.compile("$..[?match(@.sku, '(?i)a1')]").warnings.map { "offset ${it.offset}: ${it.reason}" }
+            assertTrue(warnings.single().startsWith("offset 18: '(?i)a1' isn't I-Regexp (RFC 9485), so match() is false for every value: "), warnings.single())
+            val caseless = JsonPathQuery(JsonPath.compile("$..[?match(@.sku, '[Aa]1')].qty"), scan = ScanPolicy.ALLOW_SCAN)
+            assertEquals(listOf("2"), blocking.search(caseless).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() })
+
             blocking.insert("""{"kind":"order","items":[{"sku":"C3","qty":5}]}""")
             @OptIn(ExperimentalDelvaApi::class)
             val orderSkus = JsonPathQuery(JsonPath.compile("$..sku")).withDocumentFilter(DocumentFilter.compile("@.kind == 'order'"))

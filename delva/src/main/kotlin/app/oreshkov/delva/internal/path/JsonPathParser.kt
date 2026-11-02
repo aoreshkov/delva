@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.path
 
 import app.oreshkov.delva.InvalidJsonPathException
+import app.oreshkov.delva.QueryWarning
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.canon.CanonicalNumber
 
@@ -14,6 +15,9 @@ import app.oreshkov.delva.internal.canon.CanonicalNumber
  * nested filters, parentheses and function calls, and [MAX_SELECTORS] selectors. Numbers follow SPEC.md §2.2, so
  * a literal whose exponent doesn't fit an `Int` is rejected.
  *
+ * The parser also collects the [QueryWarning]s of [PatternWarnings]: a `match` or `search` whose literal pattern makes
+ * it false for every value.
+ *
  * A template ([parseTemplate], [parseFilterTemplate]) may have `${name}` wherever the grammar allows a `literal`; the
  * tree then holds a stand-in literal there, which [Placeholders.bind] replaces.
  */
@@ -22,30 +26,44 @@ internal object JsonPathParser {
     const val MAX_NESTING: Int = 64
     const val MAX_SELECTORS: Int = 4_096
 
-    fun parse(text: String): PathQuery = Parser(text).query()
+    fun parse(text: String): Parsed<PathQuery> {
+        val parser = Parser(text)
+        return Parsed(parser.query(), parser.warnings)
+    }
 
     /**
      * A `logical-expr` on its own, as a filter selector holds one after its `?`, with blank space allowed around it.
      * It counts as one level of nesting, as the filter selector would, and the limits are those of a query.
      */
-    fun parseFilter(text: String): LogicalExpr = Parser(text).filter()
+    fun parseFilter(text: String): Parsed<LogicalExpr> {
+        val parser = Parser(text)
+        return Parsed(parser.filter(), parser.warnings)
+    }
 
     /** [parse] with `${name}` placeholders where a literal can stand ([Placeholders]). */
     fun parseTemplate(text: String): Pair<PathQuery, Placeholders> {
         val parser = Parser(text, templates = true)
-        return parser.query() to Placeholders(text, parser.placeholders, "query")
+        val tree = parser.query()
+        return tree to Placeholders(text, parser.placeholders, "query", parser.warnings, parser.patternPlaceholders)
     }
 
     /** [parseFilter] with `${name}` placeholders where a literal can stand ([Placeholders]). */
     fun parseFilterTemplate(text: String): Pair<LogicalExpr, Placeholders> {
         val parser = Parser(text, templates = true)
-        return parser.filter() to Placeholders(text, parser.placeholders, "filter")
+        val tree = parser.filter()
+        return tree to Placeholders(text, parser.placeholders, "filter", parser.warnings, parser.patternPlaceholders)
     }
 
     private class Parser(text: String, private val templates: Boolean = false) : PathScanner(text) {
         private var nesting = 0
         private var selectors = 0
         val placeholders = ArrayList<Placeholder>()
+
+        /** The warnings of literal patterns, in the order of the text. */
+        val warnings = ArrayList<QueryWarning>()
+
+        /** The `match` and `search` calls whose pattern is a placeholder, which binding checks. */
+        val patternPlaceholders = ArrayList<PatternPlaceholder>()
 
         fun filter(): LogicalExpr {
             if (text.length > MAX_LENGTH) fail("a filter has at most $MAX_LENGTH characters")
@@ -429,11 +447,16 @@ internal object JsonPathParser {
             enter()
             skipBlank()
             val args = ArrayList<FunctionArg>()
+            // Where the last argument read starts and ends: for match and search, the pattern.
+            var lastStart = i
+            var lastEnd = i
             if (peek() != ')') {
                 while (true) {
                     val at = i
                     if (args.size == function.parameters.size) fail("$name() takes ${function.parameters.size} argument(s)")
                     args += argument(function.parameters[args.size], name, at)
+                    lastStart = at
+                    lastEnd = i
                     skipBlank()
                     if (peek() == ')') break
                     if (peek() != ',') fail("expected ',' or ')'")
@@ -444,7 +467,22 @@ internal object JsonPathParser {
             if (args.size != function.parameters.size) fail("$name() takes ${function.parameters.size} argument(s)")
             i++
             nesting--
-            return FunctionCall(function, args)
+            return FunctionCall(function, args).also { pattern(it, lastStart, lastEnd) }
+        }
+
+        /**
+         * Notes the literal pattern of [call], `text[start, end)`: its warning, or, when a placeholder stands for it, the
+         * placeholder, which binding checks once it has a value.
+         */
+        private fun pattern(call: FunctionCall, start: Int, end: Int) {
+            val literal = call.patternLiteral ?: return
+            // The pattern is the last thing the call read, so a placeholder standing for it is the last one read.
+            val placeholder = placeholders.lastOrNull()
+            if (placeholder != null && placeholder.standIn === literal) {
+                patternPlaceholders += PatternPlaceholder(call, placeholders.size - 1)
+            } else {
+                PatternWarnings.of(call, start, text.substring(start, end))?.let(warnings::add)
+            }
         }
 
         /**
@@ -502,3 +540,6 @@ internal object JsonPathParser {
         override fun fail(reason: String): Nothing = throw InvalidJsonPathException(text, i, reason)
     }
 }
+
+/** A parsed query or filter, and the warnings of its text, in the order of the text. */
+internal class Parsed<T>(val tree: T, val warnings: List<QueryWarning>)

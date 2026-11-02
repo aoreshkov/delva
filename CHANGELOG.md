@@ -12,6 +12,11 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 - `delva`: `QueryRejectedException.detail` is what the store found, without the message's prefix, and
   `QueryRejectedException.query` the text of the refused JSONPath query.
+- `delva`: query warnings (experimental): `JsonPath.warnings`, `DocumentFilter.warnings` and those of the templates
+  report a `match` or `search` whose literal pattern makes it false for every value, such as `'(?i)x'`, which isn't
+  I-Regexp.
+- `delva-cli`: `search path`, `get --path` and `explain` print those warnings, for the query and for `--where`, on
+  stderr before anything else.
 
 ### Changed
 

@@ -249,6 +249,46 @@ class ReadCommandsTest {
         assertContains(bad.stderr, "at 11")
     }
 
+    @Test
+    fun `a pattern that can never match is a warning on stderr, and the query still runs`() {
+        val query = "\$..items[?search(@.sku, '\\\\d')].sku"
+        val filter = "@.status == 'open' || match(@.status, 1)"
+        // The match() side of the filter names no index term, so neither search is narrowed.
+        val search = run("search", "path", query, "--where", filter, "--scan", "--json")
+        assertEquals(ExitStatus.OK, search.status, search.stderr)
+        val warnings = search.stderr.lines().filter { it.startsWith("warning: ") }
+        assertEquals(
+            listOf(
+                "warning: the query at offset 24: '\\\\d' isn't I-Regexp (RFC 9485), so search() is false for every value: " +
+                    "\\d isn't an I-Regexp escape; for a digit, use [0-9] or \\p{Nd}",
+                "warning: --where at offset 38: the pattern 1 is a number, not a string, so match() is false for every value",
+            ),
+            warnings,
+        )
+        // The warnings come first, and stdout keeps the shape --json gives it: here, no records.
+        assertTrue(search.stderr.startsWith(warnings[0]), search.stderr)
+        assertEquals("", search.stdout)
+
+        // The filter's warning leaves the documents the rest of it accepts.
+        val hits = run("search", "path", "$..sku", "--where", filter, "--scan", "--mode", "element", "--json")
+        assertEquals(2, hits.stdout.lines().count { it.startsWith("{") }, hits.stdout)
+        assertContains(hits.stderr, "warning: --where at offset 38:")
+
+        val get = run("get", "1", "--path", "$.items[?match(@.sku, '[A-Z')].qty")
+        assertEquals(ExitStatus.OK, get.status)
+        assertContains(get.stderr, "warning: the query at offset 22: '[A-Z' isn't I-Regexp (RFC 9485), so match() is false for every value: the class has no ']'")
+        assertEquals("", get.stdout)
+
+        val explain = run("explain", "$[?match(@.a, null)]")
+        assertContains(explain.stderr, "warning: the query at offset 14: the pattern null isn't a string")
+        assertContains(explain.stdout, "terms")
+
+        // A warning is no failure, and --quiet silences it with the other notices.
+        assertEquals(ExitStatus.FAILURE, run("get", "1", "--path", "$.items[?match(@.sku, 1)]", "-e").status)
+        assertFalse("warning" in run("-q", "get", "1", "--path", "$.items[?match(@.sku, 1)]").stderr)
+        assertFalse("warning" in run("search", "path", "$..sku", "--where", "@.status == 'open'", "-c").stderr)
+    }
+
     // ------------------------------------------------------------------------------------ explain, path, types
 
     @Test

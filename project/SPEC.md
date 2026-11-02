@@ -688,6 +688,15 @@ deep, an implementation limit RFC 9485 allows; a deeper pattern isn't valid. Out
 `^` and `$` anchor the start and the end of the string, as the RFC 9535 compliance test suite expects, although
 RFC 9485's grammar reads them as ordinary characters.
 
+A pattern written as a literal in the query is another matter: if it isn't a string that is valid I-Regexp, the
+function is false for every value, which is almost never what was meant, as in `search(@.name, '(?i)ada')` (RFC 9485
+has no inline flags) or `match(@.a, 1)`. Compiling reports each such literal as a **warning** of the compiled query
+(`JsonPath.warnings`, `DocumentFilter.warnings`): its offset and length in the text, and the reason. The query still
+compiles, and runs as RFC 9535 says. A store with normalization runs a pattern in NFC ([10.2](#102-evaluation)), and
+composing can make a pattern valid or invalid (`[ỹ-̄]` is a valid range, `[ỹ-̄]` a backwards one), so
+a pattern that is invalid only as written, or only in NFC, warns too, and the reason names the kind of store in which
+the function is false.
+
 ### 10.2 Evaluation
 
 Evaluation follows RFC 9535 §2, with the values and equality of [2](#2-values-and-equality): numbers compare by
@@ -808,7 +817,9 @@ change the query's structure.
 The bound query is the query that compiling the **bound text** gives: the template's text with each placeholder
 replaced by its value's literal. A string's literal is single-quoted, escaped as in a Normalized Path
 ([9.3](#93-differences)), and a number's literal is its decimal text, with an exponent when it has one (`1E+3`). The
-bound text is the bound query's text, so the two are equal. A value that makes the bound text invalid fails the
+bound text is the bound query's text, so the two are equal, and the bound query's warnings
+([10.1](#101-queries)) are the bound text's, at offsets in it: a pattern bound to `'(?i)x'` warns at `bind`, and a
+template's own literal pattern both at `compile`, in the template's `warnings`, and at `bind`. A value that makes the bound text invalid fails the
 binding with `InvalidJsonPathException`, naming the offset in the bound text: a string with an unpaired surrogate, a
 number whose exponent is out of range ([10.1](#101-queries)), or bound text longer than 65 536 characters.
 

@@ -2,6 +2,8 @@ package app.oreshkov.delva.internal.path
 
 import app.oreshkov.delva.InvalidJsonPathException
 import app.oreshkov.delva.JsonQueryValue
+import app.oreshkov.delva.QueryWarning
+import app.oreshkov.delva.frozen
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.canon.CanonicalNumber
 import java.util.IdentityHashMap
@@ -9,13 +11,29 @@ import java.util.IdentityHashMap
 /** One `${name}` of a template's text, `text[start, end)`, and the stand-in literal the parser put in its place. */
 internal class Placeholder(val name: String, val start: Int, val end: Int, val standIn: LiteralValue)
 
+/** A `match` or `search` [call] of a template whose pattern is the placeholder at [index] of the template's list. */
+internal class PatternPlaceholder(val call: FunctionCall, val index: Int)
+
 /**
  * The placeholders of a template ([JsonPathParser.parseTemplate]), in the order of the text, and how values bind to
  * them (SPEC.md §10.6). A bound value becomes a literal of the tree, never text that is parsed, so no value can change
  * the query's structure. The bound text, the template's with each placeholder replaced by its value's literal, is what
  * [JsonPathParser] would parse into the same tree: it is the bound query's text, and its equality.
+ *
+ * The bound query's warnings are those [JsonPathParser] would find in the bound text too: the template's own
+ * [warnings], moved to their offsets in the bound text, and those of the [patterns] whose placeholder is bound to a
+ * pattern that can't match.
  */
-internal class Placeholders(private val text: String, private val list: List<Placeholder>, private val what: String) {
+internal class Placeholders(
+    private val text: String,
+    private val list: List<Placeholder>,
+    private val what: String,
+    warnings: List<QueryWarning>,
+    private val patterns: List<PatternPlaceholder>,
+) {
+    /** The warnings of the template's own literal patterns, at their offsets in its text. */
+    val warnings: List<QueryWarning> = warnings.frozen()
+
     /** Every name, once, in the order of first appearance. */
     val names: Set<String> = list.mapTo(LinkedHashSet()) { it.name }
 
@@ -33,12 +51,14 @@ internal class Placeholders(private val text: String, private val list: List<Pla
         val literals = HashMap<String, Bound>(names.size * 2)
         for (name in names) literals[name] = literal(name, values.getValue(name))
         val sb = StringBuilder(text.length + list.size * 8)
+        val boundStarts = IntArray(list.size)
         var from = 0
         var problem: Pair<Int, String>? = null
-        for (p in list) {
+        for ((k, p) in list.withIndex()) {
             sb.append(text, from, p.start)
             val bound = literals.getValue(p.name)
             if (bound.problem != null && problem == null) problem = sb.length to bound.problem
+            boundStarts[k] = sb.length
             sb.append(bound.token)
             from = p.end
         }
@@ -50,7 +70,19 @@ internal class Placeholders(private val text: String, private val list: List<Pla
         problem?.let { (offset, reason) -> throw InvalidJsonPathException(boundText, offset, reason) }
         val standIns = IdentityHashMap<LiteralValue, LiteralValue>(list.size)
         for (p in list) standIns[p.standIn] = literals.getValue(p.name).value
-        return Binding(boundText, standIns)
+        // A warning of the template's own lies outside every placeholder; it moves by what the placeholders before it grew.
+        val moved = ArrayList<QueryWarning>(warnings.size)
+        var k = 0
+        var growth = 0
+        for (w in warnings) {
+            while (k < list.size && list[k].end <= w.offset) {
+                growth = boundStarts[k] + literals.getValue(list[k].name).token.length - list[k].end
+                k++
+            }
+            moved += w.shifted(growth)
+        }
+        val boundPatterns = patterns.map { BoundPattern(it.call, boundStarts[it.index], literals.getValue(list[it.index].name).token) }
+        return Binding(boundText, standIns, moved, boundPatterns)
     }
 
     /** A value's literal: its RFC 9535 token, its value in the tree, or why it can't be one. */
@@ -104,11 +136,35 @@ internal class Placeholders(private val text: String, private val list: List<Pla
     }
 }
 
+/** A template's `match` or `search` [call] whose pattern placeholder is bound to [token], at [offset] of the bound text. */
+internal class BoundPattern(val call: FunctionCall, val offset: Int, val token: String)
+
 /**
  * Bound values, ready to replace the stand-ins of a template's tree: [query] and [filter] copy only the nodes on the way
  * to a stand-in and share the rest, so binding costs the placeholders and their ancestors, not the query.
  */
-internal class Binding(val text: String, private val standIns: IdentityHashMap<LiteralValue, LiteralValue>) {
+internal class Binding(
+    val text: String,
+    private val standIns: IdentityHashMap<LiteralValue, LiteralValue>,
+    private val templateWarnings: List<QueryWarning>,
+    private val patterns: List<BoundPattern>,
+) {
+    /** The calls [call] made of a template's calls with a bound pattern, whose translated patterns [warnings] reads. */
+    private val boundCalls = IdentityHashMap<FunctionCall, FunctionCall>(patterns.size)
+
+    /**
+     * The bound query's warnings, in the order of the bound text; called after [query] or [filter], which translate the
+     * bound patterns.
+     */
+    fun warnings(): List<QueryWarning> {
+        if (patterns.isEmpty()) return templateWarnings
+        val bound = patterns.mapNotNull { p ->
+            val call = checkNotNull(boundCalls[p.call]) { "the tree isn't bound yet" }
+            PatternWarnings.of(call, p.offset, p.token)
+        }
+        return if (bound.isEmpty()) templateWarnings else (templateWarnings + bound).sortedBy { it.offset }
+    }
+
     fun query(q: PathQuery): PathQuery {
         val segments = mapShared(q.segments, ::segment)
         return if (segments === q.segments) q else PathQuery(q.absolute, segments)
@@ -149,7 +205,8 @@ internal class Binding(val text: String, private val standIns: IdentityHashMap<L
     // A new call translates a bound `match` / `search` pattern (FunctionCall.literalPattern) once, here.
     private fun call(c: FunctionCall): FunctionCall {
         val args = mapShared(c.args, ::argument)
-        return if (args === c.args) c else FunctionCall(c.function, args)
+        if (args === c.args) return c
+        return FunctionCall(c.function, args).also { if (c.patternLiteral != null) boundCalls[c] = it }
     }
 
     private fun argument(a: FunctionArg): FunctionArg = when (a) {
