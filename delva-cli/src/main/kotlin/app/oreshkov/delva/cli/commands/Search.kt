@@ -7,6 +7,7 @@ import app.oreshkov.clikit.ExitStatus
 import app.oreshkov.clikit.JsonWriter
 import app.oreshkov.clikit.field
 import app.oreshkov.clikit.writeObject
+import app.oreshkov.delva.Cursor
 import app.oreshkov.delva.DocumentKeyQuery
 import app.oreshkov.delva.DocumentRejectedException
 import app.oreshkov.delva.ExperimentalDelvaApi
@@ -28,6 +29,7 @@ import app.oreshkov.delva.cli.withReader
  * `delva search kv <key> <value>`: the value is JSON unless `--string` says it is text, because `42`, `"42"`, `true`
  * and `{"a":1}` all have to be expressible and only parsing tells them apart.
  */
+@OptIn(ExperimentalDelvaApi::class)
 internal val searchKv = CommandHandler { context ->
     val values = context.values
     val key = values.required(DelvaCommands.kvKey)
@@ -45,7 +47,7 @@ internal val searchKv = CommandHandler { context ->
         after = values[DelvaCommands.after],
         type = values[DelvaCommands.type],
         order = values[DelvaCommands.order] ?: SearchOrder.ASCENDING,
-    )
+    ).withMaxDocuments(values[DelvaCommands.maxDocuments])
     context.withReader { store, _ ->
         val blocking = store.blocking()
         try {
@@ -86,7 +88,7 @@ internal val searchPath = CommandHandler { context ->
         scan = if (scan) ScanPolicy.ALLOW_SCAN else ScanPolicy.REJECT,
         order = values[DelvaCommands.order] ?: SearchOrder.ASCENDING,
         documentFilter = values[DelvaCommands.where],
-    )
+    ).withMaxDocuments(values[DelvaCommands.maxDocuments])
     context.warnAbout(path, query.documentFilter)
     context.withReader { store, _ ->
         val blocking = store.blocking()
@@ -148,20 +150,27 @@ private fun CommandContext.printCount(count: Long, ifNone: String? = null): Int 
 
 /**
  * The hits of [result]: all of them, or with `--limit` or `--max-bytes` one page, followed by a notice of the cursor
- * the next page starts at. When there are none, the notice `no hits` is followed by [ifNone], if any.
+ * the next page starts at. All of them end with that notice too when `--max-documents` ended the result before the
+ * documents ran out. When there are none, the notice `no hits` is followed by [ifNone], if any.
  */
 private fun CommandContext.printHits(result: SearchResult, ifNone: String? = null): Int {
     val writer = HitWriter(this)
     val paged = values[DelvaCommands.limit] != null || values[DelvaCommands.maxBytes] != null
+    var cursor: Cursor? = null
     if (paged) {
         val page = result.nextPage()
         page?.hits?.forEach(writer::write)
-        writer.finish(empty = "no hits")
-        page?.cursor?.let { output.notice("more: ${DelvaCommands.after.long} $it") }
+        cursor = page?.cursor
     } else {
-        for (hit in result) writer.write(hit)
-        writer.finish(empty = "no hits")
+        // Without a document bound the last page never has a cursor.
+        while (true) {
+            val page = result.nextPage() ?: break
+            page.hits.forEach(writer::write)
+            cursor = page.cursor
+        }
     }
+    writer.finish(empty = "no hits")
+    cursor?.let { output.notice("more: ${DelvaCommands.after.long} $it") }
     if (writer.count == 0 && ifNone != null) output.notice(ifNone)
     return queryStatus(writer.count > 0)
 }

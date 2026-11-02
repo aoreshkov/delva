@@ -219,6 +219,31 @@ class ReadCommandsTest {
     }
 
     @Test
+    fun `--max-documents prints every hit of the first documents, and says how to get the next ones`() {
+        // Order 1 has two items with a qty, order 2 one, order 3 none.
+        val items = arrayOf("search", "path", "$.items[?@.qty >= 0]", "--mode", "element", "--json")
+        val first = run(*items, "-m", "1")
+        assertEquals(listOf(1, 1), docs(first.stdout), first.stdout)
+        val cursor = Regex("more: --after (\\S+)").find(first.stderr)?.groupValues?.get(1) ?: error(first.stderr)
+        val rest = run(*items, "-m", "1", "--after", cursor)
+        assertEquals(listOf(2), docs(rest.stdout), rest.stdout)
+        assertFalse("more:" in rest.stderr, rest.stderr)
+
+        val newest = run(*items, "--order", "desc", "--max-documents", "1")
+        assertEquals(listOf(2), docs(newest.stdout), newest.stdout)
+        assertContains(newest.stderr, "more: --after ")
+        // With --limit, the bound still ends the result, and the page is the bound's first.
+        assertEquals(listOf(1), docs(run(*items, "-m", "1", "-n", "1").stdout))
+        assertEquals(listOf(1, 1, 2), docs(run(*items, "-m", "5").stdout))
+
+        assertEquals("1\n", run("search", "kv", "status", "open", "-S", "-m", "1", "-c").stdout)
+        assertEquals(ExitStatus.USAGE, program.record("search", "kv", "status", "open", "-S", "-m", "0").status)
+    }
+
+    /** The document of each `--json` hit record in [stdout]. */
+    private fun docs(stdout: String): List<Int> = Regex("^\\{\"doc\":(\\d+),", RegexOption.MULTILINE).findAll(stdout).map { it.groupValues[1].toInt() }.toList()
+
+    @Test
     fun `no hits is exit 0 and a notice, or 1 with --exit-status`() {
         val none = run("search", "kv", "status", "gone", "-S")
         assertEquals(ExitStatus.OK, none.status)

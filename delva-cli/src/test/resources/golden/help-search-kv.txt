@@ -22,23 +22,26 @@ Arguments:
          with --string
 
 Options:
-  -S, --string            Take the value as a string, not as JSON
-      --mode <mode>       Hits are whole documents, or the objects that contain
-                          the match (document|element) [default: document]
-      --nested <which>    Keep hits inside other hits, or only the outermost
-                          (all|outermost) [default: all]
-  -t, --type <name>       Only objects of this type
-  -n, --limit <n>         At most n results; a notice says how to get the rest
-                          [default: all]
-      --order <order>     Oldest documents first, or newest (asc|desc)
-                          [default: asc]
-      --after <cursor>    Resume after this cursor, from a hit's JSON or a
-                          'more:' notice
-      --max-bytes <size>  End a page before its hits pass this size, such as
-                          16MiB
-  -c, --count             Print how many hits there are, not the hits; with
-                          --limit, count at most n
-  -e, --exit-status       Exit 1 when nothing was found
+  -S, --string             Take the value as a string, not as JSON
+      --mode <mode>        Hits are whole documents, or the objects that contain
+                           the match (document|element) [default: document]
+      --nested <which>     Keep hits inside other hits, or only the outermost
+                           (all|outermost) [default: all]
+  -t, --type <name>        Only objects of this type
+  -n, --limit <n>          At most n results; a notice says how to get the rest
+                           [default: all]
+  -m, --max-documents <n>  Only the hits of the first n documents with hits;
+                           with --order desc, -m 1 gives every hit of the newest
+                           [default: all]
+      --order <order>      Oldest documents first, or newest (asc|desc)
+                           [default: asc]
+      --after <cursor>     Resume after this cursor, from a hit's JSON or a
+                           'more:' notice
+      --max-bytes <size>   End a page before its hits pass this size, such as
+                           16MiB
+  -c, --count              Print how many hits there are, not the hits; with
+                           --limit, count at most n
+  -e, --exit-status        Exit 1 when nothing was found
 
 Global options:
   -s, --store <dir>  The store directory [env: DELVA_STORE]

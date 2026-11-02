@@ -19,6 +19,10 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   stderr before anything else.
 - `delva-cli`: `search kv` that finds nothing for a key that looks like a path, such as `$.a.b`, says on stderr that
   the key is taken as one member's name, and points to `search path`.
+- `delva`: `maxDocuments` (experimental) on `JsonPathQuery` and `KeyValueQuery`, set with `withMaxDocuments`, ends a
+  search's result, and its `count`, after the hits of that many documents; with `SearchOrder.DESCENDING`, `1` gives
+  every hit of the newest matching document, and no further document is read.
+- `delva-cli`: `--max-documents` (`-m`) on `search kv` and `search path`.
 
 ### Changed
 

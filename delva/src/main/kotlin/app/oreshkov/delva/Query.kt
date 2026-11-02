@@ -18,27 +18,55 @@ import java.math.BigDecimal
  * - [type]: only containing objects of this type match (SPEC.md §6.2); in WHOLE_DOCUMENT mode a document is a hit when
  *   one of its objects of this type contains a match. A search with an invalid name throws [InvalidTypeNameException].
  * - [order]: the order of the hits (SPEC.md §4.4). [SearchOrder.DESCENDING] with `limit = 1` gives the newest hit.
+ * - [maxDocuments]: the result ends after the hits of this many documents; set with [withMaxDocuments].
  *
  * Queries are values: two instances with the same settings are equal, and [copy] derives a variant.
  */
-public class KeyValueQuery(
+public class KeyValueQuery private constructor(
     public val key: String,
     public val value: JsonQueryValue,
-    public val mode: ResultMode = ResultMode.WHOLE_DOCUMENT,
-    public val nested: NestedHits = NestedHits.ALL,
-    public val limit: Int = 100,
-    public val maxBytes: Long = Long.MAX_VALUE,
-    public val after: Cursor? = null,
-    public val type: String? = null,
-    public val order: SearchOrder = SearchOrder.ASCENDING,
+    public val mode: ResultMode,
+    public val nested: NestedHits,
+    public val limit: Int,
+    public val maxBytes: Long,
+    public val after: Cursor?,
+    public val type: String?,
+    public val order: SearchOrder,
+    maxDocuments: Int?,
 ) {
+    /** A search of every document for objects whose member [key] has [value]. */
+    public constructor(
+        key: String,
+        value: JsonQueryValue,
+        mode: ResultMode = ResultMode.WHOLE_DOCUMENT,
+        nested: NestedHits = NestedHits.ALL,
+        limit: Int = 100,
+        maxBytes: Long = Long.MAX_VALUE,
+        after: Cursor? = null,
+        type: String? = null,
+        order: SearchOrder = SearchOrder.ASCENDING,
+    ) : this(key, value, mode, nested, limit, maxBytes, after, type, order, null)
+
+    /**
+     * How many documents with hits the result covers, or null for no bound (SPEC.md §4.6): the result ends after the
+     * hits of that many documents, in [order], and the search reads no further document. `withMaxDocuments(1)` in
+     * [SearchOrder.DESCENDING] is every hit of the newest document that has one.
+     */
+    @ExperimentalDelvaApi
+    public val maxDocuments: Int? = maxDocuments
+
     init {
         require(limit > 0) { "limit must be positive, was $limit" }
         require(maxBytes > 0) { "maxBytes must be positive, was $maxBytes" }
+        require(maxDocuments == null || maxDocuments > 0) { "maxDocuments must be positive, was $maxDocuments" }
         requireSearchCursor(after, order)
     }
 
-    /** This query with the given settings changed; the result is validated like a new instance. */
+    /** This query with [maxDocuments] set to [n], or removed with null; [n] must be positive. */
+    @ExperimentalDelvaApi
+    public fun withMaxDocuments(n: Int?): KeyValueQuery = KeyValueQuery(key, value, mode, nested, limit, maxBytes, after, type, order, n)
+
+    /** This query with the given settings changed, [maxDocuments] kept; the result is validated like a new instance. */
     public fun copy(
         key: String = this.key,
         value: JsonQueryValue = this.value,
@@ -49,13 +77,14 @@ public class KeyValueQuery(
         after: Cursor? = this.after,
         type: String? = this.type,
         order: SearchOrder = this.order,
-    ): KeyValueQuery = KeyValueQuery(key, value, mode, nested, limit, maxBytes, after, type, order)
+    ): KeyValueQuery = KeyValueQuery(key, value, mode, nested, limit, maxBytes, after, type, order, maxDocuments)
 
     override fun equals(other: Any?): Boolean =
         other is KeyValueQuery && other.key == key && other.value == value && other.mode == mode && other.nested == nested &&
-            other.limit == limit && other.maxBytes == maxBytes && other.after == after && other.type == type && other.order == order
+            other.limit == limit && other.maxBytes == maxBytes && other.after == after && other.type == type && other.order == order &&
+            other.maxDocuments == maxDocuments
 
-    override fun hashCode(): Int = listOf(key, value, mode, nested, limit, maxBytes, after, type, order).hashCode()
+    override fun hashCode(): Int = listOf(key, value, mode, nested, limit, maxBytes, after, type, order, maxDocuments).hashCode()
 
     override fun toString(): String = buildString {
         append("KeyValueQuery(key=").append(key).append(", value=").append(value)
@@ -64,6 +93,7 @@ public class KeyValueQuery(
         if (after != null) append(", after=").append(after)
         if (type != null) append(", type=").append(type)
         if (order != SearchOrder.ASCENDING) append(", order=").append(order)
+        if (maxDocuments != null) append(", maxDocuments=").append(maxDocuments)
         append(')')
     }
 }

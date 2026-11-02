@@ -65,6 +65,21 @@ val current = store.blocking().search(KeyValueQuery("session", JsonQueryValue.St
 }
 ```
 
+When the answer is every hit inside the current version — each item of the newest order for a session, say —
+`maxDocuments` (experimental) ends the result after the hits of that many documents, and the search reads no document
+past them. Here a [document filter](#document-filters) picks the session's versions:
+
+```kotlin
+@OptIn(ExperimentalDelvaApi::class)
+val newestItems = JsonPathQuery(JsonPath.compile("$.items[*].sku"), order = SearchOrder.DESCENDING)
+    .withDocumentFilter(DocumentFilter.compile("@.session == 's-42'"))
+    .withMaxDocuments(1)
+val skus = store.blocking().search(newestItems).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() }
+```
+
+Without it, read the descending result's hits until `docId` changes: a result reads one snapshot, so no write in between
+can change which document is the newest.
+
 ## Document keys
 
 When every document has a name of its own, create the store with a **document key** (experimental): the path of a
@@ -130,7 +145,9 @@ blocking.search(lowStock).use { result ->
 
 A query whose filters don't narrow the documents down — `$..sku`, say — is rejected with `QueryRejectedException`
 unless the query allows a full scan with `ScanPolicy.ALLOW_SCAN`. `count(query, atMost)` tells how many hits a
-search has without reading them, and stops at `atMost`.
+search has without reading them, and stops at `atMost`. To find where a value lives in a large document, read one
+document as an outline with `JsonFormat(maxLevels = …)` ([below](#formatting-output)) rather than scanning every
+document with `$..`.
 
 The patterns of `match` and `search` are I-Regexp (RFC 9485), which has no inline flags, no `\d` and no lookaround.
 A pattern written into the query that can never match is still valid RFC 9535, so the query compiles and finds

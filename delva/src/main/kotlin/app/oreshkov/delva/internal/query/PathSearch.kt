@@ -823,8 +823,14 @@ internal class PathSearch(
     private val filter: LogicalExpr? = null,
     /** Posting sources of their own: a source shared with [anchorTerms] would already be past the document. */
     private val rootTerms: List<Candidates.TermDocs> = emptyList(),
+    /** The query's `maxDocuments`, or null. */
+    private val bound: DocumentBound? = null,
 ) : HitSource {
     private val descending = candidates.descending
+
+    override var boundReached: Boolean = false
+        private set
+    private var stoppedAtBound = false
     private val anchors = if (anchor != null) AnchorContainers(anchorTerms, anchor.postingHash) else null
 
     /** Nodes whose children the document walks considered, for tests and plans. */
@@ -881,7 +887,13 @@ internal class PathSearch(
 
     override fun next(): Boolean {
         if (typeFilter < 0) return false
-        if (descending && mode == ResultMode.CONTAINING_ELEMENT) return previous()
+        val found = if (descending && mode == ResultMode.CONTAINING_ELEMENT) previous() else following()
+        if (found) bound?.hit(docId)
+        return found
+    }
+
+    /** The next hit in ascending order, or in descending order of whole documents. */
+    private fun following(): Boolean {
         while (true) {
             if (doc == null && !openNextDocument()) {
                 hit = null
@@ -997,6 +1009,13 @@ internal class PathSearch(
     }
 
     private fun openNextDocument(): Boolean {
+        if (bound != null && bound.reached) {
+            if (!stoppedAtBound) {
+                stoppedAtBound = true
+                boundReached = hasVisibleCandidate()
+            }
+            return false
+        }
         var from = when {
             started -> if (descending) docId - 1 else docId + 1
             descending -> when {
@@ -1050,6 +1069,21 @@ internal class PathSearch(
         suppressThrough = if (inCursorDocument && !descending) afterPre else -1
         suppressFrom = if (inCursorDocument && descending) afterPre else Long.MAX_VALUE
         return true
+    }
+
+    /**
+     * Whether a visible candidate follows the open document, found without evaluating it: past the bound, a resumed
+     * search may find hits there. Neither the filter nor the query is tested, so the answer is "maybe".
+     */
+    private fun hasVisibleCandidate(): Boolean {
+        var from = if (descending) docId - 1 else docId + 1
+        while (true) {
+            candidates.seek(from)
+            val next = candidates.docId
+            if (next == candidates.exhausted) return false
+            if (visibility.isVisible(next)) return true
+            from = if (descending) next - 1 else next + 1
+        }
     }
 
     /** Whether a posting of the root terms in the candidate [docId] has the root as its containing object. Containers
