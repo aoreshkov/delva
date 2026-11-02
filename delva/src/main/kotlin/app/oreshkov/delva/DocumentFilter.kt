@@ -18,7 +18,17 @@ import app.oreshkov.delva.internal.path.LogicalExpr
  * are.
  */
 @ExperimentalDelvaApi
-public class DocumentFilter internal constructor(private val text: String, internal val expr: LogicalExpr) {
+public class DocumentFilter internal constructor(
+    private val text: String,
+    internal val expr: LogicalExpr,
+    warnings: List<QueryWarning>,
+) {
+    /**
+     * What in the filter is valid but can't be what was meant, in the order of the text, as [JsonPath.warnings] has
+     * for a query; offsets are in the filter's text.
+     */
+    public val warnings: List<QueryWarning> = warnings.frozen()
+
     override fun toString(): String = text
 
     override fun equals(other: Any?): Boolean = other is DocumentFilter && other.text == text
@@ -29,9 +39,13 @@ public class DocumentFilter internal constructor(private val text: String, inter
         /**
          * Parses and type-checks [text], with blank space allowed around the expression. As with [JsonPath.compile],
          * every syntax and type error throws [InvalidJsonPathException] naming the character offset, and so does text
-         * beyond the limits of SPEC.md §10.1, where the filter counts as one level of nesting.
+         * beyond the limits of SPEC.md §10.1, where the filter counts as one level of nesting. What is valid but can't
+         * be what was meant doesn't fail; the filter's [warnings] say what it is.
          */
         @JvmStatic
-        public fun compile(text: String): DocumentFilter = DocumentFilter(text, JsonPathParser.parseFilter(text))
+        public fun compile(text: String): DocumentFilter {
+            val parsed = JsonPathParser.parseFilter(text)
+            return DocumentFilter(text, parsed.tree, parsed.warnings)
+        }
     }
 }

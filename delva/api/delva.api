@@ -226,6 +226,7 @@ public final class app/oreshkov/delva/DocumentFilter {
 	public static final field Companion Lapp/oreshkov/delva/DocumentFilter$Companion;
 	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/DocumentFilter;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getWarnings ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -241,6 +242,7 @@ public final class app/oreshkov/delva/DocumentFilterTemplate {
 	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/DocumentFilterTemplate;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getParameters ()Ljava/util/Set;
+	public final fun getWarnings ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -399,6 +401,7 @@ public final class app/oreshkov/delva/JsonPath {
 	public static final field Companion Lapp/oreshkov/delva/JsonPath$Companion;
 	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/JsonPath;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getWarnings ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -437,6 +440,7 @@ public final class app/oreshkov/delva/JsonPathTemplate {
 	public static final fun compile (Ljava/lang/String;)Lapp/oreshkov/delva/JsonPathTemplate;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getParameters ()Ljava/util/Set;
+	public final fun getWarnings ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -634,6 +638,15 @@ public final class app/oreshkov/delva/QueryRejectedException$Reason : java/lang/
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/QueryRejectedException$Reason;
 	public static fun values ()[Lapp/oreshkov/delva/QueryRejectedException$Reason;
+}
+
+public final class app/oreshkov/delva/QueryWarning {
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLength ()I
+	public final fun getOffset ()I
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class app/oreshkov/delva/ReadableJsonStore : java/lang/AutoCloseable {

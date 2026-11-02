@@ -18,7 +18,7 @@ import app.oreshkov.delva.internal.path.Placeholders
  * [bind] puts each value into the compiled query as a literal, never as text, so no value can change what the query
  * asks: `x' || true || 'x` is one string the query compares with. The bound [JsonPath] is the one [JsonPath.compile]
  * makes of the template's text with each placeholder replaced by its value's literal, and that text is its
- * [JsonPath.toString]; binding doesn't parse it again.
+ * [JsonPath.toString]; binding doesn't parse it again. Its [JsonPath.warnings] are those of that text too.
  *
  * Placeholders are an extension of RFC 9535, which has none, and [JsonPath.compile] refuses them. Immutable and
  * thread-safe; two templates are equal when their texts are.
@@ -29,6 +29,12 @@ public class JsonPathTemplate private constructor(private val tree: PathQuery, p
     public val parameters: Set<String> get() = placeholders.names
 
     /**
+     * The warnings of the template's own text, as [JsonPath.warnings] has them, at offsets in the template's text. A
+     * placeholder has no value yet, so it gives none; a pattern bound to one gets its warning from [bind].
+     */
+    public val warnings: List<QueryWarning> get() = placeholders.warnings
+
+    /**
      * The query with each placeholder replaced by the literal of its value in [values], which has a value for every
      * one of [parameters] and for nothing else; a [JsonQueryValue.Json] value has no literal form. Each of these is
      * an [IllegalArgumentException]. A value that makes the query invalid, such as a string with an unpaired
@@ -37,7 +43,8 @@ public class JsonPathTemplate private constructor(private val tree: PathQuery, p
      */
     public fun bind(values: Map<String, JsonQueryValue>): JsonPath {
         val binding = placeholders.bind(values)
-        return JsonPath(binding.text, binding.query(tree))
+        val query = binding.query(tree)
+        return JsonPath(binding.text, query, binding.warnings())
     }
 
     /** [bind] with the values given as pairs: `bind("id" to JsonQueryValue.Str(id))`. */
@@ -69,7 +76,8 @@ public class JsonPathTemplate private constructor(private val tree: PathQuery, p
  *
  * [bind] puts each value into the compiled filter as a literal, never as text, so no value can change what the filter
  * tests. The bound filter is the one [DocumentFilter.compile] makes of the template's text with each placeholder
- * replaced by its value's literal, and that text is its [DocumentFilter.toString].
+ * replaced by its value's literal, and that text is its [DocumentFilter.toString]; its [DocumentFilter.warnings] are
+ * that text's.
  *
  * Immutable and thread-safe; two templates are equal when their texts are.
  */
@@ -78,10 +86,14 @@ public class DocumentFilterTemplate private constructor(private val tree: Logica
     /** The names of the placeholders, each once, in the order they first appear in the text. */
     public val parameters: Set<String> get() = placeholders.names
 
+    /** The warnings of the template's own text, with the rules of [JsonPathTemplate.warnings]. */
+    public val warnings: List<QueryWarning> get() = placeholders.warnings
+
     /** The filter with each placeholder replaced by the literal of its value, with the rules of [JsonPathTemplate.bind]. */
     public fun bind(values: Map<String, JsonQueryValue>): DocumentFilter {
         val binding = placeholders.bind(values)
-        return DocumentFilter(binding.text, binding.filter(tree))
+        val filter = binding.filter(tree)
+        return DocumentFilter(binding.text, filter, binding.warnings())
     }
 
     /** [bind] with the values given as pairs: `bind("kind" to JsonQueryValue.Str(kind))`. */

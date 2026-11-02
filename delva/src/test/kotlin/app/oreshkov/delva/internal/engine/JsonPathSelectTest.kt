@@ -66,6 +66,21 @@ class JsonPathSelectTest {
     }
 
     @Test
+    fun `only the selectors whose pattern can never match warn, and they still compile`() {
+        // Warnings don't change what a query selects; the test below checks that every valid selector selects as the
+        // suite expects, these two included.
+        val warned = cases.filter { !it.invalid }.filter { JsonPath.compile(it.selector).warnings.isNotEmpty() }
+        assertEquals(
+            listOf("functions, match, non-string second arg", "functions, search, non-string second arg"),
+            warned.map { it.name },
+        )
+        for (case in warned) {
+            val warning = JsonPath.compile(case.selector).warnings.single()
+            assertEquals("1", case.selector.substring(warning.offset, warning.offset + warning.length), case.name)
+        }
+    }
+
+    @Test
     fun `a template without placeholders accepts and refuses each selector as compile does`() {
         for (case in cases) {
             val compiled = runCatching { JsonPath.compile(case.selector) }.getOrNull()

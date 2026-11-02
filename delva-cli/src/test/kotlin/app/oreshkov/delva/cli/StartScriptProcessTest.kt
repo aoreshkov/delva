@@ -109,6 +109,20 @@ class StartScriptProcessTest {
     }
 
     @Test
+    fun `a query's warning reaches stderr, and the query still runs`() {
+        val store = work.resolve("store")
+        assertEquals(0, delva("init", store.toString()).status)
+        val env = mapOf("DELVA_STORE" to store.toString())
+        assertEquals(0, delva("insert", "-", stdin = """{"city":"Xanten"}""".toByteArray(), env = env).status)
+
+        // The space makes the argument one quoted word on Windows too, where the .bat sees the parentheses.
+        val run = delva("search", "path", "$[?search(@, '(?i)x')]", "--scan", "--json", env = env)
+        assertEquals(0, run.status, run.stderr)
+        assertContains(run.stderr, "warning: the query at offset 13: '(?i)x' isn't I-Regexp (RFC 9485), so search() is false for every value")
+        assertEquals("", run.text)
+    }
+
+    @Test
     fun `a reader that stops early ends the command with IO_ERR, and nothing on stderr`() {
         val store = work.resolve("store")
         assertEquals(0, delva("init", store.toString()).status)

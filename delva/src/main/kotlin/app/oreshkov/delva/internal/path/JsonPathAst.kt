@@ -152,14 +152,23 @@ internal sealed interface FunctionArg {
 
 internal class FunctionCall(val function: PathFunction, val args: List<FunctionArg>) {
     /**
-     * The regular expression of `match` / `search` when its pattern is a string literal, translated once;
-     * null when it isn't valid I-Regexp (the function is then false) or the pattern isn't a literal.
+     * The literal pattern of `match` / `search`, any literal and not only a string; null for another function, or
+     * when the pattern isn't a literal.
      */
-    val literalPattern: IRegexp.Compiled? = if (function == PathFunction.MATCH || function == PathFunction.SEARCH) {
-        ((args[1] as? FunctionArg.Value)?.expr as? ValueExpr.Literal)?.value?.let { (it as? LiteralValue.Str)?.value }?.let { IRegexp.compile(it) }
+    val patternLiteral: LiteralValue? = if (function == PathFunction.MATCH || function == PathFunction.SEARCH) {
+        ((args[1] as? FunctionArg.Value)?.expr as? ValueExpr.Literal)?.value
     } else {
         null
     }
+
+    /** [patternLiteral] translated once when it's a string, valid I-Regexp or not. */
+    val literalRegexp: IRegexp.Result? = (patternLiteral as? LiteralValue.Str)?.let { IRegexp.compile(it.value) }
+
+    /**
+     * The regular expression of `match` / `search` when its pattern is a string literal; null when it isn't valid
+     * I-Regexp (the function is then false) or the pattern isn't a string literal.
+     */
+    val literalPattern: IRegexp.Compiled? = literalRegexp as? IRegexp.Compiled
 
     fun normalized(): FunctionCall = FunctionCall(function, args.map { it.normalized() })
 }

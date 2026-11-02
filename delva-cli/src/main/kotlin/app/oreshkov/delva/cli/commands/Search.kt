@@ -21,6 +21,7 @@ import app.oreshkov.delva.SearchResult
 import app.oreshkov.delva.cli.DelvaCommands
 import app.oreshkov.delva.cli.HitWriter
 import app.oreshkov.delva.cli.queryStatus
+import app.oreshkov.delva.cli.warnAbout
 import app.oreshkov.delva.cli.withReader
 
 /**
@@ -83,6 +84,7 @@ internal val searchPath = CommandHandler { context ->
         order = values[DelvaCommands.order] ?: SearchOrder.ASCENDING,
         documentFilter = values[DelvaCommands.where],
     )
+    context.warnAbout(path, query.documentFilter)
     context.withReader { store, _ ->
         val blocking = store.blocking()
         if (values[DelvaCommands.count]) {

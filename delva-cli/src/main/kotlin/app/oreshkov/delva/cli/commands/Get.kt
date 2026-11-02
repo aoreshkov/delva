@@ -13,6 +13,7 @@ import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.cli.DelvaCommands
 import app.oreshkov.delva.cli.jsonFormat
 import app.oreshkov.delva.cli.queryStatus
+import app.oreshkov.delva.cli.warnAbout
 import app.oreshkov.delva.cli.withReader
 
 /**
@@ -29,6 +30,7 @@ internal val get = CommandHandler { context ->
     val given = context.values[DelvaCommands.getDoc]
     val key = context.values[DelvaCommands.getKey]
     val query = context.values[DelvaCommands.getPath] ?: WHOLE_DOCUMENT
+    context.warnAbout(query)
     context.withReader { store, _ ->
         val doc = given ?: run {
             if (store.creationOptions.documentKey == null) {
