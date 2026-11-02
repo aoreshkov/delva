@@ -25,8 +25,8 @@ even Delva, and knows no command of any program's: a program declares its own tr
 - A `Program` runner that answers `--help`, [`help <command>`](#a-help-command), `--version`, usage errors (exit
   status 2) and configuration errors (78), hands every other command
   to the handler the program registered for it, turns an expected failure (`CommandFailure`) into its exit status
-  (`ExitStatus` names the `sysexits.h` codes), and lets a command that runs until stopped stop cleanly on Ctrl-C or
-  SIGTERM.
+  (`ExitStatus` names the `sysexits.h` codes), lets a command that runs until stopped stop cleanly on Ctrl-C or
+  SIGTERM, and can read [argument files](#argument-files), `@args.txt`, past a Windows launcher.
 
 ```kotlin
 val limit = Option.Single("--limit", Converters.positiveInt, "-n", help = "Most rows to list", valueName = "n")
@@ -252,13 +252,64 @@ the working directory, not to the file: write absolute paths in a user or system
 
 To read another format, or from somewhere else, implement `Settings`.
 
+## Argument files
+
+A Windows `.bat` start script, such as the one Gradle's `application` plugin writes, hands its arguments to `cmd`, which
+reads `|`, `&` and `^` in them as its own however they were quoted: a filter such as `@.kind == 'a|b'` never reaches
+the program. A program can turn on argument files ([experimental](#experimental-api)), so that `@path` stands for the
+arguments in a file, one per line, which no shell or script reads on the way:
+
+```kotlin
+val where = Option.Single("--where", Converters.string, valueName = "filter")
+val path = Argument.Single("path", Converters.string, "Where to look")
+val query = CommandSpec("query", "Find entries", options = listOf(where), arguments = listOf(path))
+val root = CommandSpec("tool", subcommands = listOf(query))
+
+@OptIn(ExperimentalCliKitApi::class)
+val program = Program(
+    root,
+    "tool 1.0",
+    mapOf(query to CommandHandler { context -> context.output.text("${context.values[where]}"); ExitStatus.OK }),
+).withArgumentFiles()
+```
+
+With this `args.txt`, `tool @args.txt` runs `tool query --where "@.kind == 'a|b'" $.orders`, and
+`tool query @args.txt` would too if the file left out `query`:
+
+```text
+query
+--where
+@.kind == 'a|b'
+$.orders
+```
+
+- **The file:** UTF-8, at most 1 MiB, with LF or CRLF line ends and a leading byte-order mark ignored. Each line is
+  one argument, taken as written: no quotes, escapes or comments. The final line break adds no argument, and any other
+  empty line is an empty argument. A relative path is relative to the working directory.
+- **Where `@` counts:** only where the parser reads a new option or operand. A value an option takes is never a file,
+  so `--where @.kind`, `--where=@.kind` and `--body @request.json`, which `Converters.inlineOrFile` reads, mean what
+  they did; neither is anything after `--`. An operand that starts with `@` is written `@@`: `@@request.json` passes
+  `@request.json` on. `@` alone is left as it is.
+- **As if typed:** the lines are read where `@path` was, commands, options, values and `--` included, and `--no-color`
+  and `--width` work from a file too. A line that starts with `@` is literal, since files don't nest.
+- **Errors:** a file that can't be read is `error: can't read argument file 'args.txt': no such file`, exit status 66
+  (`ExitStatus.NO_INPUT`), with no usage line.
+- **Help and completion:** every help page ends with `@file reads arguments from a file, one per line; @@ for a
+  literal @.`, and the completion scripts step over a word that starts with `@`.
+- **PowerShell** reads an unquoted `@name` as splatting a variable, so write `tool '@args.txt'` there.
+
+The format is not `java`'s, whose argument files split lines on spaces and read quotes and `#` comments: those are the
+rules of another quoting layer, and a filter full of quotes would need escaping for it as it does for `cmd`. Nothing is
+read without an `@` the user typed, and a secret is still never taken from a value, from a file or not.
+
 ## Experimental API
 
 `@ExperimentalCliKitApi` marks what is new and may still change, in signature or behaviour, in a minor release. Using
 it needs `@OptIn(ExperimentalCliKitApi::class)`, and the [changelog](CHANGELOG.md) says when a mark is lifted. It marks
 the types of [configuration files](#configuration-files), `Settings`, `Setting`, `SettingsException` and
 `ConfigurationFiles`, and the constructors of `Program`, `Parser` and `HelpRenderer` that take settings, while an
-option's `config` key is stable. It also marks `Constraint.RequiresValue`, a rule that one operand needs an option to
+option's `config` key is stable. It marks `Program.withArgumentFiles` for [argument files](#argument-files), and
+`Constraint.RequiresValue`, a rule that one operand needs an option to
 have one of some values:
 
 ```kotlin

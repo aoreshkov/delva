@@ -288,6 +288,9 @@ public class CommandFailure(
  * it drives to its exit statuses, once, rather than in every handler. Anything else that escapes is
  * a bug, reported as one line and [ExitStatus.SOFTWARE] rather than a stack trace and whatever the
  * runtime felt like returning.
+ *
+ * Argument files, `@path` for the arguments a file holds, are off unless a program turns them on, on the JVM with
+ * `withArgumentFiles()`.
  */
 public class Program @ExperimentalCliKitApi constructor(
     private val root: CommandSpec,
@@ -379,13 +382,46 @@ public class Program @ExperimentalCliKitApi constructor(
     internal val name: String get() = root.name
 
     /**
+     * Reads an argument file's content, when the program has argument files on; `null` when it hasn't. Set only on the
+     * copy [withArgumentFiles] makes, so a program, once built, never changes how it reads its command line.
+     */
+    private var argumentFiles: ((String) -> String)? = null
+
+    /**
+     * A copy of this program with argument files on, each read by [read], which throws [ArgumentFileException] for one
+     * it can't read. Internal, since reading a file needs the platform: the JVM's public `withArgumentFiles()` is this
+     * with a reader of files.
+     */
+    internal fun withArgumentFiles(read: (String) -> String): Program =
+        Program(root, version, handlers, translate, environment, settings).also { it.argumentFiles = read }
+
+    /** [args] with every argument file in place, as [Parser.expand] describes; [args] as they are with argument files off. */
+    internal fun expand(args: Array<String>): Expansion {
+        val read = argumentFiles ?: return Expansion.Expanded(args.asList())
+        return Parser(root, environment, settings).expand(args.asList(), read)
+    }
+
+    /**
      * Runs the command line [args] against [io] and answers the exit status; stdout is flushed before it returns. A
      * command that succeeded but whose output stdout didn't take exits with [ExitStatus.IO_ERR] (see
      * [TerminalIo.stdoutState]); one that failed keeps its own status.
+     *
+     * With argument files on, each `@path` in [args] is replaced by the file's lines first; a file that can't be read
+     * is an error, with [ExitStatus.NO_INPUT] and no usage line.
      */
-    public fun run(args: Array<String>, io: TerminalIo): Int {
+    public fun run(args: Array<String>, io: TerminalIo): Int = run(expand(args), io)
+
+    /** Runs [expansion], the command line with its argument files in place, as [run] describes. */
+    internal fun run(expansion: Expansion, io: TerminalIo): Int {
         val status = try {
-            dispatch(args, io)
+            when (expansion) {
+                is Expansion.Expanded -> dispatch(expansion.args, io)
+                is Expansion.Unreadable -> {
+                    // The command line names a file it can't have, so no usage line: nothing about its syntax is wrong.
+                    io.errEntry("error: ", expansion.message, io.styler::red)
+                    ExitStatus.NO_INPUT
+                }
+            }
         } finally {
             io.flush()
         }
@@ -394,14 +430,14 @@ public class Program @ExperimentalCliKitApi constructor(
         return if (state != StdoutState.Written && status == ExitStatus.OK) ExitStatus.IO_ERR else status
     }
 
-    private fun dispatch(args: Array<String>, io: TerminalIo): Int {
+    private fun dispatch(args: List<String>, io: TerminalIo): Int {
         // Prose past 100 columns is hard to read, however wide the terminal.
         val help = HelpRenderer(io.styler, null, minOf(io.width, MAX_HELP_WIDTH), settings)
         return when (val parsed = Parser(root, environment, settings).parse(args)) {
             is ParseResult.Help -> {
                 // Help is the payload when it was asked for, and noise when it follows an error —
                 // which is why the error branch below writes to stderr instead.
-                io.out(help.render(parsed.path))
+                io.out(help.render(parsed.path, argumentFiles = argumentFiles != null))
                 ExitStatus.OK
             }
 
@@ -433,7 +469,8 @@ public class Program @ExperimentalCliKitApi constructor(
         invocation.notices.forEach(context.output::warn)
         // The one command with no dependency on anything: it walks the same tree the parser does.
         if (invocation.command === StandardOptions.completion) {
-            io.out(CompletionGenerator().generate(invocation.values.required(StandardOptions.shell), root))
+            val shell = invocation.values.required(StandardOptions.shell)
+            io.out(CompletionGenerator().generate(shell, root, argumentFiles = argumentFiles != null))
             ExitStatus.OK
         } else {
             handlers.getValue(invocation.command).run(context)

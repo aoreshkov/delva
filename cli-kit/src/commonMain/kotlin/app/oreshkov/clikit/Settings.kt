@@ -98,4 +98,5 @@ internal fun parseSettings(text: String, file: String): List<Setting> {
     return settings
 }
 
-private const val BYTE_ORDER_MARK = "\uFEFF"
+/** What some editors, Notepad among them, write at the start of a UTF-8 file. */
+internal const val BYTE_ORDER_MARK = "\uFEFF"
