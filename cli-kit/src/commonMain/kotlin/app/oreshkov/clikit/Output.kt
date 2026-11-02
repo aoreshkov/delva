@@ -16,6 +16,12 @@ package app.oreshkov.clikit
  * A machine-readable payload is written with [JsonWriter] — a writer, not a serializer, so this
  * module still depends on nothing — and handed over as text to [text].
  *
+ * A notice can be the payload's context, such as the cursor of the next page, so it has to stay next
+ * to that payload when a script merges the streams (`2>&1`). The JVM's `SystemTerminalIo` delivers buffered
+ * stdout before every stderr write, unlike C stdio, so merged lines read in the order they were
+ * written, for writes from one thread. A script that parses the output still asks for [machineReadable]
+ * output, which carries its context inside the payload.
+ *
  * Everything but [text] — tables, properties, notices, warnings, errors, log lines — goes through
  * [TerminalText.escape], so data shown in them can't drive the terminal; [text] is the payload, and
  * is written as it is.

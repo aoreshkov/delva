@@ -12,7 +12,10 @@ public interface TerminalIo {
     /** The payload. Only ever the thing the command was asked to produce. */
     public fun out(text: String)
 
-    /** Progress, tables, warnings, errors — everything a pipe should not receive. */
+    /**
+     * Progress, tables, warnings, errors — everything a pipe should not receive. A terminal that buffers stdout
+     * delivers it first, so that streams merged on one reader keep the order they were written in.
+     */
     public fun err(text: String)
 
     /** [text], then a line break, on stdout. */
