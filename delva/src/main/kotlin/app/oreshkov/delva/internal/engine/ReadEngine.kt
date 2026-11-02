@@ -148,7 +148,8 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
         if (path.segments.size > DocumentOrderEvaluator.MAX_SEGMENTS) {
             throw QueryRejectedException(
                 QueryRejectedException.Reason.TOO_MANY_SEGMENTS,
-                "${query.path} has ${path.segments.size} segments, and a search takes at most ${DocumentOrderEvaluator.MAX_SEGMENTS}: select evaluates it on one document",
+                "${query.path} has ${path.segments.size} segments; a search takes at most ${DocumentOrderEvaluator.MAX_SEGMENTS}",
+                query.path.toString(),
             )
         }
         val filter = documentFilter(query)
@@ -159,7 +160,8 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
         if (requirement == null && query.scan != ScanPolicy.ALLOW_SCAN) {
             throw QueryRejectedException(
                 QueryRejectedException.Reason.NEEDS_SCAN,
-                "no index term narrows the search for ${query.path}: filter on a member equal to a literal, or use ScanPolicy.ALLOW_SCAN",
+                "no index term narrows the search for ${query.path}",
+                query.path.toString(),
             )
         }
         val type = validTypeName(query.type)
@@ -178,7 +180,8 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
             } catch (e: Candidates.RangeTooWide) {
                 throw QueryRejectedException(
                     QueryRejectedException.Reason.RANGE_TOO_WIDE,
-                    "the range ${e.range.text} of ${query.path} matches more than ${options.maxRangeDocuments} documents: narrow it, or use ScanPolicy.ALLOW_SCAN",
+                    "the range ${e.range.text} of ${query.path} matches more than ${options.maxRangeDocuments} documents",
+                    query.path.toString(),
                 )
             }
             val anchorTerms = anchor?.terms?.map { t -> terms.getOrPut(Candidates.key(t.term.term)) { Candidates.TermDocs(version, t.term.term, from, descending) } }.orEmpty()

@@ -196,22 +196,45 @@ private fun differences(stored: CreationOptions, requested: CreationOptions): St
 
 /**
  * A search the store can't answer, refused for [reason] before anything is read (SPEC.md §4.1, §10.4). Nothing is wrong
- * with the query as such: another store, a narrower query, [ScanPolicy.ALLOW_SCAN], or a select of each document
- * answers it.
+ * with the query as such: each [Reason] says what answers it instead.
+ *
+ * [detail] states the fact only, such as `no index term narrows the search for $..sku`, and names no API, so that a
+ * program can print it next to a remedy in its own words, chosen by [reason].
  */
-public class QueryRejectedException(public val reason: Reason, detail: String) : DelvaException("Query rejected: $detail") {
+public class QueryRejectedException(
+    /** Why the query was refused, and so what answers it instead. */
+    public val reason: Reason,
+    /** What the store found, without the `Query rejected: ` prefix of the message and without a remedy. */
+    public val detail: String,
+    /** The text of the refused JSONPath query, without its document filter; null for a key–value search. */
+    public val query: String?,
+) : DelvaException("Query rejected: $detail") {
+
+    /** A rejection with no query text, as a key–value search's is. */
+    public constructor(reason: Reason, detail: String) : this(reason, detail, null)
+
     /** Why the query was refused. */
     public enum class Reason {
-        /** A JSONPath search that no index term narrows, with [ScanPolicy.REJECT]. */
+        /**
+         * A JSONPath search that no index term narrows, with [ScanPolicy.REJECT]. A filter that compares a member with a
+         * literal, in the query or in [JsonPathQuery.documentFilter], narrows it (SPEC.md §10.4 lists which comparisons
+         * do); [ScanPolicy.ALLOW_SCAN] evaluates it on every document, and [ReadableJsonStore.explain] tells beforehand
+         * whether a search would.
+         */
         NEEDS_SCAN,
 
-        /** A JSONPath comparison `<`, `<=`, `>` or `>=` whose range matches more documents than a search reads for one. */
+        /**
+         * A JSONPath comparison `<`, `<=`, `>` or `>=` whose range matches more documents than a search reads for one. A
+         * narrower range answers it, and so does [ScanPolicy.ALLOW_SCAN], under which the range narrows nothing.
+         */
         RANGE_TOO_WIDE,
 
         /**
          * A key–value search the index controls leave unanswerable: a key [CreationOptions.indexedKeys] or
-         * [CreationOptions.excludedKeys] don't index, a string length outside the indexed ones, or an object or array
-         * value in a store created without [CreationOptions.hashTerms].
+         * [CreationOptions.excludedKeys] don't index, a string length outside [CreationOptions.minIndexedStringBytes]
+         * and [CreationOptions.maxIndexedStringBytes], or an object or array value in a store created without
+         * [CreationOptions.hashTerms]. The controls are fixed when a store is created, so only a store created with
+         * other [CreationOptions] answers it.
          */
         NOT_INDEXED,
 

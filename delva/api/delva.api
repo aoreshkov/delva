@@ -620,6 +620,9 @@ public final class app/oreshkov/delva/QueryPlan {
 
 public final class app/oreshkov/delva/QueryRejectedException : app/oreshkov/delva/DelvaException {
 	public fun <init> (Lapp/oreshkov/delva/QueryRejectedException$Reason;Ljava/lang/String;)V
+	public fun <init> (Lapp/oreshkov/delva/QueryRejectedException$Reason;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getQuery ()Ljava/lang/String;
 	public final fun getReason ()Lapp/oreshkov/delva/QueryRejectedException$Reason;
 }
 

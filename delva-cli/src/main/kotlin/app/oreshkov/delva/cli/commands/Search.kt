@@ -63,7 +63,8 @@ internal val searchKv = CommandHandler { context ->
 
 /**
  * `delva search path <query> [--where <filter>]`. A query that no index term narrows would read every document; that
- * has to be asked for with `--scan`, and is refused before anything is read, with `explain`'s answer as the reason.
+ * has to be asked for with `--scan`. Otherwise delva refuses it before anything is read, and [app.oreshkov.delva.cli.Failures] words the
+ * refusal in this command line's options.
  */
 @OptIn(ExperimentalDelvaApi::class)
 internal val searchPath = CommandHandler { context ->
@@ -84,13 +85,6 @@ internal val searchPath = CommandHandler { context ->
     )
     context.withReader { store, _ ->
         val blocking = store.blocking()
-        if (!scan && blocking.explain(query).fullScan) {
-            throw CommandFailure(
-                ExitStatus.USAGE,
-                "no index term narrows $path, so it would read every document; add ${DelvaCommands.scan.long} to allow " +
-                    "that, or filter on a member equal to a value",
-            )
-        }
         if (values[DelvaCommands.count]) {
             context.printCount(blocking.count(query, context.countLimit()))
         } else {

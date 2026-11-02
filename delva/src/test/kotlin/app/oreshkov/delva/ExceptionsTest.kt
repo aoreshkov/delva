@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ExceptionsTest {
@@ -61,10 +62,17 @@ class ExceptionsTest {
     }
 
     @Test
-    fun `a rejected query carries its reason`() {
+    fun `a rejected query carries its reason, the fact apart from the prefix, and the query's text`() {
         val e = QueryRejectedException(QueryRejectedException.Reason.NOT_INDEXED, "the key \"k\" isn't indexed by this store")
         assertEquals("Query rejected: the key \"k\" isn't indexed by this store", e.message)
         assertEquals(QueryRejectedException.Reason.NOT_INDEXED, e.reason)
+        assertEquals("the key \"k\" isn't indexed by this store", e.detail)
+        assertNull(e.query)
+
+        val path = QueryRejectedException(QueryRejectedException.Reason.NEEDS_SCAN, "no index term narrows the search for $..a", "$..a")
+        assertEquals("Query rejected: no index term narrows the search for $..a", path.message)
+        assertEquals("no index term narrows the search for $..a", path.detail)
+        assertEquals("$..a", path.query)
     }
 
     @Test

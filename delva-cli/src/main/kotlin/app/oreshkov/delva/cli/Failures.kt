@@ -39,7 +39,6 @@ internal object Failures {
         DocumentRejectedException::class to ExitStatus.DATA_ERR,
         InvalidTypeNameException::class to ExitStatus.DATA_ERR,
         QueryLimitException::class to ExitStatus.DATA_ERR,
-        QueryRejectedException::class to ExitStatus.DATA_ERR,
         CreationOptionsMismatchException::class to ExitStatus.DATA_ERR,
         UnsupportedFormatException::class to ExitStatus.DATA_ERR,
         ResultTooLargeException::class to ExitStatus.DATA_ERR,
@@ -53,11 +52,15 @@ internal object Failures {
      */
     val bugs: Set<KClass<out DelvaException>> = setOf(StoreClosedException::class)
 
+    /** The ones whose exit status depends on more than their class: a refused search's on its reason ([rejected]). */
+    val byReason: Set<KClass<out DelvaException>> = setOf(QueryRejectedException::class)
+
     /** The failure [error] stands for, or `null` when it is a bug. */
     fun translate(error: Exception): CommandFailure? = when (error) {
         is StoreNotFoundException -> CommandFailure(ExitStatus.NO_INPUT, "no store at ${error.directory}")
         is StoreLockedException -> CommandFailure(ExitStatus.TEMP_FAIL, "${error.directory} is open in another process" + (error.holder?.let { " ($it)" } ?: ""))
         is StoreExistsException -> CommandFailure(ExitStatus.CONFIG, "there is already a store at ${error.directory}")
+        is QueryRejectedException -> rejected(error)
         is DelvaException -> statuses[error::class]?.let { CommandFailure(it, error.message ?: error::class.simpleName!!) }
         is NoSuchFileException -> CommandFailure(ExitStatus.NO_INPUT, "no such file: ${error.file}")
         is AccessDeniedException -> CommandFailure(ExitStatus.NO_PERM, "access denied: ${error.file}")
@@ -65,5 +68,30 @@ internal object Failures {
         // Delva's other refusals of a request: a node that doesn't exist, or isn't an object.
         is IllegalArgumentException -> CommandFailure(ExitStatus.DATA_ERR, error.message ?: "invalid request")
         else -> null
+    }
+
+    /**
+     * A search the store refused: delva states what it found, and the remedy is worded here from the reason, in this
+     * command line's options rather than the library's API. A search that another invocation answers on the same store
+     * is a usage error; one that only a store created with other options answers is a data error.
+     */
+    private fun rejected(error: QueryRejectedException): CommandFailure = when (error.reason) {
+        QueryRejectedException.Reason.NEEDS_SCAN -> CommandFailure(
+            ExitStatus.USAGE,
+            "${error.detail}, so it would read every document; add ${DelvaCommands.scan.long} to allow that, or filter on " +
+                "a member equal to a value",
+        )
+        QueryRejectedException.Reason.RANGE_TOO_WIDE -> CommandFailure(
+            ExitStatus.USAGE,
+            "${error.detail}; narrow the range, or add ${DelvaCommands.scan.long} to read every document",
+        )
+        QueryRejectedException.Reason.TOO_MANY_SEGMENTS -> CommandFailure(
+            ExitStatus.USAGE,
+            "${error.detail}; delva get <doc> ${DelvaCommands.getPath.long} takes a query of any length, on one document",
+        )
+        QueryRejectedException.Reason.NOT_INDEXED -> CommandFailure(
+            ExitStatus.DATA_ERR,
+            "${error.detail}; what a store indexes is fixed when it is created, and delva info shows it",
+        )
     }
 }
