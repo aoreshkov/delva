@@ -123,6 +123,45 @@ class ReadCommandsTest {
     }
 
     @Test
+    fun `search kv that finds nothing for a key like a path says the key is a member's name`() {
+        val notice = "'$.customer.name' is taken as one member's name, not as a path; to search by path, use delva search path"
+        val nothing = run("search", "kv", "$.customer.name", "ada", "-S")
+        assertEquals(ExitStatus.OK, nothing.status)
+        assertEquals("", nothing.stdout)
+        assertEquals("no hits\n$notice\n", nothing.stderr)
+
+        // Each shape of key that reads as a path, with --count and with --json too; stdout keeps its shape.
+        for (key in listOf("@.name", "customer.name", "items[0]")) {
+            assertContains(run("search", "kv", key, "ada", "-S").stderr, "'$key' is taken as one member's name")
+        }
+        val count = run("search", "kv", "$.customer.name", "ada", "-S", "--count", "--json")
+        assertEquals("""{"count":0}""" + "\n", count.stdout)
+        assertContains(count.stderr, notice)
+        assertEquals(ExitStatus.FAILURE, run("search", "kv", "$.customer.name", "ada", "-S", "-e").status)
+        assertEquals("", run("-q", "search", "kv", "$.customer.name", "ada", "-S").stderr)
+
+        // An ordinary key that finds nothing gets no notice: nothing points at a path.
+        assertEquals("no hits\n", run("search", "kv", "name", "eve", "-S").stderr)
+    }
+
+    @Test
+    fun `search kv finds a member whose name holds a dot, and then says nothing about paths`() {
+        val dotted = root.resolve("dotted")
+        JsonStore.create(dotted).use { it.blocking().insert("""{"a.b":1,"c":{"d":2}}""") }
+        val program = DelvaProgram.create(mapOf("DELVA_STORE" to dotted.toString())::get)
+
+        val hit = program.record("search", "kv", "a.b", "1", "--json").assertPipeSafe()
+        assertEquals(ExitStatus.OK, hit.status, hit.stderr)
+        assertContains(hit.stdout, """"doc":1""")
+        assertEquals("", hit.stderr)
+        assertEquals("1\n", program.record("search", "kv", "a.b", "1", "--count").assertPipeSafe().stdout)
+
+        // The member a path would reach is d, which a key–value search finds by its own name.
+        assertContains(program.record("search", "kv", "c.d", "2").assertPipeSafe().stderr, "not as a path")
+        assertEquals(ExitStatus.OK, program.record("search", "kv", "d", "2").assertPipeSafe().status)
+    }
+
+    @Test
     fun `search hits down a pipe are a plain table with a preview of each`() {
         val result = run("search", "kv", "name", "ada", "-S", "--mode", "element")
         assertEquals(ExitStatus.OK, result.status, result.stderr)
