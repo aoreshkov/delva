@@ -17,6 +17,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   I-Regexp.
 - `delva-cli`: `search path`, `get --path` and `explain` print those warnings, for the query and for `--where`, on
   stderr before anything else.
+- `delva-cli`: `search kv` that finds nothing for a key that looks like a path, such as `$.a.b`, says on stderr that
+  the key is taken as one member's name, and points to `search path`.
 
 ### Changed
 

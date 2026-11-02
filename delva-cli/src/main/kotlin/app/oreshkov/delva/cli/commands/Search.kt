@@ -30,10 +30,13 @@ import app.oreshkov.delva.cli.withReader
  */
 internal val searchKv = CommandHandler { context ->
     val values = context.values
+    val key = values.required(DelvaCommands.kvKey)
     val raw = values.required(DelvaCommands.kvValue)
     val asString = values[DelvaCommands.string]
+    // A page resumed with --after continues a search that had hits, so finding nothing there says nothing about the key.
+    val ifNone = if (values[DelvaCommands.after] == null) pathLikeKeyNotice(key) else null
     val query = KeyValueQuery(
-        key = values.required(DelvaCommands.kvKey),
+        key = key,
         value = if (asString) JsonQueryValue.Str(raw) else JsonQueryValue.Json(raw),
         mode = values[DelvaCommands.mode] ?: ResultMode.WHOLE_DOCUMENT,
         nested = values[DelvaCommands.nested] ?: NestedHits.ALL,
@@ -47,9 +50,9 @@ internal val searchKv = CommandHandler { context ->
         val blocking = store.blocking()
         try {
             if (values[DelvaCommands.count]) {
-                context.printCount(blocking.count(query, context.countLimit()))
+                context.printCount(blocking.count(query, context.countLimit()), ifNone)
             } else {
-                blocking.search(query).use { context.printHits(it) }
+                blocking.search(query).use { context.printHits(it, ifNone) }
             }
         } catch (e: DocumentRejectedException) {
             // The value is parsed when the search starts; text that isn't JSON most likely meant a string.
@@ -122,20 +125,32 @@ internal val searchKey = CommandHandler { context ->
     }
 }
 
+/**
+ * The notice for a key–value search of [key] that found nothing, when the key looks like a JSONPath query or a dotted
+ * path, such as `$.index.accountId`; `null` for any other key. The key is a member's name as written, so that search
+ * looks for a member called exactly `$.index.accountId`, and finds nothing without saying why. A member's name may hold
+ * these characters, which is why this is a notice after the result and not a refusal.
+ */
+private fun pathLikeKeyNotice(key: String): String? {
+    val pathLike = key.startsWith('$') || key.startsWith('@') || '.' in key || '[' in key
+    return if (pathLike) "'$key' is taken as one member's name, not as a path; to search by path, use delva search path" else null
+}
+
 /** With `--count`, `--limit` is where counting stops. */
 private fun CommandContext.countLimit(): Long = values[DelvaCommands.limit]?.toLong() ?: Long.MAX_VALUE
 
-/** `--count`: the number on stdout, or `{"count":n}` with `--json`. */
-private fun CommandContext.printCount(count: Long): Int {
+/** `--count`: the number on stdout, or `{"count":n}` with `--json`; [ifNone], if any, on stderr when it is 0. */
+private fun CommandContext.printCount(count: Long, ifNone: String? = null): Int {
     output.text(if (output.machineReadable) buildString { JsonWriter(this).writeObject { field("count", count) } } else count.toString())
+    if (count == 0L && ifNone != null) output.notice(ifNone)
     return queryStatus(count > 0)
 }
 
 /**
  * The hits of [result]: all of them, or with `--limit` or `--max-bytes` one page, followed by a notice of the cursor
- * the next page starts at.
+ * the next page starts at. When there are none, the notice `no hits` is followed by [ifNone], if any.
  */
-private fun CommandContext.printHits(result: SearchResult): Int {
+private fun CommandContext.printHits(result: SearchResult, ifNone: String? = null): Int {
     val writer = HitWriter(this)
     val paged = values[DelvaCommands.limit] != null || values[DelvaCommands.maxBytes] != null
     if (paged) {
@@ -147,6 +162,7 @@ private fun CommandContext.printHits(result: SearchResult): Int {
         for (hit in result) writer.write(hit)
         writer.finish(empty = "no hits")
     }
+    if (writer.count == 0 && ifNone != null) output.notice(ifNone)
     return queryStatus(writer.count > 0)
 }
 
