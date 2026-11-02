@@ -15,21 +15,38 @@ package app.oreshkov.delva
  * - [scan]: what to do when the index can't narrow the search down (see [JsonStore.explain]).
  * - [order]: the order of the hits, as in [KeyValueQuery].
  * - [documentFilter]: only the documents it accepts are searched; set with [withDocumentFilter].
+ * - [maxDocuments]: the result ends after the hits of this many documents; set with [withMaxDocuments].
  *
  * Queries are values: two instances with the same settings are equal, and [copy] derives a variant.
  */
-public class JsonPathQuery @ExperimentalDelvaApi constructor(
+public class JsonPathQuery private constructor(
     public val path: JsonPath,
-    public val mode: ResultMode = ResultMode.CONTAINING_ELEMENT,
-    public val nested: NestedHits = NestedHits.ALL,
-    public val limit: Int = 100,
-    public val maxBytes: Long = Long.MAX_VALUE,
-    public val after: Cursor? = null,
-    public val type: String? = null,
-    public val scan: ScanPolicy = ScanPolicy.REJECT,
-    public val order: SearchOrder = SearchOrder.ASCENDING,
+    public val mode: ResultMode,
+    public val nested: NestedHits,
+    public val limit: Int,
+    public val maxBytes: Long,
+    public val after: Cursor?,
+    public val type: String?,
+    public val scan: ScanPolicy,
+    public val order: SearchOrder,
     documentFilter: DocumentFilter?,
+    maxDocuments: Int?,
 ) {
+    /** A search of the documents [documentFilter] accepts, or of every document when it is null. */
+    @ExperimentalDelvaApi
+    public constructor(
+        path: JsonPath,
+        mode: ResultMode = ResultMode.CONTAINING_ELEMENT,
+        nested: NestedHits = NestedHits.ALL,
+        limit: Int = 100,
+        maxBytes: Long = Long.MAX_VALUE,
+        after: Cursor? = null,
+        type: String? = null,
+        scan: ScanPolicy = ScanPolicy.REJECT,
+        order: SearchOrder = SearchOrder.ASCENDING,
+        documentFilter: DocumentFilter?,
+    ) : this(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, null)
+
     /** A search of every document. */
     public constructor(
         path: JsonPath,
@@ -41,7 +58,7 @@ public class JsonPathQuery @ExperimentalDelvaApi constructor(
         type: String? = null,
         scan: ScanPolicy = ScanPolicy.REJECT,
         order: SearchOrder = SearchOrder.ASCENDING,
-    ) : this(path, mode, nested, limit, maxBytes, after, type, scan, order, null)
+    ) : this(path, mode, nested, limit, maxBytes, after, type, scan, order, null, null)
 
     /**
      * The condition a document has to meet to be searched (SPEC.md §10.5), or null to search every document. A
@@ -51,18 +68,35 @@ public class JsonPathQuery @ExperimentalDelvaApi constructor(
     @ExperimentalDelvaApi
     public val documentFilter: DocumentFilter? = documentFilter
 
+    /**
+     * How many documents with hits the result covers, or null for no bound (SPEC.md §4.6): the result ends after the
+     * hits of that many documents, in [order], and the search reads no further document. `withMaxDocuments(1)` in
+     * [SearchOrder.DESCENDING] is every hit of the newest document that has one.
+     */
+    @ExperimentalDelvaApi
+    public val maxDocuments: Int? = maxDocuments
+
     init {
         require(limit > 0) { "limit must be positive, was $limit" }
         require(maxBytes > 0) { "maxBytes must be positive, was $maxBytes" }
+        require(maxDocuments == null || maxDocuments > 0) { "maxDocuments must be positive, was $maxDocuments" }
         requireSearchCursor(after, order)
     }
 
     /** This query with [documentFilter] set to [filter], or removed with null. */
     @ExperimentalDelvaApi
     public fun withDocumentFilter(filter: DocumentFilter?): JsonPathQuery =
-        JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, filter)
+        JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, filter, maxDocuments)
 
-    /** This query with the given settings changed, the [documentFilter] kept; the result is validated like a new instance. */
+    /** This query with [maxDocuments] set to [n], or removed with null; [n] must be positive. */
+    @ExperimentalDelvaApi
+    public fun withMaxDocuments(n: Int?): JsonPathQuery =
+        JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, n)
+
+    /**
+     * This query with the given settings changed, the [documentFilter] and [maxDocuments] kept; the result is validated
+     * like a new instance.
+     */
     public fun copy(
         path: JsonPath = this.path,
         mode: ResultMode = this.mode,
@@ -73,14 +107,15 @@ public class JsonPathQuery @ExperimentalDelvaApi constructor(
         type: String? = this.type,
         scan: ScanPolicy = this.scan,
         order: SearchOrder = this.order,
-    ): JsonPathQuery = JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter)
+    ): JsonPathQuery = JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, maxDocuments)
 
     override fun equals(other: Any?): Boolean =
         other is JsonPathQuery && other.path == path && other.mode == mode && other.nested == nested && other.limit == limit &&
             other.maxBytes == maxBytes && other.after == after && other.type == type && other.scan == scan && other.order == order &&
-            other.documentFilter == documentFilter
+            other.documentFilter == documentFilter && other.maxDocuments == maxDocuments
 
-    override fun hashCode(): Int = listOf(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter).hashCode()
+    override fun hashCode(): Int =
+        listOf(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, maxDocuments).hashCode()
 
     override fun toString(): String = buildString {
         append("JsonPathQuery(path=").append(path)
@@ -91,6 +126,7 @@ public class JsonPathQuery @ExperimentalDelvaApi constructor(
         if (scan != ScanPolicy.REJECT) append(", scan=").append(scan)
         if (order != SearchOrder.ASCENDING) append(", order=").append(order)
         if (documentFilter != null) append(", documentFilter=").append(documentFilter)
+        if (maxDocuments != null) append(", maxDocuments=").append(maxDocuments)
         append(')')
     }
 }

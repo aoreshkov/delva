@@ -48,6 +48,7 @@ import app.oreshkov.delva.internal.path.PathQuery
 import app.oreshkov.delva.internal.payload.FragmentKind
 import app.oreshkov.delva.internal.payload.PayloadTag
 import app.oreshkov.delva.internal.query.Candidates
+import app.oreshkov.delva.internal.query.DocumentBound
 import app.oreshkov.delva.internal.query.DocumentOrderEvaluator
 import app.oreshkov.delva.internal.query.HitReader
 import app.oreshkov.delva.internal.query.LocatedNode
@@ -137,6 +138,7 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
                 plan = options.typeQueryPlan,
                 descending = query.order == SearchOrder.DESCENDING,
                 bufferHits = options.descendingBufferHits,
+                bound = DocumentBound.of(query.maxDocuments),
             )
             EngineSearchResult(this, query.limit, query.maxBytes, query.order, snapshot, version, fragments, types, executor, keysOf(version), keyOrder = false, dictionaryOf(version))
         }
@@ -202,6 +204,7 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
                 bufferHits = options.descendingBufferHits,
                 filter = filter,
                 rootTerms = rootTermDocs,
+                bound = DocumentBound.of(query.maxDocuments),
             )
             EngineSearchResult(this, query.limit, query.maxBytes, query.order, snapshot, version, fragments, types, search, keysOf(version), keyOrder = false, dictionaryOf(version))
         }

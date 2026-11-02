@@ -34,7 +34,10 @@ public interface SearchResult : AutoCloseable {
 public class SearchPage internal constructor(
     /** The page's hits, in the search's order. */
     public val hits: List<SearchHit>,
-    /** Where a new search resumes after this page; null when this is the last page of the result. */
+    /**
+     * Where a new search resumes after this page; null when this is the last page of the result and no hits follow.
+     * When the query's `maxDocuments` ended the result, the last page has a cursor if more documents may have hits.
+     */
     public val cursor: Cursor?,
 )
 

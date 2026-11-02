@@ -422,6 +422,7 @@ public final class app/oreshkov/delva/JsonPathQuery {
 	public final fun getDocumentFilter ()Lapp/oreshkov/delva/DocumentFilter;
 	public final fun getLimit ()I
 	public final fun getMaxBytes ()J
+	public final fun getMaxDocuments ()Ljava/lang/Integer;
 	public final fun getMode ()Lapp/oreshkov/delva/ResultMode;
 	public final fun getNested ()Lapp/oreshkov/delva/NestedHits;
 	public final fun getOrder ()Lapp/oreshkov/delva/SearchOrder;
@@ -431,6 +432,7 @@ public final class app/oreshkov/delva/JsonPathQuery {
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 	public final fun withDocumentFilter (Lapp/oreshkov/delva/DocumentFilter;)Lapp/oreshkov/delva/JsonPathQuery;
+	public final fun withMaxDocuments (Ljava/lang/Integer;)Lapp/oreshkov/delva/JsonPathQuery;
 }
 
 public final class app/oreshkov/delva/JsonPathTemplate {
@@ -565,6 +567,7 @@ public final class app/oreshkov/delva/KeyValueQuery {
 	public final fun getKey ()Ljava/lang/String;
 	public final fun getLimit ()I
 	public final fun getMaxBytes ()J
+	public final fun getMaxDocuments ()Ljava/lang/Integer;
 	public final fun getMode ()Lapp/oreshkov/delva/ResultMode;
 	public final fun getNested ()Lapp/oreshkov/delva/NestedHits;
 	public final fun getOrder ()Lapp/oreshkov/delva/SearchOrder;
@@ -572,6 +575,7 @@ public final class app/oreshkov/delva/KeyValueQuery {
 	public final fun getValue ()Lapp/oreshkov/delva/JsonQueryValue;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public final fun withMaxDocuments (Ljava/lang/Integer;)Lapp/oreshkov/delva/KeyValueQuery;
 }
 
 public final class app/oreshkov/delva/LockHolder {

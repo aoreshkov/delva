@@ -131,6 +131,38 @@ class GuideExampleTest {
     }
 
     @Test
+    fun `every hit of the newest version is one bounded search, as the guide shows`() {
+        JsonStore.openOrCreate(dir.resolve("newest-items")).use { store ->
+            store.blocking().insert("""{"session":"s-42","items":[{"sku":"A1"},{"sku":"B2"}]}""")
+            store.blocking().insert("""{"session":"s-42","items":[{"sku":"A1"},{"sku":"C3"},{"sku":"D4"}]}""")
+            store.blocking().insert("""{"session":"s-7","items":[{"sku":"E5"}]}""")
+
+            @OptIn(ExperimentalDelvaApi::class)
+            val newestItems = JsonPathQuery(JsonPath.compile("$.items[*].sku"), order = SearchOrder.DESCENDING)
+                .withDocumentFilter(DocumentFilter.compile("@.session == 's-42'"))
+                .withMaxDocuments(1)
+            val skus = store.blocking().search(newestItems).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() }
+            assertEquals(listOf("\"D4\"", "\"C3\"", "\"A1\""), skus)
+
+            // Without the bound: the descending hits up to the first of another document, from one result.
+            val unbounded = newestItems.withMaxDocuments(null)
+            val looped = store.blocking().search(unbounded).use { result ->
+                val hits = result.iterator()
+                val first = hits.next()
+                buildList {
+                    add(first.readJsonAsString())
+                    while (hits.hasNext()) {
+                        val hit = hits.next()
+                        if (hit.docId != first.docId) break
+                        add(hit.readJsonAsString())
+                    }
+                }
+            }
+            assertEquals(skus, looped)
+        }
+    }
+
+    @Test
     fun `types come with each document of insertAll and are listed as a flow, as the guide shows`() = runTest {
         JsonStore.openOrCreate(dir.resolve("types")).use { store ->
             val outcomes = store.blocking().insertAll(

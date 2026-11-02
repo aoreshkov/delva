@@ -109,6 +109,15 @@ internal object DelvaCommands {
         defaultDisplay = "all",
     )
 
+    val maxDocuments: Option.Single<Int> = Option.Single(
+        "--max-documents",
+        Converters.positiveInt,
+        "-m",
+        help = "Only the hits of the first n documents with hits; with --order desc, -m 1 gives every hit of the newest",
+        valueName = "n",
+        defaultDisplay = "all",
+    )
+
     val order: Option.Single<SearchOrder> = Option.Single(
         "--order",
         ValueArgs.order,
@@ -133,7 +142,7 @@ internal object DelvaCommands {
 
     val count: Option.Flag = Option.Flag("--count", "-c", help = "Print how many hits there are, not the hits; with --limit, count at most n")
 
-    private val searchOptions = listOf(mode, nested, type, limit, order, after, maxBytes, count, exitStatus)
+    private val searchOptions = listOf(mode, nested, type, limit, maxDocuments, order, after, maxBytes, count, exitStatus)
 
     private val searchConstraints: List<Constraint> = listOf(Constraint.Exclusive(count, maxBytes))
 
@@ -226,6 +235,7 @@ internal object DelvaCommands {
             Example("delva -s store search path '\$..[?@.qty < 1].sku'", "The SKU of every item out of stock"),
             Example("delva -s store search path '\$..[?@.qty < 1]' --mode element -c -n 10", "Whether at least ten items are out of stock"),
             Example("delva -s store search path '\$..sku' --where \"@.kind == 'order'\"", "Every SKU in the documents of kind order"),
+            Example("delva -s store search path '\$..sku' --where \"@.kind == 'order'\" --order desc -m 1", "Every SKU in the newest order"),
         ),
         constraints = hitConstraints,
     )

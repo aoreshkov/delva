@@ -6,6 +6,8 @@ import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.ResultMode
+import app.oreshkov.delva.SearchOrder
+import app.oreshkov.delva.SearchResult
 import app.oreshkov.delva.StoreOptions
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo.Platform
@@ -20,7 +22,9 @@ import kotlin.test.assertTrue
 /**
  * Long runs of insert, type and delete churn on one store with compaction, reopened and crashed (power
  * loss between acknowledged operations) now and then, checked against a model at checkpoints: documents, types of
- * every object, `objectsOfType`, `countOfType` and type-filtered searches. The live documents stay around a target
+ * every object, `objectsOfType`, `countOfType` and type-filtered searches. Between checkpoints, a search bounded to the
+ * first or last few documents is opened and its first page read; the rest is read after the churn that follows, and
+ * must still be the hits of exactly those documents as the model had them when it opened. The live documents stay around a target
  * count, so the index and the log must stay bounded too: their sizes at checkpoints are compared with their sizes early on.
  * Lane files are reclaimed now and then, and control files go once flushes cover them.
  *
@@ -74,8 +78,11 @@ class CompactionSimTest {
         var compactions = 0L
         var flushes = 0L
         val target = 150
+        val bounded = ArrayList<Bounded>()
+        var boundedChecked = 0
         try {
             for (op in 1..operations) {
+                if (op % (CHECKPOINT / 4) == CHECKPOINT / 8) bounded += openBounded(store, docs, random, "operation $op")
                 when (random.nextInt(20)) {
                     in 0..8 -> if (docs.size < 2 * target) {
                         val objects = random.nextInt(1, 6)
@@ -104,6 +111,7 @@ class CompactionSimTest {
                     }
                     else -> when (random.nextInt(40)) {
                         0 -> {
+                            boundedChecked += finish(bounded)
                             flushes += store.indexes.flushes
                             compactions += store.indexes.compactor.compactions
                             store.close()
@@ -112,6 +120,7 @@ class CompactionSimTest {
                             reopens++
                         }
                         1 -> {
+                            boundedChecked += finish(bounded)
                             flushes += store.indexes.flushes
                             compactions += store.indexes.compactor.compactions
                             // Power loss after the last acknowledgement: every acknowledged operation was synced.
@@ -129,6 +138,7 @@ class CompactionSimTest {
                     }
                 }
                 if (op % CHECKPOINT == 0) {
+                    boundedChecked += finish(bounded)
                     verify(store, docs, typed, "operation $op")
                     sizes += store.indexes.segmentBytes
                     logSizes += fs.files().filter { it.parent?.fileName?.toString() in LOG_DIRS }.sumOf { fs.bytes(it).size.toLong() }
@@ -138,17 +148,49 @@ class CompactionSimTest {
             compactions += store.indexes.compactor.compactions
             store.compact()
             reclaimed += store.reclaim()
+            boundedChecked += finish(bounded)
             verify(store, docs, typed, "the end")
         } finally {
+            for (b in bounded) b.result.close()
             runCatching { store.close() }
         }
+        assertTrue(boundedChecked > 0, "no bounded search was read across changes")
         // The live documents stay around the target: so must the index, once it has filled.
         val early = sizes.subList(0, minOf(3, sizes.size)).max()
         assertTrue(sizes.all { it <= 3 * early }, "index bytes at checkpoints: $sizes")
         val earlyLog = logSizes.subList(0, minOf(3, logSizes.size)).max()
         assertTrue(logSizes.all { it <= 3 * earlyLog }, "log bytes at checkpoints: $logSizes")
         assertTrue(reclaimed > 0, "no lane file was reclaimed")
-        println("compaction simulation $seed (T=$t): $operations operations, $flushes flushes, $compactions compactions, $reopens reopens, $crashes crashes, ${docs.size} documents at the end, $reclaimed lane files reclaimed, index bytes at checkpoints $sizes, log bytes $logSizes")
+        println("compaction simulation $seed (T=$t): $operations operations, $flushes flushes, $compactions compactions, $reopens reopens, $crashes crashes, ${docs.size} documents at the end, $reclaimed lane files reclaimed, $boundedChecked bounded searches read across changes, index bytes at checkpoints $sizes, log bytes $logSizes")
+    }
+
+    /** A bounded search left open: the hits read so far, and those of its documents when it was opened. */
+    private class Bounded(val result: SearchResult, val read: List<Node>, val expected: List<Node>, val label: String)
+
+    /**
+     * Opens `hot = yes` bounded to the first or last 1–3 live documents, checks its count, and reads its first page. Each
+     * document's objects all have `hot`, so the expected hits are every object of those documents.
+     */
+    private fun openBounded(store: Engine, docs: TreeMap<Long, Int>, random: Random, label: String): Bounded {
+        val order = SearchOrder.entries[random.nextInt(2)]
+        val n = random.nextInt(1, 4)
+        val query = KeyValueQuery("hot", JsonQueryValue.Str("yes"), ResultMode.CONTAINING_ELEMENT, limit = 2, order = order).withMaxDocuments(n)
+        val ids = (if (order == SearchOrder.ASCENDING) docs.navigableKeySet() else docs.descendingKeySet()).take(n)
+        val ascending = ids.flatMap { docId -> List(docs.getValue(docId)) { Node(docId, 4L + 3 * it) } }
+        val expected = if (order == SearchOrder.ASCENDING) ascending else ids.flatMap { docId -> ascending.filter { it.docId == docId }.reversed() }
+        assertEquals(expected.size.toLong(), store.count(query), "$label: count with maxDocuments = $n $order")
+        val result = store.search(query)
+        val read = result.nextPage()?.hits.orEmpty().map { Node(it.node.docId.raw, it.node.nodePre) }
+        return Bounded(result, read, expected, "$label: maxDocuments = $n $order")
+    }
+
+    /** Reads the rest of each open bounded search and closes it; returns how many there were. */
+    private fun finish(bounded: MutableList<Bounded>): Int {
+        for (b in bounded) {
+            val rest = b.result.use { result -> result.iterator().asSequence().map { Node(it.node.docId.raw, it.node.nodePre) }.toList() }
+            assertEquals(b.expected, b.read + rest, b.label)
+        }
+        return bounded.size.also { bounded.clear() }
     }
 
     /** `$.objs[j]` is the object at pre 4 + 3j: the root is 0, `true` 1, `n` 2, the array 3, and each object is followed by its `k` and `hot`. */

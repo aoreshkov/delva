@@ -89,7 +89,9 @@ internal class EngineSearchResult(
             hits += hit
         }
         pending = pending ?: fetch()
-        return SearchPage(hits, if (pending != null) cursorOf(hits.last()) else null)
+        // At the document bound the next candidate isn't evaluated, so whether hits follow isn't known: the cursor
+        // stays, and a search resumed from it tells.
+        return SearchPage(hits, if (pending != null || source.boundReached) cursorOf(hits.last()) else null)
     }
 
     override fun iterator(): Iterator<SearchHit> = object : Iterator<SearchHit> {

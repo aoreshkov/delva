@@ -49,4 +49,36 @@ class QueriesTest {
         assertNotEquals(filter, DocumentFilter.compile("@.kind=='x'"))
         assertEquals("@.kind == 'x'", filter.toString())
     }
+
+    @Test
+    fun `a document bound is part of the query's value, survives copy and must be positive`() {
+        val path = JsonPathQuery(JsonPath.compile("$.a"))
+        val bounded = path.withMaxDocuments(1)
+        assertEquals(null, path.maxDocuments)
+        assertEquals(1, bounded.maxDocuments)
+        assertEquals(bounded, JsonPathQuery(JsonPath.compile("$.a")).withMaxDocuments(1))
+        assertEquals(bounded.hashCode(), JsonPathQuery(JsonPath.compile("$.a")).withMaxDocuments(1).hashCode())
+        assertNotEquals(path, bounded)
+        assertNotEquals(bounded, path.withMaxDocuments(2))
+        assertEquals(1, bounded.copy(limit = 3).maxDocuments)
+        assertEquals(1, bounded.withDocumentFilter(DocumentFilter.compile("@.kind == 'x'")).maxDocuments)
+        assertEquals(DocumentFilter.compile("@.kind == 'x'"), path.withDocumentFilter(DocumentFilter.compile("@.kind == 'x'")).withMaxDocuments(1).documentFilter)
+        assertEquals(path, bounded.withMaxDocuments(null))
+        assertEquals("JsonPathQuery(path=$.a, mode=CONTAINING_ELEMENT, nested=ALL, limit=100, maxDocuments=1)", bounded.toString())
+        for (n in listOf(0, -1)) {
+            val e = assertFailsWith<IllegalArgumentException> { path.withMaxDocuments(n) }
+            assertEquals("maxDocuments must be positive, was $n", e.message)
+        }
+
+        val keyValue = KeyValueQuery("k", JsonQueryValue.Num(1))
+        val boundedKeyValue = keyValue.withMaxDocuments(3)
+        assertEquals(3, boundedKeyValue.maxDocuments)
+        assertEquals(boundedKeyValue, KeyValueQuery("k", JsonQueryValue.Num(1)).withMaxDocuments(3))
+        assertEquals(boundedKeyValue.hashCode(), KeyValueQuery("k", JsonQueryValue.Num(1)).withMaxDocuments(3).hashCode())
+        assertNotEquals(keyValue, boundedKeyValue)
+        assertEquals(3, boundedKeyValue.copy(order = SearchOrder.DESCENDING).maxDocuments)
+        assertEquals(keyValue, boundedKeyValue.withMaxDocuments(null))
+        assertEquals("KeyValueQuery(key=k, value=Num(value=1), mode=WHOLE_DOCUMENT, nested=ALL, limit=100, maxDocuments=3)", boundedKeyValue.toString())
+        assertFailsWith<IllegalArgumentException> { keyValue.withMaxDocuments(0) }
+    }
 }

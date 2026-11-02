@@ -231,6 +231,7 @@ A query is `key = value` with:
 | `after` | cursor to resume from ([4.6](#46-pagination)) | none |
 | `type` | only containing objects of this type match ([6](#6-types)) | none |
 | `order` | `ASCENDING` or `DESCENDING` ([4.4](#44-order)) | `ASCENDING` |
+| `maxDocuments` | the result ends after the hits of this many documents ([4.6](#46-pagination)); MUST be positive | no bound |
 
 The query value follows the document rules: a number outside the range of [2.2](#22-numbers) is rejected with
 `NUMBER_OUT_OF_RANGE`, and a string with unpaired surrogates with `INVALID_STRING`.
@@ -282,7 +283,8 @@ first read, from the result's snapshot.
 Hits are ordered by `(docId, pre)`: ascending with `order = ASCENDING`, descending with `DESCENDING`. DocIds follow
 the order in which inserts started ([3.1](#31-document-ids)), so ascending returns the oldest document first, and
 descending the newest first and, within a document, the last node first. Both orders return the same hits; only the
-sequence differs. `DESCENDING` with `limit = 1` returns the newest hit.
+sequence differs. `DESCENDING` with `limit = 1` returns the newest hit, and with `maxDocuments = 1` every hit of the
+newest document that has one.
 
 ### 4.5 Nested hits
 
@@ -310,11 +312,18 @@ Text that isn't a cursor fails to parse with the same exception.
 - **A descending search resumed** in a new search returns nothing above the cursor, so documents inserted since the
   first page aren't returned; a new search without a cursor starts again from the newest.
 
+**Document bound.** With `maxDocuments = n`, the result is the hits of the first `n` documents, in the query's order,
+that have at least one hit: every hit of each, and nothing after them. It bounds the result, not a page: `limit` and
+`maxBytes` still cut it into pages, so a document with more hits than `limit` spans pages. The search reads no
+document past the `n`-th, so whether one with hits follows isn't known: the last page has a cursor when another
+visible document is a candidate for the query ([10.4](#104-search)), and a search resumed from it may find nothing. A
+resumed search counts its `n` documents from the cursor, including the cursor's own when hits of it remain.
+
 ### 4.7 Count
 
 `count(query, atMost)` returns how many hits a search for the query returns from the current state, key–value,
 JSONPath ([10.4](#104-search)) or in key order ([3.3](#33-document-keys)), but no more than `atMost`: `min(hits, atMost)`. It counts what the search's pages hold
-together — the query's cursor, type, mode and nested-hit filter apply, `limit` and `maxBytes` don't — without reading the
+together — the query's cursor, type, mode, nested-hit filter and `maxDocuments` apply, `limit` and `maxBytes` don't — without reading the
 hits' JSON, and it stops at the `atMost`-th hit. A query the search refuses, it refuses the same way. `atMost` MUST NOT
 be negative.
 
@@ -740,7 +749,7 @@ nodes by how the query visits them; select ([10.3](#103-select)) returns the exa
 |---|---|---|
 | `path` | the compiled query | — |
 | `mode` | `CONTAINING_ELEMENT`: each selected node is a hit; `WHOLE_DOCUMENT`: each document where the query selects a node, with the root as the hit | `CONTAINING_ELEMENT` |
-| `nested`, `limit`, `maxBytes`, `after`, `order` | as in [4.1](#41-query); `OUTERMOST_ONLY` drops a selected node inside another selected node | as there |
+| `nested`, `limit`, `maxBytes`, `after`, `order`, `maxDocuments` | as in [4.1](#41-query); `OUTERMOST_ONLY` drops a selected node inside another selected node | as there |
 | `type` | only selected objects of this type are hits; in `WHOLE_DOCUMENT` mode a document is a hit when one of them is | none |
 | `scan` | `REJECT` or `ALLOW_SCAN`, see below | `REJECT` |
 | `documentFilter` | only documents whose root passes this filter are searched ([10.5](#105-document-filters)) | none |

@@ -53,6 +53,37 @@ internal interface HitSource {
 
     /** Finds the next hit; false when there are no more. */
     fun next(): Boolean
+
+    /**
+     * True once [next] has returned false because the query's document bound was reached while visible candidate
+     * documents remained, so a search resumed past the last hit may find more. The candidates aren't evaluated to tell.
+     */
+    val boundReached: Boolean get() = false
+}
+
+/**
+ * A search's `maxDocuments`: counts the documents its hits come from, so the source stops before it opens a document
+ * past the last one it may return. Hits come grouped by document in either order, so a new docId is a new document.
+ */
+internal class DocumentBound(private val maxDocuments: Int) {
+    private var documents = 0
+    private var lastDocId = -1L
+
+    /** Whether the bound's documents have all had hits: the source must not open another. */
+    val reached: Boolean get() = documents >= maxDocuments
+
+    /** Counts the document of a hit the source returns. */
+    fun hit(docId: Long) {
+        if (docId != lastDocId) {
+            lastDocId = docId
+            documents++
+        }
+    }
+
+    companion object {
+        /** The bound for a query's `maxDocuments`, or null when it has none. */
+        fun of(maxDocuments: Int?): DocumentBound? = maxDocuments?.let(::DocumentBound)
+    }
 }
 
 /** How a search with a type filter finds its documents. */
@@ -118,8 +149,14 @@ internal class QueryExecutor(
     private val plan: TypeQueryPlan = TypeQueryPlan.AUTO,
     private val descending: Boolean = false,
     private val bufferHits: Int = DESCENDING_BUFFER_HITS,
+    /** The query's `maxDocuments`, or null. */
+    private val bound: DocumentBound? = null,
 ) : HitSource {
     val stats = QueryStats()
+
+    override var boundReached: Boolean = false
+        private set
+    private var stoppedAtBound = false
 
     private val locator = NodeLocator(fragments)
     private val matcher = ValueMatcher()
@@ -186,7 +223,13 @@ internal class QueryExecutor(
     val entriesDecoded: Long get() = merger.entriesDecoded
 
     override fun next(): Boolean {
-        if (descending && mode == ResultMode.CONTAINING_ELEMENT) return previous()
+        val found = if (descending && mode == ResultMode.CONTAINING_ELEMENT) previous() else following()
+        if (found) bound?.hit(docId)
+        return found
+    }
+
+    /** The next hit in ascending order, or in descending order of whole documents. */
+    private fun following(): Boolean {
         while (true) {
             if (!docOpen && !openNextDocument()) {
                 hit = null
@@ -327,6 +370,13 @@ internal class QueryExecutor(
 
     private fun openNextDocument(): Boolean {
         if (typeFilter == UNKNOWN_TYPE) return false
+        if (bound != null && bound.reached) {
+            if (!stoppedAtBound) {
+                stoppedAtBound = true
+                boundReached = hasVisibleCandidate()
+            }
+            return false
+        }
         val merged = sources ?: openSources().also { sources = it }
         while (true) {
             if (typeDriven && !nextTypedDocument(merged)) return false
@@ -358,6 +408,19 @@ internal class QueryExecutor(
             }
             return true
         }
+    }
+
+    /**
+     * Whether the term's postings name another visible document, found without reading any: past the bound, a resumed
+     * search may find hits there. A type filter isn't consulted, so the answer is "maybe".
+     */
+    private fun hasVisibleCandidate(): Boolean {
+        val merged = sources ?: return false
+        while (merged.docId != merged.exhausted) {
+            if (visibility.isVisible(merged.docId)) return true
+            merged.skipDocument()
+        }
+        return false
     }
 
     /**

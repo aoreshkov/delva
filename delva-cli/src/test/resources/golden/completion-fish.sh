@@ -10,7 +10,7 @@ function __delva_at
             continue
         end
         switch $word
-            case --store -s --width --key -k --path -p --line-width --max-levels --mode --nested --type -t --limit -n --order --after --max-bytes --where --normalization --fragment-size --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --replace --ignore-key --ignore-path --max-differences
+            case --store -s --width --key -k --path -p --line-width --max-levels --mode --nested --type -t --limit -n --max-documents -m --order --after --max-bytes --where --normalization --fragment-size --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --replace --ignore-key --ignore-path --max-differences
                 set skip 1
             case '-*'
             case '*'
@@ -72,6 +72,7 @@ complete -c delva -n '__delva_at search kv' -l mode -x -a 'document element' -d 
 complete -c delva -n '__delva_at search kv' -l nested -x -a 'all outermost' -d 'Keep hits inside other hits, or only the outermost'
 complete -c delva -n '__delva_at search kv' -l type -s t -r -F -d 'Only objects of this type'
 complete -c delva -n '__delva_at search kv' -l limit -s n -r -F -d 'At most n results; a notice says how to get the rest'
+complete -c delva -n '__delva_at search kv' -l max-documents -s m -r -F -d 'Only the hits of the first n documents with hits; with --order desc, -m 1 gives every hit of the newest'
 complete -c delva -n '__delva_at search kv' -l order -x -a 'asc desc' -d 'Oldest documents first, or newest'
 complete -c delva -n '__delva_at search kv' -l after -r -F -d 'Resume after this cursor, from a hit'\''s JSON or a '\''more:'\'' notice'
 complete -c delva -n '__delva_at search kv' -l max-bytes -r -F -d 'End a page before its hits pass this size, such as 16MiB'
@@ -89,6 +90,7 @@ complete -c delva -n '__delva_at search path' -l mode -x -a 'document element' -
 complete -c delva -n '__delva_at search path' -l nested -x -a 'all outermost' -d 'Keep hits inside other hits, or only the outermost'
 complete -c delva -n '__delva_at search path' -l type -s t -r -F -d 'Only objects of this type'
 complete -c delva -n '__delva_at search path' -l limit -s n -r -F -d 'At most n results; a notice says how to get the rest'
+complete -c delva -n '__delva_at search path' -l max-documents -s m -r -F -d 'Only the hits of the first n documents with hits; with --order desc, -m 1 gives every hit of the newest'
 complete -c delva -n '__delva_at search path' -l order -x -a 'asc desc' -d 'Oldest documents first, or newest'
 complete -c delva -n '__delva_at search path' -l after -r -F -d 'Resume after this cursor, from a hit'\''s JSON or a '\''more:'\'' notice'
 complete -c delva -n '__delva_at search path' -l max-bytes -r -F -d 'End a page before its hits pass this size, such as 16MiB'
