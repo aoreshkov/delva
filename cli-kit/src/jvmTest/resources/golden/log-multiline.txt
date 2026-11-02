@@ -1,0 +1,18 @@
+2026-11-01T19:02:13.897Z DEBUG REQUEST: https://example.com/game/startup
+                               │ METHOD: POST
+                               │ HEADERS
+                               │     Accept: application/json
+                               │
+                               │ BODY
+2026-11-01T19:02:13.897Z WARN  retrying: upstream said:
+                               │ 503 Service Unavailable
+INFO  a carriage return
+      │ 2026-11-01T19:02:13.897Z ERROR forged stays a continuation
+2 documents
+│ next page: --after k2
+warning: --limit was given twice
+         │ the last one is used
+error: can't read 'a.json'
+       │ \u001B[2J and the rest of the line
+error: where the console can't show a box-drawing line
+       | the marker is ASCII

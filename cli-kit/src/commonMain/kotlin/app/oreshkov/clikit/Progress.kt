@@ -73,7 +73,7 @@ public class Progress(
             erase()
             enabled && io.interactive && !interrupted
         }
-        if (shownMessage) message?.let { io.errLine(TerminalText.escape(it)) }
+        if (shownMessage) message?.let { io.errEntry("", it) }
     }
 
     /** Takes the line off the screen; called holding [LOCK]. */

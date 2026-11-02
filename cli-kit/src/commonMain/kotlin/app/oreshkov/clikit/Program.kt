@@ -390,7 +390,7 @@ public class Program @ExperimentalCliKitApi constructor(
             io.flush()
         }
         val state = io.stdoutState()
-        if (state == StdoutState.Failed) io.errLine(io.styler.red("error: ") + "could not write to standard output")
+        if (state == StdoutState.Failed) io.errEntry("error: ", "could not write to standard output", io.styler::red)
         return if (state != StdoutState.Written && status == ExitStatus.OK) ExitStatus.IO_ERR else status
     }
 
@@ -411,7 +411,7 @@ public class Program @ExperimentalCliKitApi constructor(
             }
 
             is ParseResult.UsageError -> {
-                io.errLine(io.styler.red("error: ") + TerminalText.escape(parsed.message))
+                io.errEntry("error: ", parsed.message, io.styler::red)
                 parsed.suggestion?.let { io.errLine("       did you mean ${TerminalText.escape(it)}?") }
                 io.errLine(help.usageLine(parsed.path))
                 ExitStatus.USAGE
@@ -419,7 +419,7 @@ public class Program @ExperimentalCliKitApi constructor(
 
             // The command line was fine, so a usage line would only send the reader looking in the wrong place.
             is ParseResult.ConfigurationError -> {
-                io.errLine(io.styler.red("error: ") + TerminalText.escape(parsed.message))
+                io.errEntry("error: ", parsed.message, io.styler::red)
                 ExitStatus.CONFIG
             }
 
@@ -461,7 +461,7 @@ public class Program @ExperimentalCliKitApi constructor(
     }
 
     private fun report(failure: CommandFailure, invocation: ParseResult.Invocation, io: TerminalIo): Int {
-        io.errLine(io.styler.red("error: ") + TerminalText.escape(failure.message.orEmpty()))
+        io.errEntry("error: ", failure.message.orEmpty(), io.styler::red)
         if (failure.showUsage) io.errLine(HelpRenderer(io.styler).usageLine(invocation.path))
         return failure.status
     }
@@ -475,7 +475,7 @@ private const val MAX_HELP_WIDTH = 100
  * [verbose] or how to get it; answers [ExitStatus.SOFTWARE].
  */
 internal fun reportBug(error: Throwable, program: String, verbose: Boolean, io: TerminalIo): Int {
-    io.errLine(io.styler.red("internal error: ") + TerminalText.escape(error.message ?: error::class.simpleName.orEmpty()))
+    io.errEntry("internal error: ", error.message ?: error::class.simpleName.orEmpty(), io.styler::red)
     if (verbose) {
         io.errLine(TerminalText.stackTrace(error))
     } else {
