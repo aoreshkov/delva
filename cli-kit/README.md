@@ -44,6 +44,10 @@ fun main(args: Array<String>) {
 }
 ```
 
+A single-value option given more than once takes its last value, as POSIX reads options in order and as an alias
+that puts a default first needs; when the values differ, `warning: --limit was given 2 times; the last one is used`
+says so, without repeating them, and `--quiet` silences it.
+
 It is a Kotlin Multiplatform module with one target, the JVM (22 or newer). Its KDoc is on
 [javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit).
 

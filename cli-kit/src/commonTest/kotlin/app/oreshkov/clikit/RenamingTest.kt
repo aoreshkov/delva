@@ -72,7 +72,7 @@ class RenamingTest {
 
     @Test
     fun `a former option name takes a value either way, with one warning however often it's typed`() {
-        for (args in listOf(listOf("--max", "5"), listOf("--max=5"), listOf("--max", "4", "--max=5"))) {
+        for (args in listOf(listOf("--max", "5"), listOf("--max=5"), listOf("--max", "5", "--max=5"))) {
             val parsed = invocation("session", "list", *args.toTypedArray())
             assertEquals(5, parsed.values[TestCommands.limit], "$args")
             assertEquals(listOf("--max is deprecated; use --limit"), parsed.notices, "$args")

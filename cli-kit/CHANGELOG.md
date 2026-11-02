@@ -8,6 +8,11 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+### Added
+
+- A warning when the command line gives a single-value option different values, such as `--limit 1 … --limit 100`:
+  the last one is still used, and the warning names the option and how many times it was given, never the values.
+
 ### Changed
 
 - With stdout and stderr merged on one reader, as under `2>&1`, notices, warnings and errors keep their place among the

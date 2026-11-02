@@ -106,6 +106,93 @@ class ParserTest {
         )
     }
 
+    // ------------------------------------------------------------------- a single-value option repeated
+
+    @Test
+    fun `a single-value option given twice takes the last value`() {
+        // POSIX reads options in order, and a wrapper that puts a default first relies on it: `alias x='x -n 10'`.
+        assertEquals(100, invocation("session", "list", "--limit", "1", "--limit", "100").values[TestCommands.limit])
+        assertEquals(1, invocation("session", "list", "--limit", "100", "-n1").values[TestCommands.limit])
+    }
+
+    @Test
+    fun `a single-value option given different values is warned about at the last one`() {
+        assertEquals(
+            listOf("--limit was given 2 times; the last one is used"),
+            invocation("session", "list", "--limit", "1", "--limit", "100").notices,
+        )
+        assertEquals(
+            listOf("--limit was given 3 times; the last one is used"),
+            invocation("session", "list", "-n", "1", "-n", "1", "-n", "2").notices,
+        )
+    }
+
+    @Test
+    fun `a repeat counts by option, whatever spelling and form each value is given in`() {
+        val warning = listOf("--limit was given 2 times; the last one is used")
+        assertEquals(warning, invocation("session", "list", "-n", "1", "--limit", "2").notices)
+        assertEquals(warning, invocation("session", "list", "--limit=1", "--limit", "2").notices)
+        assertEquals(warning, invocation("session", "list", "--limit", "1", "-n2").notices)
+        // A former name is the name the reader knows the option by when the last value was typed with it, as everywhere.
+        assertEquals(
+            listOf("--max is deprecated; use --limit", "--limit was given 2 times; the last one is used"),
+            invocation("session", "list", "--max", "1", "--limit", "2").notices,
+        )
+        assertEquals(
+            listOf("--max is deprecated; use --limit", "--max was given 2 times; the last one is used"),
+            invocation("session", "list", "--limit", "1", "--max", "2").notices,
+        )
+    }
+
+    @Test
+    fun `the same value given again changes nothing, and is not warned about`() {
+        assertEquals(emptyList(), invocation("session", "list", "-n", "5", "--limit=5").notices)
+        assertEquals(emptyList(), invocation("session", "list", "-n5", "-n", "5", "-n", "5").notices)
+    }
+
+    @Test
+    fun `a repeated option, a variable or a setting is never a repeat`() {
+        val parameters = invocation("request", "get", "-a", "alice", "-p", "page=2", "-p", "page=3", "game.startup")
+        assertEquals(emptyList(), parameters.notices)
+        val settings = object : Settings {
+            override val locations: List<String> = listOf("the project file")
+            override fun read(): List<Setting> = listOf(Setting("data-dir", "/from/settings", "p:1"))
+        }
+        val environment = mapOf("DEMO_DATA_DIR" to "/from/env")
+        // Each fills in only what the command line left out, so a typed value next to both is still given once.
+        val typed = Parser(TestCommands.root, environment::get, settings).parse(listOf("--data-dir", "/typed", "session", "list"))
+        assertIs<ParseResult.Invocation>(typed)
+        assertEquals("/typed", typed.values[TestCommands.dataDir])
+        assertEquals(emptyList(), typed.notices)
+    }
+
+    @Test
+    fun `an unset value restarts the count`() {
+        val parsed = unsetInvocation("--dir", "/a", "--dir", "\${x}", "--dir", "/b")
+        assertEquals("/b", parsed.values[dir])
+        assertEquals(listOf("--dir: ignoring '\${x}'"), parsed.notices)
+        assertEquals(emptyList(), unsetInvocation("--dir", "/a", "--dir", "/b", "--dir=").notices)
+    }
+
+    @Test
+    fun `a repeat keeps its place among the other notices`() {
+        val parsed = unsetInvocation("--dir", "/a", "\${x}", "--dir", "/b", "--tag", "\${t}")
+        assertEquals(
+            listOf("<first>: ignoring '\${x}'", "--dir was given 2 times; the last one is used", "--tag: ignoring '\${t}'"),
+            parsed.notices,
+        )
+    }
+
+    @Test
+    fun `the warning about a repeat never shows a value`() {
+        // A value-taking option can hold a secret, and the warning lands in CI logs of runs that succeed.
+        val token = Option.Single("--token", Converters.string)
+        val parsed = Parser(CommandSpec("demo", options = listOf(token))).parse(listOf("--token", "s3cret-a", "--token=s3cret-b"))
+        assertIs<ParseResult.Invocation>(parsed)
+        assertEquals(listOf("--token was given 2 times; the last one is used"), parsed.notices)
+        assertFalse(parsed.notices.any { "s3cret" in it })
+    }
+
     @Test
     fun `values arrive converted, read by the handle that declared them`() {
         val parsed = invocation("session", "list", "-n", "5")

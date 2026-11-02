@@ -152,6 +152,18 @@ class ProgramTest {
     }
 
     @Test
+    fun `a single-value option given different values is a warning before the command runs, which --quiet silences`() {
+        val limit = Option.Single("--limit", Converters.positiveInt, "-n")
+        val list = CommandSpec("list", options = listOf(limit, StandardOptions.quiet))
+        val program = Program(list, "list 1.0", mapOf(list to CommandHandler { context -> context.io.errLine("ran ${context.values[limit]}"); 0 }))
+
+        val warned = program.record("-n", "1", "--limit", "100")
+        assertEquals(ExitStatus.OK, warned.status)
+        assertEquals("warning: --limit was given 2 times; the last one is used\nran 100\n", warned.stderr)
+        assertEquals("ran 100\n", program.record("-n", "1", "--limit", "100", "--quiet").stderr)
+    }
+
+    @Test
     fun `a value its converter calls unset is a warning before the command runs, which --quiet silences`() {
         val target = Option.Single(
             "--target",
