@@ -60,7 +60,10 @@ public class HelpRenderer @ExperimentalCliKitApi constructor(
     }
 
     /** The help page of the last command of [path], the commands from the root down to it. */
-    public fun render(path: List<CommandSpec>): String {
+    public fun render(path: List<CommandSpec>): String = render(path, argumentFiles = false)
+
+    /** [render]'s page, which, for a program with [argumentFiles] on, ends with a line on how to give one. */
+    internal fun render(path: List<CommandSpec>, argumentFiles: Boolean): String {
         val command = path.last()
         val invocation = invocation(path)
         val inherited = optionsFor(path).filterNot { it.hidden }
@@ -169,6 +172,11 @@ public class HelpRenderer @ExperimentalCliKitApi constructor(
             if (command.subcommands.isNotEmpty()) {
                 appendLine()
                 appendText("Run '$invocation <command> --help' for more on a command.")
+            }
+
+            if (argumentFiles) {
+                appendLine()
+                appendText(ARGUMENT_FILES)
             }
 
             if (command.epilogue != null) {
@@ -287,6 +295,9 @@ private const val DEFAULT_WIDTH = TableRenderer.DEFAULT_WIDTH
 private const val INDENT = "  "
 private const val HANGING = "    "
 private const val COMMENT = "# "
+
+/** The footer of a program with argument files on, the one thing about them a reader can't guess. */
+private const val ARGUMENT_FILES = "@file reads arguments from a file, one per line; @@ for a literal @."
 
 /** The tag of a deprecated option or command. */
 private const val DEPRECATED = "(deprecated)"

@@ -12,6 +12,9 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 - A warning when the command line gives a single-value option different values, such as `--limit 1 … --limit 100`:
   the last one is still used, and the warning names the option and how many times it was given, never the values.
+- Argument files, opt-in and experimental: with `Program.withArgumentFiles()`, `@args.txt` where an option or operand
+  is read stands for the file's lines, one argument each, so an argument holding `|`, `&` or `^` gets past a Windows
+  `.bat` start script; an option's value is never read as a file, and `@@` starts a literal `@`.
 
 ### Changed
 

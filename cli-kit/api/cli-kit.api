@@ -545,6 +545,7 @@ public final class app/oreshkov/clikit/ProgramMainKt {
 	public static final fun implementationVersion (Lkotlin/reflect/KClass;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun implementationVersion$default (Lkotlin/reflect/KClass;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun runAndExit (Lapp/oreshkov/clikit/Program;[Ljava/lang/String;)Ljava/lang/Void;
+	public static final fun withArgumentFiles (Lapp/oreshkov/clikit/Program;)Lapp/oreshkov/clikit/Program;
 }
 
 public final class app/oreshkov/clikit/Progress {
