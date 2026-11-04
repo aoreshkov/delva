@@ -111,7 +111,7 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
         val manifests = ManifestStore(io, dir)
         val info = LogFiles.StoreInfo(
             options.creation.fragmentBytes, options.encoderBudgetBytes, options.creation.hashTerms, options.indexPolicy,
-            options.creation.normalization, options.creation.documentKey,
+            options.creation.normalization, options.creation.documentKey, options.creation.vectorField,
         )
         val filesExist = { m: Manifest ->
             m.files.all { f -> onDisk[f.fileNo]?.let { it.control == f.control && it.laneId == f.laneId } == true } &&
@@ -124,10 +124,11 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
         val manifest = loaded ?: Manifest(
             1, info.fragmentBytes, info.encoderBudgetBytes, info.hashTerms, nextFileNo = 1, nextDocId = 1, lastLsn = 0, files = emptyList(),
             indexPolicy = info.indexPolicy, normalization = info.normalization, documentKey = info.documentKey,
+            vectorField = info.vectorField,
         ).also { manifests.write(it) }
         if (manifest.fragmentBytes != info.fragmentBytes || manifest.hashTerms != info.hashTerms ||
             manifest.indexPolicy != info.indexPolicy || manifest.normalization != info.normalization ||
-            manifest.documentKey != info.documentKey
+            manifest.documentKey != info.documentKey || manifest.vectorField != info.vectorField
         ) {
             throw CreationOptionsMismatchException(dir, manifest.creationOptions(), options.creation)
         }

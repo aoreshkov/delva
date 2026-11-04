@@ -29,7 +29,7 @@ internal interface PostingSink {
     /**
      * [locatorKind] is a [PostingLocator] kind; [fragmentPre] and [locatorOffset] are the fragment key `pre` and the
      * payload offset of the object's tag byte for PART and SUBTREE, `containerPre` and 0 for HEADER, 0 and 0 for
-     * UNRESOLVED. [pathHash] is the 16-bit path hash of the containing object's parent (SPEC.md §15). The term bytes
+     * UNRESOLVED. [pathHash] is the 16-bit path hash of the containing object's parent (SPEC.md §16). The term bytes
      * are valid only during the call.
      */
     fun posting(term: ByteArray, termOffset: Int, termLength: Int, containerPre: Long, memberPre: Long, inArray: Boolean, locatorKind: Int, fragmentPre: Long, locatorOffset: Int, pathHash: Int)

@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.log
 
 import app.oreshkov.delva.Normalization
+import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.compress.DictionaryFiles
 import app.oreshkov.delva.internal.io.FileIo
@@ -52,6 +53,7 @@ internal class LogFiles(
         val indexPolicy: IndexPolicy = IndexPolicy.EVERYTHING,
         val normalization: Normalization = Normalization.NONE,
         val documentKey: String? = null,
+        val vectorField: VectorField? = null,
     ) {
         @Volatile
         var nextDocId: () -> Long = { 1 }
@@ -332,6 +334,7 @@ internal class LogFiles(
             indexPolicy = info.indexPolicy,
             normalization = info.normalization,
             documentKey = info.documentKey,
+            vectorField = info.vectorField,
         )
         manifests.write(manifest)
     }

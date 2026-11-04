@@ -20,6 +20,7 @@ import app.oreshkov.delva.internal.path.SingularPath
  * | [maxIndexedStringBytes] | unlimited | ≥ [minIndexedStringBytes] |
  * | [normalization] | [Normalization.NONE] | |
  * | [documentKey] | none | a JSON path other than `$` |
+ * | [vectorField] | none | a [VectorField] |
  *
  * Options are values: two instances with the same settings are equal, and [copy] derives a variant, such as
  * `CreationOptions().copy(normalization = Normalization.NFC)`.
@@ -37,10 +38,13 @@ import app.oreshkov.delva.internal.path.SingularPath
  *   [Normalization.NFC] the normalized form is what is stored, indexed, compared and read back, and query keys,
  *   query values, type names and type paths are normalized the same way.
  * - [documentKey]: the JSON path of the string that names each document (SPEC.md §3.3), set with [withDocumentKey].
+ * - [vectorField]: where each document holds its vector, and how vectors are compared (SPEC.md §11), set with
+ *   [withVectorField].
  */
 public class CreationOptions private constructor(
     // First, so that this constructor's JVM signature differs from the public one that takes a documentKey.
     private val key: String?,
+    private val vector: VectorField?,
     public val fragmentBytes: Int,
     public val hashTerms: Boolean,
     public val indexedKeys: Set<String>,
@@ -58,7 +62,7 @@ public class CreationOptions private constructor(
         minIndexedStringBytes: Int = 0,
         maxIndexedStringBytes: Int = Int.MAX_VALUE,
         normalization: Normalization = Normalization.NONE,
-    ) : this(null, fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization)
+    ) : this(null, null, fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization)
 
     /** Options with a [documentKey]; validated like the others. */
     @ExperimentalDelvaApi
@@ -72,7 +76,7 @@ public class CreationOptions private constructor(
         normalization: Normalization = Normalization.NONE,
         documentKey: String?,
     ) : this(
-        checkedDocumentKey(documentKey, normalization),
+        documentKey, null,
         fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization,
     )
 
@@ -90,7 +94,27 @@ public class CreationOptions private constructor(
     @ExperimentalDelvaApi
     public val documentKey: String? get() = key
 
+    /**
+     * Where each document holds its vector, and how vectors are compared, or null for a store without vectors
+     * (SPEC.md §11). Set with [withVectorField].
+     *
+     * In a store created with one, each document's array of [VectorField.dimensions] numbers at [VectorField.path] is
+     * its vector, and a document with anything else there is rejected. Its path can't be the [documentKey] path, nor
+     * one inside it or around it.
+     */
+    @ExperimentalDelvaApi
+    public val vectorField: VectorField? get() = vector
+
     init {
+        val keySteps = key?.let { checkedPath(it, normalization, "the document key can't be the whole document") }
+        val vectorSteps = vector?.let { checkedPath(it.path, normalization, "the vector can't be the whole document") }
+        if (key != null && keySteps != null && vector != null && vectorSteps != null) {
+            // A document key is a string and a vector an array, so no document could have both if one held the other.
+            val shorter = minOf(keySteps.size, vectorSteps.size)
+            require(keySteps.subList(0, shorter) != vectorSteps.subList(0, shorter)) {
+                "the vector field ${vector.path} and the document key $key overlap: one holds the other"
+            }
+        }
         require(fragmentBytes in MIN_FRAGMENT_BYTES..MAX_FRAGMENT_BYTES) {
             "fragmentBytes $fragmentBytes outside $MIN_FRAGMENT_BYTES..$MAX_FRAGMENT_BYTES"
         }
@@ -103,7 +127,10 @@ public class CreationOptions private constructor(
         }
     }
 
-    /** These options with the given ones changed, the [documentKey] kept; the result is validated like a new instance. */
+    /**
+     * These options with the given ones changed, the [documentKey] and the [vectorField] kept; the result is validated
+     * like a new instance.
+     */
     public fun copy(
         fragmentBytes: Int = this.fragmentBytes,
         hashTerms: Boolean = this.hashTerms,
@@ -113,26 +140,37 @@ public class CreationOptions private constructor(
         maxIndexedStringBytes: Int = this.maxIndexedStringBytes,
         normalization: Normalization = this.normalization,
     ): CreationOptions = CreationOptions(
-        fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization, documentKey,
+        key, vector, fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization,
     )
 
     /**
      * These options with [documentKey] set to [path], or removed with null. Throws [InvalidJsonPathException] when
-     * [path] isn't a JSON path that can name a document's key.
+     * [path] isn't a JSON path that can name a document's key, and [IllegalArgumentException] when it overlaps the
+     * [vectorField].
      */
     @ExperimentalDelvaApi
     public fun withDocumentKey(path: String?): CreationOptions = CreationOptions(
-        fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization, path,
+        path, vector, fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization,
+    )
+
+    /**
+     * These options with [vectorField] set to [field], or removed with null. Throws [InvalidJsonPathException] when the
+     * field's path names no key under these options' [normalization], and [IllegalArgumentException] when it overlaps
+     * the [documentKey].
+     */
+    @ExperimentalDelvaApi
+    public fun withVectorField(field: VectorField?): CreationOptions = CreationOptions(
+        key, field, fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization,
     )
 
     override fun equals(other: Any?): Boolean =
         other is CreationOptions && other.fragmentBytes == fragmentBytes && other.hashTerms == hashTerms &&
             other.indexedKeys == indexedKeys && other.excludedKeys == excludedKeys &&
             other.minIndexedStringBytes == minIndexedStringBytes && other.maxIndexedStringBytes == maxIndexedStringBytes &&
-            other.normalization == normalization && other.documentKey == documentKey
+            other.normalization == normalization && other.key == key && other.vector == vector
 
     override fun hashCode(): Int = listOf(
-        fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization, documentKey,
+        fragmentBytes, hashTerms, indexedKeys, excludedKeys, minIndexedStringBytes, maxIndexedStringBytes, normalization, key, vector,
     ).hashCode()
 
     override fun toString(): String = buildString {
@@ -143,7 +181,8 @@ public class CreationOptions private constructor(
         if (minIndexedStringBytes != 0) append(", minIndexedStringBytes=").append(minIndexedStringBytes)
         if (maxIndexedStringBytes != Int.MAX_VALUE) append(", maxIndexedStringBytes=").append(maxIndexedStringBytes)
         if (normalization != Normalization.NONE) append(", normalization=").append(normalization)
-        if (documentKey != null) append(", documentKey=").append(documentKey)
+        if (key != null) append(", documentKey=").append(key)
+        if (vector != null) append(", vectorField=").append(vector)
         append(')')
     }
 
@@ -158,18 +197,23 @@ public class CreationOptions private constructor(
         @ExperimentalDelvaApi
         public const val MAX_DOCUMENT_KEY_BYTES: Int = 1024
 
-        private fun checkedDocumentKey(documentKey: String?, normalization: Normalization): String? {
-            if (documentKey == null) return null
-            val steps = SingularPath.parse(documentKey)
-            if (steps.isEmpty()) throw InvalidJsonPathException(documentKey, 0, "the document key can't be the whole document")
-            if (normalization == Normalization.NFC && steps.any { it is PathStep.Name && Nfc.normalizeOrNull(it.key) == null }) {
-                throw InvalidJsonPathException(
-                    documentKey,
+        /**
+         * The steps of [path], a path into each document other than `$`, with its names as [normalization] makes the
+         * keys they match.
+         */
+        private fun checkedPath(path: String, normalization: Normalization, whole: String): List<PathStep> {
+            val steps = SingularPath.parse(path)
+            if (steps.isEmpty()) throw InvalidJsonPathException(path, 0, whole)
+            if (normalization != Normalization.NFC) return steps
+            return steps.map { step ->
+                if (step !is PathStep.Name) return@map step
+                val key = Nfc.normalizeOrNull(step.key) ?: throw InvalidJsonPathException(
+                    path,
                     0,
                     "a name with more than ${Nfc.MAX_COMBINING_RUN} combining marks in a row once normalized matches no key",
                 )
+                PathStep.Name(key)
             }
-            return documentKey
         }
     }
 }

@@ -200,14 +200,14 @@ class StoreOpeningTest {
 
     @Test
     fun `a store of another format version is refused by every way of opening, and left exactly as it was`() {
-        val dir = storeOfVersion("newer", 2)
+        val dir = storeOfVersion("newer", 3)
         val before = contents(dir)
 
         val e = assertFailsWith<UnsupportedFormatException> { JsonStore.open(dir) }
         assertEquals(dir, e.directory)
-        assertEquals(2, e.version)
-        assertEquals(listOf(1), e.supportedVersions)
-        assertEquals("The store at $dir is in format version 2, written by a newer version of Delva; this one reads format version 1", e.message)
+        assertEquals(3, e.version)
+        assertEquals(listOf(1, 2), e.supportedVersions)
+        assertEquals("The store at $dir is in format version 3, written by a newer version of Delva; this one reads format versions 1, 2", e.message)
         assertFailsWith<UnsupportedFormatException> { JsonStore.openOrCreate(dir) }
         assertFailsWith<UnsupportedFormatException> { JsonStore.openSecondary(dir) }
         assertFailsWith<UnsupportedFormatException> { JsonStore.reset(dir) }
@@ -215,8 +215,8 @@ class StoreOpeningTest {
         assertEquals(before, contents(dir))
 
         val format = assertNotNull(JsonStore.probe(dir))
-        assertEquals(2, format.version)
-        assertEquals(listOf(1), format.supportedVersions)
+        assertEquals(3, format.version)
+        assertEquals(listOf(1, 2), format.supportedVersions)
         assertFalse(format.supported)
         assertEquals(before, contents(dir))
 
@@ -232,7 +232,7 @@ class StoreOpeningTest {
         val manifests = dir.listDirectoryEntries("MANIFEST-*").sorted()
         assertTrue(manifests.size > 1, "no fallback MANIFEST: $manifests")
         val current = manifests.last()
-        current.writeBytes(withFormatVersion(current.readBytes(), 2))
+        current.writeBytes(withFormatVersion(current.readBytes(), 3))
 
         assertFailsWith<UnsupportedFormatException> { JsonStore.open(dir) }
         assertFailsWith<UnsupportedFormatException> { JsonStore.openSecondary(dir) }
@@ -258,6 +258,19 @@ class StoreOpeningTest {
             store.blocking().insert("""{"a":1}""")
         }
         assertTrue(assertNotNull(JsonStore.probe(dir)).supported)
+
+        // A store created with a vector field is in format 2 from its creation on, and stays in it across a reset.
+        val vectors = root.resolve("vectors")
+        val creation = CreationOptions().withVectorField(VectorField("$.v", 2, VectorMetric.EUCLIDEAN))
+        JsonStore.create(vectors, creation).use { store ->
+            val format = assertNotNull(JsonStore.probe(vectors))
+            assertEquals(2, format.version)
+            assertTrue(format.supported)
+            store.blocking().insert("""{"v":[1,2]}""")
+        }
+        assertEquals(creation, JsonStore.reset(vectors))
+        assertEquals(2, assertNotNull(JsonStore.probe(vectors)).version)
+        assertEquals(1, assertNotNull(JsonStore.probe(dir)).version)
     }
 
     @Test

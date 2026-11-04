@@ -106,7 +106,7 @@ internal class Splitter(
     /** Length of the key the container is a member value of, or 0. */
     private var fOwnerKeyLength = IntArray(16)
 
-    /** Path hash of the container (SPEC.md §15). */
+    /** Path hash of the container (SPEC.md §16). */
     private var fPath = IntArray(16)
 
     // ---- per insert ----

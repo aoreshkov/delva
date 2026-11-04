@@ -19,12 +19,13 @@ Contents
   8. [Consistency](#8-consistency)
   9. [Compare](#9-compare)
   10. [JSONPath](#10-jsonpath)
+  11. [Vector search](#11-vector-search)
 - Part 2 — Canonical forms
-  11. [Varints](#11-varints)
-  12. [Number keys](#12-number-keys)
-  13. [Canonical value hash](#13-canonical-value-hash)
-  14. [Index terms](#14-index-terms)
-  15. [Path hashes](#15-path-hashes)
+  12. [Varints](#12-varints)
+  13. [Number keys](#13-number-keys)
+  14. [Canonical value hash](#14-canonical-value-hash)
+  15. [Index terms](#15-index-terms)
+  16. [Path hashes](#16-path-hashes)
 
 ---
 
@@ -564,8 +565,9 @@ without the other.
   store, like a search, so operations running alongside it neither disturb it nor appear in its report, and a store
   whose report lists damage keeps serving everything that isn't damaged. A report that lists nothing means every
   record, block and index entry the store can reach checked out at the moment it was read.
-- `fragmentBytes`, `hashTerms`, normalization, the document key ([3.3](#33-document-keys)) and the index controls of
-  [4.1](#41-query) are fixed when a store is created and recorded in it. Opening the store uses them, and a request to open it with other values fails. Opening
+- `fragmentBytes`, `hashTerms`, normalization, the document key ([3.3](#33-document-keys)), the vector field
+  ([11.1](#111-the-vector-field)) and the index controls of [4.1](#41-query) are fixed when a store is created and
+  recorded in it. Opening the store uses them, and a request to open it with other values fails. Opening
   a directory that holds no store fails without changing it, unless creating a store there was asked for.
 - A store records the **format version** its files are written in. Opening a store in a format version this version
   of Delva doesn't read, as its writer or as a secondary, or resetting it, fails with `UnsupportedFormatException`,
@@ -666,7 +668,7 @@ Applying the differences to the left value — setting the right value at each `
 adding each `ADDED` value, removing each `REMOVED` value — gives a value equal to the right one (when no value was cut
 and nothing was ignored).
 
-A diff MAY take two stored values with equal canonical hashes ([13](#13-canonical-value-hash)) as equal without reading
+A diff MAY take two stored values with equal canonical hashes ([14](#14-canonical-value-hash)) as equal without reading
 them. The hash isn't collision-resistant against an adversary; with `verifySkippedSubtrees` such values are compared.
 `isEqual` never takes equal hashes as proof of equality.
 
@@ -772,7 +774,7 @@ requires. A term is required when every node the query selects implies it:
   lies on that side of the literal. A string range needs a store that indexes strings of every length.
 
 When each segment before the filter a search looks up is one name or one index, the objects that filter tests are
-children of a node at a fixed path, and postings whose path hash ([15](#15-path-hashes)) is not that path's are left
+children of a node at a fixed path, and postings whose path hash ([16](#16-path-hashes)) is not that path's are left
 out: a document whose matching objects all sit elsewhere isn't read at all. `explain` reports the path as `within`.
 
 A term that the store's index controls ([4.1](#41-query)) leave out requires nothing. A range that more than 1 048 576
@@ -832,6 +834,76 @@ template's own literal pattern both at `compile`, in the template's `warnings`, 
 binding with `InvalidJsonPathException`, naming the offset in the bound text: a string with an unpaired surrogate, a
 number whose exponent is out of range ([10.1](#101-queries)), or bound text longer than 65 536 characters.
 
+## 11. Vector search
+
+Vector search is experimental. A store MAY be created with a **vector field**: each document MAY hold one vector, an
+array of numbers at a fixed path, and a search returns the documents whose vectors are nearest to a query vector.
+Search is exact: every candidate vector is compared, so the result is the true nearest set.
+
+### 11.1 The vector field
+
+The vector field is fixed when the store is created, like the document key ([3.3](#33-document-keys)), and recorded in
+the store ([8](#8-consistency)). It has:
+
+| Setting | Meaning | Range |
+|---|---|---|
+| `path` | where each document holds its vector, written as type paths are ([6.1](#61-assigning-types)) and not `$` itself | a path that neither holds the document key's path nor lies inside it |
+| `dimensions` | how many numbers every vector has | 1 to 4096 |
+| `metric` | how distances are measured: `COSINE`, `DOT_PRODUCT` or `EUCLIDEAN` | |
+| `required` | whether a document without a vector is rejected | default false |
+
+A store with a vector field is in format version 2, and one without in format version 1, for its whole life
+([8](#8-consistency)). A version of Delva that reads only format 1 refuses a store with a vector field, and reads every
+other store as before.
+
+The vector stays in the document, which reads back as it was inserted ([2.3](#23-what-is-stored)); the store also keeps
+it as 32-bit floats beside the document. The field doesn't change indexing: postings for the array and its numbers
+exist unless the index controls ([4.1](#41-query)) leave them out, which `excludedKeys` does for its key at any depth.
+
+### 11.2 Vectors in documents
+
+At insert, the value at the vector field's path decides:
+
+- **No value there, or `null`:** the document has no vector. It is never a hit of a vector search, and every other
+  operation sees it as usual. With `required` it's rejected with `INVALID_VECTOR` instead.
+- **An array of exactly `dimensions` numbers:** the document's vector. Each number is converted to the nearest 32-bit
+  float (IEEE 754 binary32, round to nearest, ties to even) from its decimal text, so a number written with 9
+  significant digits keeps its exact value. A number whose magnitude rounds to infinity is rejected with
+  `INVALID_VECTOR`; one too small for a normal float becomes a subnormal or zero, and `-0` becomes negative zero,
+  whose distances are those of zero.
+- **Anything else:** a string, an object, an array of another length or with an element that isn't a number, rejects
+  the document with `INVALID_VECTOR`, at the offset and path of the value. Under `COSINE` a vector whose elements are
+  all zero is rejected too, since it has no direction.
+
+A replace ([7.1](#71-replace)) or an upsert gives the new document its own vector, or none.
+
+### 11.3 Search
+
+A vector search takes a **query vector**, of `dimensions` numbers that are finite and, under `COSINE`, not all zero
+(`IllegalArgumentException` otherwise), and returns the `k` visible documents whose vectors are nearest to it, with
+`k` from 1 to 10 000. Each hit is a document's root, as in `WHOLE_DOCUMENT` mode, with its **distance**, where smaller
+is closer:
+
+| Metric | Distance |
+|---|---|
+| `COSINE` | `1 − (q · v) / (‖q‖ ‖v‖)`, from 0 to 2 |
+| `DOT_PRODUCT` | `−(q · v)` |
+| `EUCLIDEAN` | `‖q − v‖` |
+
+- Hits are ordered by distance ascending, and hits of equal distance by docId ascending. A search returns at most
+  `k` hits in one result, without a cursor.
+- `maxDistance`, when given, leaves out every document farther than it.
+- A document filter ([10.5](#105-document-filters)) restricts the candidates to the documents it accepts, before the
+  `k` nearest are chosen: the result is the `k` nearest of the accepted documents that have a vector, never fewer
+  when there are as many.
+  When the filter's terms narrow nothing, the search fails with `QueryRejectedException` (`NEEDS_SCAN`) unless `scan`
+  is `ALLOW_SCAN`, as a JSONPath search does ([10.4](#104-search)).
+- A search sees the store as of its start ([8](#8-consistency)): a document inserted later isn't a hit, and one deleted
+  later still can be.
+- Distances are computed in 32-bit floating point. Their last bits MAY differ between versions of Delva, and so MAY
+  the order of documents whose distances differ only there.
+- `explain` tells how many vectors a search would compare, the filter's terms, and whether it would read documents.
+
 ---
 
 # Part 2 — Canonical forms
@@ -839,12 +911,12 @@ number whose exponent is out of range ([10.1](#101-queries)), or bound text long
 These byte forms are stored in indexes and fragment data. Changing any of them changes stored data, so they're
 versioned with the storage format.
 
-## 11. Varints
+## 12. Varints
 
 Unsigned LEB128, at most 10 bytes; the 10th byte MUST be `0x00` or `0x01`. Encodings MUST be minimal: a final byte
 of `0x00` after the first byte is invalid. Readers reject invalid encodings as corruption.
 
-## 12. Number keys
+## 13. Number keys
 
 A number key encodes a JSON number so that unsigned byte-wise comparison of keys is numeric comparison, and equal
 numbers have identical keys.
@@ -861,7 +933,7 @@ negative   01 | ~u32be(E + 2³¹) | ~(2·p + 1)… | FF
 
 `~` inverts every bit. Examples: `1` → `03 80000001 03 00`; `123` → `03 80000002 03 2f 00`; `-0.05` → `01 7fffffff f4 ff`.
 
-## 13. Canonical value hash
+## 14. Canonical value hash
 
 A 128-bit hash of a JSON value, equal for equal values ([2](#2-values-and-equality)). `H` is XXH3-128 with seed 0.
 Inside hash inputs, a 128-bit value is 16 bytes: the high 64 bits big-endian, then the low 64 bits big-endian;
@@ -880,7 +952,7 @@ object          m = Σ H('M' | varint(keyLength) | key | h(value))  mod 2¹²⁸
 isn't collision-resistant against an adversary; searches and `isEqual` confirm every hash match by comparing the
 values, and a diff does when asked ([9.3](#93-differences)).
 
-## 14. Index terms
+## 15. Index terms
 
 The index key for a member `key: value`:
 
@@ -899,7 +971,7 @@ term := varint(keyLength) | key | tag | valueKey
 
 Tags `11`, `21`, `30` and `31` are lossy: a match is confirmed against the stored value.
 
-## 15. Path hashes
+## 16. Path hashes
 
 A path hash tells where a container sits by the member keys on the way down from the root, with every array index
 written as the same step: in `{"a":[{"b":{}}, {"b":{}}]}` both inner objects have the path `a`, element, `b`. `h` is
@@ -913,7 +985,7 @@ array element  element(h)   = XXH3-64(empty, 0x41 · 2³² + h)
 no container   NONE = 0
 ```
 
-Every posting of an index term ([14](#14-index-terms)) stores the path hash of its containing object's **parent**,
+Every posting of an index term ([15](#15-index-terms)) stores the path hash of its containing object's **parent**,
 modulo 2¹⁶ (little-endian); the parent of the root is NONE. A search ([10.4](#104-search)) whose query fixes that path
 skips postings with another value. Different paths can share a value, so what such a posting stands for is still
 checked against the stored document.

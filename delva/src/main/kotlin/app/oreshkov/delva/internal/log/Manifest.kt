@@ -4,6 +4,8 @@ import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.Normalization
 import app.oreshkov.delva.UnsupportedFormatException
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.internal.bytes.ByteReader
 import app.oreshkov.delva.internal.bytes.Crc32c
 import app.oreshkov.delva.internal.bytes.GrowableBytes
@@ -50,8 +52,12 @@ internal class ManifestWatermark(val docId: Long, val fileNo: Long, val offset: 
  *           | indexedKeyCount:varint | { length:varint utf8 }*                    empty: every key
  *           | excludedKeyCount:varint | { length:varint utf8 }*
  *           | documentKeyLength:varint | utf8                                    the documentKey path; 0: none
+ *           | [ vectorPathLength:varint | utf8 | dimensions:u32               format 2 only: the vectorField
+ *             | metric:u8 (1 cosine, 2 dot product, 3 euclidean) | flags:u8 (bit 0: required) ]
  *           | crc32c:u32                                                 over everything before it
  * ```
+ * - The format version is [VECTOR_FORMAT_VERSION] for a store with a vector field and [FORMAT_VERSION] for any other,
+ *   whose MANIFEST is then exactly what Delva 0.3 writes and reads.
  * - `fragmentBytes`, `hashTerms`, `normalization` and the index controls shape stored data and are checked when the store opens;
  *   the encoder budget is recorded for diagnostics.
  * - `nextDocId` and `lastLsn` are lower bounds: recovery takes the larger of them and what the control log holds.
@@ -85,17 +91,22 @@ internal class Manifest(
     val normalization: Normalization = Normalization.NONE,
     /** [CreationOptions.documentKey]; validated when decoded. */
     val documentKey: String? = null,
+    /** [CreationOptions.vectorField]. */
+    val vectorField: VectorField? = null,
 ) {
+    /** The format version the store's files are in, which the vector field decides. */
+    val formatVersion: Int get() = if (vectorField != null) VECTOR_FORMAT_VERSION else FORMAT_VERSION
+
     /** What the store was created with. The encoder budget isn't part of it: each open writes its own. */
     fun creationOptions(): CreationOptions = CreationOptions(
         fragmentBytes, hashTerms, indexPolicy.includedKeys, indexPolicy.excludedKeys, indexPolicy.minStringBytes,
         indexPolicy.maxStringBytes, normalization, documentKey,
-    )
+    ).withVectorField(vectorField)
 
     fun encode(): ByteArray {
         val out = GrowableBytes(256)
         out.writeIntLE(MAGIC)
-        out.writeShortLE(FORMAT_VERSION)
+        out.writeShortLE(formatVersion)
         out.writeShortLE(0)
         out.writeLongLE(manifestNo)
         out.writeIntLE(fragmentBytes)
@@ -146,6 +157,14 @@ internal class Manifest(
         val key = documentKey?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
         out.writeVarLong(key.size.toLong())
         out.writeBytes(key)
+        if (vectorField != null) {
+            val path = vectorField.path.toByteArray(Charsets.UTF_8)
+            out.writeVarLong(path.size.toLong())
+            out.writeBytes(path)
+            out.writeIntLE(vectorField.dimensions)
+            out.writeByte(METRIC_CODES.getValue(vectorField.metric))
+            out.writeByte(if (vectorField.required) VECTOR_REQUIRED else 0)
+        }
         out.writeIntLE(Crc32c.of(out.array, 0, out.size))
         return out.toByteArray()
     }
@@ -168,11 +187,20 @@ internal class Manifest(
          * crash: it deletes them once its first new MANIFEST is durable and before `CURRENT` names it. A crash between
          * the two leaves `CURRENT` naming a missing MANIFEST, which 0.1 and 0.2 refuse, as every MANIFEST left is one
          * they don't read, and which the upgrading version's fallback passes over to its new one.
+         *
+         * This is the format of a store without a vector field. A store is in one format for its whole life, since the
+         * vector field is fixed when it's created, so no store is ever upgraded from one of them to the other.
          */
         const val FORMAT_VERSION: Int = 1
 
+        /**
+         * The format of a store with a vector field: [FORMAT_VERSION] plus the vector field in the MANIFEST. A version
+         * that reads only format 1 refuses such a store before it reads a vector of it.
+         */
+        const val VECTOR_FORMAT_VERSION: Int = 2
+
         /** The format versions this version reads, ascending. */
-        val SUPPORTED_VERSIONS: List<Int> = listOf(FORMAT_VERSION)
+        val SUPPORTED_VERSIONS: List<Int> = listOf(FORMAT_VERSION, VECTOR_FORMAT_VERSION)
 
         private const val MAGIC = 0x464D5644 // "DVMF" read little-endian
         private const val KIND_CONTROL = 1
@@ -181,6 +209,12 @@ internal class Manifest(
         private const val SEGMENT_BYTES = 17
         private const val WATERMARK_BYTES = 24
         private val NORMALIZATIONS = Normalization.entries
+
+        /** The codes of the metrics, which are persisted and so never follow the enum's order. */
+        private val METRIC_CODES: Map<VectorMetric, Int> = mapOf(
+            VectorMetric.COSINE to 1, VectorMetric.DOT_PRODUCT to 2, VectorMetric.EUCLIDEAN to 3,
+        )
+        private const val VECTOR_REQUIRED = 1
 
         /**
          * Decodes the MANIFEST file [path] holds as [bytes]. Throws [UnsupportedFormatException] for an intact MANIFEST
@@ -277,11 +311,36 @@ internal class Manifest(
                 }
                 path
             }
+            val vectorField = if (version == VECTOR_FORMAT_VERSION) readVectorField(r, source) else null
             if (r.remaining != 0) throw CorruptionException(source, "${r.remaining} trailing bytes")
             if (manifestNo <= 0 || fragmentBytes <= 0 || nextDocId < 0 || lastLsn < 0 || indexedUpToLsn < 0 || indexedUpToLsn > lastLsn || abortedFileNo !in 0 until nextFileNo || typeDictionaryFileNo !in 0 until nextFileNo || deletedFileNo !in 0 until nextFileNo) {
                 throw CorruptionException(source, "invalid field values")
             }
-            return Manifest(manifestNo, fragmentBytes, budget, hashTerms, nextFileNo, nextDocId, lastLsn, files, indexedUpToLsn, abortedFileNo, typeDictionaryFileNo, deletedFileNo, segments, watermarks, dictionaries, indexPolicy, normalization, documentKey)
+            val manifest = Manifest(manifestNo, fragmentBytes, budget, hashTerms, nextFileNo, nextDocId, lastLsn, files, indexedUpToLsn, abortedFileNo, typeDictionaryFileNo, deletedFileNo, segments, watermarks, dictionaries, indexPolicy, normalization, documentKey, vectorField)
+            try {
+                manifest.creationOptions()
+            } catch (e: IllegalArgumentException) {
+                // InvalidJsonPathException too: options that no store could have been created with.
+                throw CorruptionException(source, "invalid creation options: ${e.message}")
+            }
+            return manifest
+        }
+
+        private fun readVectorField(r: ByteReader, source: String): VectorField {
+            val length = r.readVarInt(r.remaining)
+            val bytes = ByteArray(length)
+            r.readBytes(bytes, 0, length)
+            val path = String(bytes, Charsets.UTF_8)
+            val dimensions = r.readIntLE()
+            val code = r.readByte()
+            val metric = METRIC_CODES.entries.firstOrNull { it.value == code }?.key ?: throw CorruptionException(source, "unknown vector metric $code")
+            val flags = r.readByte()
+            if (flags and VECTOR_REQUIRED.inv() != 0) throw CorruptionException(source, "unknown vector flags $flags")
+            return try {
+                VectorField(path, dimensions, metric, required = flags == VECTOR_REQUIRED)
+            } catch (e: IllegalArgumentException) {
+                throw CorruptionException(source, "invalid vector field: ${e.message}")
+            }
         }
     }
 }

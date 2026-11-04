@@ -69,7 +69,7 @@ public class CompareOptions(
  * - [maxDifferences]: the diff stops after this many differences;
  * - [maxValueBytes]: [DiffValue.json] holds at most this many bytes of UTF-8;
  * - [verifySkippedSubtrees]: compare values whose canonical hashes are equal instead of taking them as equal. The hash
- *   isn't collision-resistant against an adversary (SPEC.md §13).
+ *   isn't collision-resistant against an adversary (SPEC.md §14).
  */
 public class DiffOptions(
     public val includeTypes: Boolean = false,

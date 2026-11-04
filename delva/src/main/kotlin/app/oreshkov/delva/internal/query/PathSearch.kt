@@ -107,7 +107,7 @@ internal class PathPlanner(private val policy: IndexPolicy, private val hashTerm
      * The path of the nodes whose children segment [k] filters, when segments `0 until k` fix it — each a child segment
      * of one name or index — and segment [k] is a child segment too: its path hash, and its text with every index
      * written `[*]`. The containing objects of the anchor's postings are then children of a node at that path, so their
-     * postings carry its hash (SPEC.md §15).
+     * postings carry its hash (SPEC.md §16).
      */
     private fun parentPath(query: PathQuery, k: Int): Pair<Int, String>? {
         if (query.segments[k].descendant) return null

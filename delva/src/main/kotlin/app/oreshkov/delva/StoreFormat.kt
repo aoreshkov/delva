@@ -2,7 +2,8 @@ package app.oreshkov.delva
 
 /**
  * The format a store's files are written in, as [JsonStore.probe] read it from the store's metadata. Until 1.0, a minor
- * version of Delva may write a new format version and read only its own.
+ * version of Delva may write a new format version and read only its own. A store is in one format for its whole life:
+ * format 1, or format 2 when it was created with a [CreationOptions.vectorField].
  */
 @ExperimentalDelvaApi
 public class StoreFormat internal constructor(

@@ -190,6 +190,7 @@ private fun differences(stored: CreationOptions, requested: CreationOptions): St
         "maxIndexedStringBytes" to { it.maxIndexedStringBytes },
         "normalization" to { it.normalization },
         "documentKey" to { it.documentKey ?: "none" },
+        "vectorField" to { it.vectorField ?: "none" },
     ).mapNotNull { (name, get) -> get(stored).takeIf { it != get(requested) }?.let { "$name $it, not ${get(requested)}" } }
     return if (parts.isEmpty()) "other options than $requested" else parts.joinToString("; ")
 }

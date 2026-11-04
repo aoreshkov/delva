@@ -123,9 +123,11 @@ public final class app/oreshkov/delva/CreationOptions {
 	public final fun getMaxIndexedStringBytes ()I
 	public final fun getMinIndexedStringBytes ()I
 	public final fun getNormalization ()Lapp/oreshkov/delva/Normalization;
+	public final fun getVectorField ()Lapp/oreshkov/delva/VectorField;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 	public final fun withDocumentKey (Ljava/lang/String;)Lapp/oreshkov/delva/CreationOptions;
+	public final fun withVectorField (Lapp/oreshkov/delva/VectorField;)Lapp/oreshkov/delva/CreationOptions;
 }
 
 public final class app/oreshkov/delva/CreationOptions$Companion {
@@ -863,6 +865,33 @@ public final class app/oreshkov/delva/UnsupportedFormatException : app/oreshkov/
 	public final fun getDirectory ()Ljava/nio/file/Path;
 	public final fun getSupportedVersions ()Ljava/util/List;
 	public final fun getVersion ()I
+}
+
+public final class app/oreshkov/delva/VectorField {
+	public static final field Companion Lapp/oreshkov/delva/VectorField$Companion;
+	public static final field MAX_DIMENSIONS I
+	public fun <init> (Ljava/lang/String;ILapp/oreshkov/delva/VectorMetric;)V
+	public fun <init> (Ljava/lang/String;ILapp/oreshkov/delva/VectorMetric;Z)V
+	public synthetic fun <init> (Ljava/lang/String;ILapp/oreshkov/delva/VectorMetric;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDimensions ()I
+	public final fun getMetric ()Lapp/oreshkov/delva/VectorMetric;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getRequired ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class app/oreshkov/delva/VectorField$Companion {
+}
+
+public final class app/oreshkov/delva/VectorMetric : java/lang/Enum {
+	public static final field COSINE Lapp/oreshkov/delva/VectorMetric;
+	public static final field DOT_PRODUCT Lapp/oreshkov/delva/VectorMetric;
+	public static final field EUCLIDEAN Lapp/oreshkov/delva/VectorMetric;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/VectorMetric;
+	public static fun values ()[Lapp/oreshkov/delva/VectorMetric;
 }
 
 public final class app/oreshkov/delva/VerifyIssue {

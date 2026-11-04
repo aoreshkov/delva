@@ -3,7 +3,7 @@ package app.oreshkov.delva.internal.term
 import app.oreshkov.delva.internal.hash.Xxh3
 
 /**
- * Hashes of label paths (SPEC.md §15): the member keys from the document root down to a container, with every array
+ * Hashes of label paths (SPEC.md §16): the member keys from the document root down to a container, with every array
  * index written as the same step. A posting carries the low 16 bits of the path hash of its containing object's
  * parent, so a search whose query fixes that path can skip postings of objects elsewhere without reading them.
  *

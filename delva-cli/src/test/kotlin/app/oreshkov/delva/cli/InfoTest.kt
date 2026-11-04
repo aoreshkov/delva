@@ -3,9 +3,12 @@ package app.oreshkov.delva.cli
 import app.oreshkov.clikit.ExitStatus
 import app.oreshkov.clikit.testing.record
 import app.oreshkov.delva.CreationOptions
+import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InsertSource
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.Normalization
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.ExperimentalPathApi
@@ -74,8 +77,24 @@ class InfoTest {
         assertContains(
             json,
             """"creationOptions":{"fragmentBytes":4096,"hashTerms":true,"normalization":"nfc","indexedKeys":[],""" +
-                """"excludedKeys":["note"],"minIndexedStringBytes":0,"maxIndexedStringBytes":2147483647,"documentKey":null}""",
+                """"excludedKeys":["note"],"minIndexedStringBytes":0,"maxIndexedStringBytes":2147483647,"documentKey":null,""" +
+                """"vectorField":null}""",
         )
+        assertContains(program.record("-s", dir.toString(), "info").stdout, Regex("""vector field\s+none"""))
+    }
+
+    @OptIn(ExperimentalDelvaApi::class)
+    @Test
+    fun `info shows the vector field a store was created with`() {
+        val dir = root.resolve("vectors")
+        val field = VectorField("$.embedding", dimensions = 384, metric = VectorMetric.DOT_PRODUCT, required = true)
+        JsonStore.create(dir, CreationOptions(excludedKeys = setOf("embedding")).withVectorField(field)).close()
+
+        val text = program.record("-s", dir.toString(), "info").assertPipeSafe()
+        assertEquals(ExitStatus.OK, text.status, text.stderr)
+        assertContains(text.stdout, Regex("""vector field\s+\$\.embedding, 384 dimensions, dot product, required\n"""))
+        val json = program.record("-s", dir.toString(), "info", "--json").stdout
+        assertContains(json, """"vectorField":{"path":"$.embedding","dimensions":384,"metric":"dot_product","required":true}}""")
     }
 
     @Test

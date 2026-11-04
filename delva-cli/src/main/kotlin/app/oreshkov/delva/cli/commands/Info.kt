@@ -66,6 +66,7 @@ private class Summary(
                 "excluded keys" to keys(creation.excludedKeys, "none"),
                 "indexed strings" to stringLengths(),
                 "document key" to (creation.documentKeyPath ?: "none"),
+                "vector field" to vectorField(),
             ),
         )
         if (types.isNotEmpty()) output.text("")
@@ -101,6 +102,13 @@ private class Summary(
 
     private fun keys(keys: Set<String>, whenEmpty: String): String =
         if (keys.isEmpty()) whenEmpty else keys.sorted().joinToString(", ")
+
+    @OptIn(ExperimentalDelvaApi::class)
+    private fun vectorField(): String {
+        val field = creation.vectorField ?: return "none"
+        val metric = field.metric.name.lowercase().replace('_', ' ')
+        return "${field.path}, ${field.dimensions} dimensions, $metric" + if (field.required) ", required" else ""
+    }
 
     private fun stringLengths(): String {
         val min = creation.minIndexedStringBytes
@@ -145,6 +153,23 @@ internal fun JsonWriter.creationOptions(creation: CreationOptions): JsonWriter =
     field("minIndexedStringBytes", creation.minIndexedStringBytes)
     field("maxIndexedStringBytes", creation.maxIndexedStringBytes)
     field("documentKey", creation.documentKeyPath)
+    vectorField(creation)
+}
+
+/** [CreationOptions.vectorField] as the `vectorField` member: null, or its path, dimensions, metric and whether it's required. */
+@OptIn(ExperimentalDelvaApi::class)
+private fun JsonWriter.vectorField(creation: CreationOptions) {
+    val field = creation.vectorField
+    if (field == null) {
+        name("vectorField").nullValue()
+        return
+    }
+    name("vectorField").writeObject {
+        field("path", field.path)
+        field("dimensions", field.dimensions)
+        field("metric", field.metric.name.lowercase())
+        field("required", field.required)
+    }
 }
 
 /** [CreationOptions.documentKey], which the CLI reports and passes on as it is. */

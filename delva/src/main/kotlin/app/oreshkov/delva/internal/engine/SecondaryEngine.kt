@@ -588,9 +588,9 @@ internal class SecondaryEngine private constructor(
             var attempts = 0
             while (true) {
                 try {
-                    newestManifest(readOnly, dir) ?: return null
-                    // A MANIFEST decodes only in the format version this version writes.
-                    return StoreFormat(Manifest.FORMAT_VERSION, Manifest.SUPPORTED_VERSIONS)
+                    val manifest = newestManifest(readOnly, dir) ?: return null
+                    // A MANIFEST decodes only in a format version this version reads.
+                    return StoreFormat(manifest.formatVersion, Manifest.SUPPORTED_VERSIONS)
                 } catch (e: UnsupportedFormatException) {
                     return StoreFormat(e.version, e.supportedVersions)
                 } catch (e: Changed) {

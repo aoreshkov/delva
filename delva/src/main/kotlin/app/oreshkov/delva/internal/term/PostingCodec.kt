@@ -10,7 +10,7 @@ import app.oreshkov.delva.internal.bytes.GrowableBytes
  * ```
  * entry      := containerPreDelta:varint                 from the previous entry; the first is absolute
  *             | memberDelta << 2 | sameHash << 1 | inArray :varint   memberPre − containerPre, at least 1
- *             | [pathHash:u16le]                         path hash of the container's parent (SPEC.md §15), absent
+ *             | [pathHash:u16le]                         path hash of the container's parent (SPEC.md §16), absent
  *                                                      when sameHash: then it's the previous entry's in the run
  *             | fragLocator
  * fragLocator := (containerPre − fragmentPre) << 2 | kind :varint | offsetInFragment:varint     kind PART, SUBTREE
