@@ -236,12 +236,21 @@ internal class Engine private constructor(
         return insertStream(ByteArrayInputStream(utf8Document(json)), paths, NO_DOC_IDS, replaceKey = true)
     }
 
-    /** The type paths of an insert, with the store's document key path. */
+    /** The type paths of an insert, with the store's document key path and vector field. */
     private fun typePaths(types: Map<String, String>): TypePaths =
-        if (types.isEmpty()) keyPaths else TypePaths.compile(types, options.creation.normalization, options.creation.documentKey)
+        if (types.isEmpty()) storePaths else TypePaths.compile(types, options.creation.normalization, options.creation.documentKey, options.creation.vectorField)
 
-    /** The store's document key path alone, for inserts without types; [TypePaths.EMPTY] without one. */
-    private val keyPaths: TypePaths = options.creation.documentKey?.let { TypePaths.compile(emptyMap(), options.creation.normalization, it) } ?: TypePaths.EMPTY
+    /**
+     * The store's document key path and vector field alone, for inserts without types; [TypePaths.EMPTY] in a store
+     * without either.
+     */
+    private val storePaths: TypePaths = options.creation.let { creation ->
+        if (creation.documentKey == null && creation.vectorField == null) {
+            TypePaths.EMPTY
+        } else {
+            TypePaths.compile(emptyMap(), creation.normalization, creation.documentKey, creation.vectorField)
+        }
+    }
 
     /**
      * Inserts the document of [source], deleting [replaces] with it, and with [replaceKey] the document that has its key;
@@ -336,7 +345,7 @@ internal class Engine private constructor(
     override fun insertAll(sources: Iterable<InsertSource>): List<InsertOutcome> {
         val compiled = HashMap<Map<String, String>, TypePaths>()
         val batch = sources.map { source ->
-            val paths = if (source.types.isEmpty()) keyPaths else compiled.getOrPut(source.types) { typePaths(source.types) }
+            val paths = if (source.types.isEmpty()) storePaths else compiled.getOrPut(source.types) { typePaths(source.types) }
             Triple(source, paths, source.replaces)
         }
         val keyed = options.creation.documentKey != null

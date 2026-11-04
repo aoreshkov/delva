@@ -14,16 +14,18 @@ import java.util.concurrent.ConcurrentSkipListMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-/** The memtables of the posting, fragment, type and document-key indexes; frozen and flushed together. Thread-safe. */
+/** The memtables of the posting, fragment, type, document-key and vector indexes; frozen and flushed together. Thread-safe. */
 internal class Memtable {
     val postings = PostingMemtable()
     val fragments = FragmentIndexMemtable()
     val types = TypeMemtable()
     val keys = KeyMemtable()
+    val vectors = VectorMemtable()
 
-    val approximateBytes: Long get() = postings.approximateBytes + fragments.approximateBytes + types.approximateBytes + keys.approximateBytes
+    val approximateBytes: Long
+        get() = postings.approximateBytes + fragments.approximateBytes + types.approximateBytes + keys.approximateBytes + vectors.approximateBytes
 
-    val isEmpty: Boolean get() = postings.runCount == 0 && fragments.size == 0 && types.isEmpty && keys.isEmpty
+    val isEmpty: Boolean get() = postings.runCount == 0 && fragments.size == 0 && types.isEmpty && keys.isEmpty && vectors.isEmpty
 }
 
 /**

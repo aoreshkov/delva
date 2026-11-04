@@ -119,6 +119,7 @@ internal class PreparedInsert {
         commit.extents.clear()
         commit.flags = 0
         commit.key = null
+        commit.vector = null
         types.clear()
         replaces = NO_DOC_IDS
         replaceKey = false
@@ -906,11 +907,18 @@ internal class Writer(
                         }
                         for (run in p.runs) m.postings.add(run)
                         p.commit.key?.let { m.keys.add(it, p.docId) }
+                        p.commit.vector?.let { m.vectors.add(p.docId, it) }
                     }
                     commits[c++] = p.docId
                 }
                 is WriteRequest.Commit -> if (request.conflict == null) {
-                    request.commit.key?.let { key -> indexes.withActive { m -> m.keys.add(key, request.commit.docId) } }
+                    val commit = request.commit
+                    if (commit.key != null || commit.vector != null) {
+                        indexes.withActive { m ->
+                            commit.key?.let { m.keys.add(it, commit.docId) }
+                            commit.vector?.let { m.vectors.add(commit.docId, it) }
+                        }
+                    }
                     commits[c++] = request.commit.docId
                 } else {
                     aborts[a++] = request.commit.docId

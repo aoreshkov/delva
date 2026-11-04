@@ -94,7 +94,11 @@ internal class Ingest(private val engine: Engine) : FragmentSink, TermSink, Type
         splitter.split(docId, source, typePaths, keySeed)
         val commit = prepared.commit
         commit.key = splitter.documentKey
-        commit.flags = (if (promoted) 0 else ControlRecords.COMMIT_IMPLICIT_BEGIN) or (if (commit.key != null) ControlRecords.COMMIT_KEYED else 0)
+        // A new array per insert: the vector memtable keeps it.
+        commit.vector = splitter.vector()
+        commit.flags = (if (promoted) 0 else ControlRecords.COMMIT_IMPLICIT_BEGIN) or
+            (if (commit.key != null) ControlRecords.COMMIT_KEYED else 0) or
+            (if (commit.vector != null) ControlRecords.COMMIT_VECTOR else 0)
         commit.fragmentCount = splitter.fragmentCount
         commit.rootKind = splitter.rootKind
         commit.rootHashLow = splitter.rootHashLow

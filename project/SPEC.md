@@ -60,6 +60,7 @@ one of these reasons:
 | `LIMIT_EXCEEDED` | The document exceeds a configured limit (see [1.3](#13-limits)). |
 | `TYPE_PATH_UNMATCHED` | A type assignment given with the insert selects no value, or selects a value that isn't an object (see [6.1](#61-assigning-types)). |
 | `KEY_MISSING` | The store has document keys and the document has no string at the key's path: no value there, or a value that isn't a string (see [3.3](#33-document-keys)). |
+| `INVALID_VECTOR` | The store has a vector field and the value at its path isn't a vector the field takes, or there is none and the field requires one (see [11.2](#112-vectors-in-documents)). |
 
 The exception carries the byte offset of the problem in the input (counting a leading byte-order mark) when it's
 known, and a JSON path when it's known. For `TYPE_PATH_UNMATCHED` that is the path exactly as it was given.
@@ -872,8 +873,12 @@ At insert, the value at the vector field's path decides:
   `INVALID_VECTOR`; one too small for a normal float becomes a subnormal or zero, and `-0` becomes negative zero,
   whose distances are those of zero.
 - **Anything else:** a string, an object, an array of another length or with an element that isn't a number, rejects
-  the document with `INVALID_VECTOR`, at the offset and path of the value. Under `COSINE` a vector whose elements are
-  all zero is rejected too, since it has no direction.
+  the document with `INVALID_VECTOR`. Under `COSINE` a vector whose elements are all zero is rejected too, since it has
+  no direction.
+
+The rejection's path is the vector field's path. Its offset is that of the element at fault when there is one (an
+element that isn't a number, a number too large, or one more than `dimensions`), and otherwise that of the value at the
+path; a required vector that is missing has no offset.
 
 A replace ([7.1](#71-replace)) or an upsert gives the new document its own vector, or none.
 

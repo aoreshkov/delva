@@ -32,6 +32,7 @@ import app.oreshkov.delva.internal.term.TermSink
 import app.oreshkov.delva.internal.term.TermSorter
 import app.oreshkov.delva.internal.types.TypeDictionary
 import app.oreshkov.delva.internal.types.TypeIndexView
+import app.oreshkov.delva.internal.vector.Vectors
 import app.oreshkov.delva.internal.visibility.LateCommits
 import java.nio.file.Path
 import java.util.TreeSet
@@ -242,12 +243,14 @@ internal class Replay(
                 if ((commit.key != null) != keyed) {
                     throw CorruptionException(location, if (keyed) "COMMIT of document $docId without a document key" else "COMMIT of document $docId with a document key")
                 }
+                Vectors.commitProblem(commit.vector, options.creation.vectorField)?.let { throw CorruptionException(location, "COMMIT of document $docId $it") }
                 begun -= docId
                 committed += docId
                 maxDocId = maxOf(maxDocId, docId)
                 late?.committed(docId, lsn)
                 replayCommit(location, watermarks[docId])
                 commit.key?.let { memtable.keys.add(it, docId) }
+                commit.vector?.let { memtable.vectors.add(docId, it) }
                 val replaced = pendingReplaces.remove(docId)
                 if (commit.replaces != (replaced != null)) {
                     throw CorruptionException(location, if (commit.replaces) "COMMIT of document $docId replaces documents no DELETE record names" else "COMMIT of document $docId after DELETE records of its insert")

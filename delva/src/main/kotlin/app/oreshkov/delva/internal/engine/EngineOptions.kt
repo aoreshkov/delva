@@ -104,8 +104,11 @@ internal class EngineOptions(
     val ingestBudgetBytes: Long = ingestBudgetBytes ?: share(8, MIN_BUDGET_BYTES, DEFAULT_INGEST_BUDGET_BYTES)
     val smallInsertThreshold: Long = smallInsertThreshold ?: minOf(DEFAULT_SMALL_INSERT_THRESHOLD, this.ingestBudgetBytes / 4)
 
-    /** Base reservation of every running insert in the ingest budget: its tokenizer window and initial buffers. */
-    val ingestBaseBytes: Long = windowBytes.toLong() + stringChunkBytes + INGEST_BUFFER_BYTES
+    /**
+     * Base reservation of every running insert in the ingest budget: its tokenizer window and initial buffers, and in a
+     * store with a vector field two vectors, the one the splitter fills and the copy its COMMIT carries.
+     */
+    val ingestBaseBytes: Long = windowBytes.toLong() + stringChunkBytes + INGEST_BUFFER_BYTES + 8L * (creation.vectorField?.dimensions ?: 0)
     val largeLanes: Int = largeLanes ?: (heapBytes / (512L shl 20)).coerceIn(1L, DEFAULT_LARGE_LANES.toLong()).toInt()
     val memtableBytes: Long = memtableBytes ?: (share(8, MIN_BUDGET_BYTES, DEFAULT_MEMTABLE_BUDGET_BYTES) / 4).coerceAtMost(DEFAULT_MEMTABLE_BYTES)
     val memtableBudgetBytes: Long = memtableBudgetBytes ?: maxOf(share(8, MIN_BUDGET_BYTES, DEFAULT_MEMTABLE_BUDGET_BYTES), 4 * this.memtableBytes)

@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.split
 
 import app.oreshkov.delva.Normalization
+import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.internal.canon.Nfc
 import app.oreshkov.delva.internal.path.PathStep
 import app.oreshkov.delva.internal.path.SingularPath
@@ -8,9 +9,9 @@ import app.oreshkov.delva.internal.types.TypeNames
 import java.util.Arrays
 
 /**
- * Type assignments given with an insert, and the store's document key path, compiled into a trie that the splitter
- * follows while streaming: each open container remembers its trie node, and a value start looks up the child for its
- * key or index. The node of the document key is [keyNode].
+ * Type assignments given with an insert, and the store's document key path and vector field, compiled into a trie that
+ * the splitter follows while streaming: each open container remembers its trie node, and a value start looks up the
+ * child for its key or index. The node of the document key is [keyNode], and that of the vector [vectorNode].
  *
  * Paths are [SingularPath]s (SPEC.md §6.1). Nodes are ints; [NONE] means no path continues. Immutable and thread-safe.
  */
@@ -27,11 +28,15 @@ internal class TypePaths private constructor(
     val keyNode: Int,
     /** The document key path as it was given, or null. */
     val keyPath: String?,
+    /** The node the vector field's path ends at, or [NONE]. */
+    val vectorNode: Int,
+    /** The store's vector field, or null. */
+    val vector: VectorField?,
 ) {
     /** Number of trie nodes; node ids are `0 until nodeCount`. */
     val nodeCount: Int get() = typeNames.size
 
-    val isEmpty: Boolean = keyNode == NONE && typeNames.all { it == null }
+    val isEmpty: Boolean = keyNode == NONE && vectorNode == NONE && typeNames.all { it == null }
 
     /** The node of the document root (`$`), or [NONE] when there are no paths. */
     val root: Int get() = if (isEmpty) NONE else 0
@@ -69,12 +74,18 @@ internal class TypePaths private constructor(
         val EMPTY: TypePaths = compile(emptyMap())
 
         /**
-         * Compiles `path → type name`, and the document key path [keyPath] when given. Throws [IllegalArgumentException]
-         * for invalid path syntax or when two paths select the same value with different types, and
-         * [app.oreshkov.delva.InvalidTypeNameException] for an invalid type name. With NFC, a type name or a name in a
-         * path whose normalized form has too long a run of combining marks is rejected ([Nfc.normalize]).
+         * Compiles `path → type name`, and the document key path [keyPath] and the path of the [vector] field when given.
+         * Throws [IllegalArgumentException] for invalid path syntax or when two paths select the same value with
+         * different types, and [app.oreshkov.delva.InvalidTypeNameException] for an invalid type name. With NFC, a type
+         * name or a name in a path whose normalized form has too long a run of combining marks is rejected
+         * ([Nfc.normalize]).
          */
-        fun compile(paths: Map<String, String>, normalization: Normalization = Normalization.NONE, keyPath: String? = null): TypePaths {
+        fun compile(
+            paths: Map<String, String>,
+            normalization: Normalization = Normalization.NONE,
+            keyPath: String? = null,
+            vector: VectorField? = null,
+        ): TypePaths {
             val nfc = normalization == Normalization.NFC
             class Node {
                 val keyChildren = LinkedHashMap<String, Node>()
@@ -100,16 +111,19 @@ internal class TypePaths private constructor(
                 node.type = type
                 if (node.path == null) node.path = text
             }
-            var key: Node? = null
-            if (keyPath != null) {
-                key = root
-                for (step in SingularPath.parse(keyPath)) {
-                    key = when (step) {
-                        is PathStep.Name -> key!!.keyChildren.getOrPut(if (nfc) Nfc.normalize(step.key, "document key path") else step.key) { Node() }
-                        is PathStep.Index -> key!!.indexChildren.getOrPut(step.index) { Node() }
+            /** The node [path] ends at, created with the nodes on the way. */
+            fun nodeOf(path: String, what: String): Node {
+                var node = root
+                for (step in SingularPath.parse(path)) {
+                    node = when (step) {
+                        is PathStep.Name -> node.keyChildren.getOrPut(if (nfc) Nfc.normalize(step.key, what) else step.key) { Node() }
+                        is PathStep.Index -> node.indexChildren.getOrPut(step.index) { Node() }
                     }
                 }
+                return node
             }
+            val key = keyPath?.let { nodeOf(it, "document key path") }
+            val vectorNode = vector?.let { nodeOf(it.path, "vector field path") }
 
             // Breadth-first numbering; each node's children are contiguous.
             val order = ArrayList<Node>()
@@ -146,6 +160,7 @@ internal class TypePaths private constructor(
                 childStart, childEnd, isIndex, index, keys, child,
                 Array(order.size) { order[it].type }, Array(order.size) { order[it].path },
                 if (key == null) NONE else ids.getValue(key), keyPath,
+                if (vectorNode == null) NONE else ids.getValue(vectorNode), vector,
             )
         }
     }

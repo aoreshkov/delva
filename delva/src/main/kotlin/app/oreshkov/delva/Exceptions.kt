@@ -93,6 +93,13 @@ public enum class RejectReason {
      * the value isn't a string.
      */
     KEY_MISSING,
+
+    /**
+     * The store has a [CreationOptions.vectorField] and the value at its path isn't a vector the field accepts: not an
+     * array of [VectorField.dimensions] numbers, a number too large for a 32-bit float, all zeros under
+     * [VectorMetric.COSINE], or no vector at all when the field is [required][VectorField.required].
+     */
+    INVALID_VECTOR,
 }
 
 private fun buildRejectMessage(reason: RejectReason, byteOffset: Long, jsonPath: String?, detail: String?): String =

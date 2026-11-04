@@ -4,6 +4,7 @@ import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocumentRejectedException
 import app.oreshkov.delva.RejectReason
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.bytes.Varint
 import app.oreshkov.delva.internal.canon.CanonicalHash
@@ -21,6 +22,7 @@ import app.oreshkov.delva.internal.term.FragmentIndexer
 import app.oreshkov.delva.internal.term.PathHash
 import app.oreshkov.delva.internal.term.TermSink
 import app.oreshkov.delva.internal.term.TermSorter
+import app.oreshkov.delva.internal.vector.Vectors
 
 /**
  * The streaming splitter: turns a document's tokens into bounded fragments, their
@@ -45,7 +47,8 @@ import app.oreshkov.delva.internal.term.TermSorter
  * **Everything else per fragment:** each written fragment goes to the [FragmentSink], then through [FragmentIndexer]
  * into the insert-local [TermSorter] unless there's no term sink (values split for comparison).
  * Canonical hashes run per frame; duplicate keys are detected
- * by [DupKeyChecker]; type paths are matched as values start.
+ * by [DupKeyChecker]; type paths are matched as values start, and the document key and the vector are captured while
+ * they stream.
  *
  * Rejections throw [DocumentRejectedException]; the fragments, runs and types delivered so far must then be
  * discarded by the caller. Reusable; not thread-safe.
@@ -122,6 +125,16 @@ internal class Splitter(
     private var capturingKey = false
     private var keyFound = false
 
+    // The vector: the array at [TypePaths.vectorNode], its numbers converted to float32 as they stream, so it takes
+    // 4 bytes per dimension whatever the document's size.
+    private var vectorValues = FloatArray(0)
+
+    /** The frame of the vector's array while it's open, else -1. */
+    private var vectorFrame = -1
+    private var vectorOffset = 0L
+    private var vectorCount = 0
+    private var vectorFound = false
+
     // String in progress.
     private var inString = false
     private var stringPre = 0L
@@ -157,7 +170,8 @@ internal class Splitter(
     val sorterBufferedBytes: Long get() = sorter.bufferedBytes
 
     /** Heap the splitter keeps for reuse: pending and output buffers, sorter and duplicate-key tables. */
-    val retainedBytes: Long get() = pending.capacity.toLong() + out.capacity + stringBuffer.capacity + sorter.retainedBytes + keys.retainedBytes
+    val retainedBytes: Long
+        get() = pending.capacity.toLong() + out.capacity + stringBuffer.capacity + sorter.retainedBytes + keys.retainedBytes + 4L * vectorValues.size
 
     /** Largest pending buffer size reached. */
     var peakPendingBytes: Int = 0
@@ -169,6 +183,9 @@ internal class Splitter(
 
     /** The document key of the last split (UTF-8), or null when its type paths have no key path. */
     val documentKey: ByteArray? get() = if (keyFound) keyBuffer.toByteArray() else null
+
+    /** A new array with the vector of the last split, or null when its type paths have no vector field or it has none. */
+    fun vector(): FloatArray? = if (vectorFound) vectorValues.copyOf(vectorCount) else null
 
     /**
      * Splits the document read from [source] as [docId]. [typePaths] are matched while streaming; [keySeed] seeds the
@@ -188,8 +205,7 @@ internal class Splitter(
                     JsonToken.STRING -> string(source, last = true)
                     JsonToken.STRING_PART -> string(source, source.isLastPart)
                     JsonToken.NUMBER -> number(source)
-                    JsonToken.TRUE, JsonToken.FALSE -> literal(if (token == JsonToken.TRUE) PayloadTag.TRUE else PayloadTag.FALSE, source.byteOffset)
-                    JsonToken.NULL -> literal(PayloadTag.NULL, source.byteOffset)
+                    JsonToken.TRUE, JsonToken.FALSE, JsonToken.NULL -> literal(token, source.byteOffset)
                     else -> error("unexpected token ${JsonToken.name(token)}")
                 }
             }
@@ -216,6 +232,10 @@ internal class Splitter(
         keyBuffer.clear()
         capturingKey = false
         keyFound = false
+        typePaths.vector?.let { if (vectorValues.size != it.dimensions) vectorValues = FloatArray(it.dimensions) }
+        vectorFrame = -1
+        vectorCount = 0
+        vectorFound = false
         inString = false
         pending.clear()
         stringBuffer.clear()
@@ -243,6 +263,7 @@ internal class Splitter(
             if (paths.keyNode != TypePaths.NONE && !keyFound) {
                 throw DocumentRejectedException(RejectReason.KEY_MISSING, -1, jsonPath = paths.keyPath, detail = "no value at the document key path")
             }
+            if (paths.vector?.required == true && !vectorFound) rejectVector(-1, "no value at the vector field's path, which the store requires")
         }
         nodeCount = nextPre
         sorter.finish()
@@ -251,11 +272,13 @@ internal class Splitter(
     // ---- values ----------------------------------------------------------------------------------------------------
 
     /**
-     * Assigns the next `pre` to a value that starts now and matches type paths, and starts capturing the document key
-     * when [isString] is at its path; returns the `pre`.
+     * Assigns the next `pre` to a value that starts now with [token] and matches type paths, and starts capturing the
+     * document key or the vector when the value is at its path; returns the `pre`.
      */
-    private fun beginValue(isObject: Boolean, byteOffset: Long, isString: Boolean = false): Long {
+    private fun beginValue(token: Int, byteOffset: Long): Long {
         check(!rootDone) { "value after the root" }
+        val isObject = token == JsonToken.START_OBJECT
+        if (inVector() && token != JsonToken.NUMBER) rejectVector(byteOffset, "element $vectorCount of the vector isn't a number")
         val pre = nextPre++
         var node = TypePaths.NONE
         if (depth > 0) {
@@ -287,21 +310,74 @@ internal class Splitter(
                 typeSink.assign(docId, pre, type)
             }
             if (node == paths.keyNode) {
-                if (!isString) {
+                if (token != JsonToken.STRING) {
                     throw DocumentRejectedException(RejectReason.KEY_MISSING, byteOffset, jsonPath = paths.keyPath, detail = "the value at the document key path isn't a string")
                 }
                 capturingKey = true
             }
+            if (node == paths.vectorNode) beginVector(token, byteOffset)
         }
         return pre
     }
 
-    private fun literal(tag: Int, byteOffset: Long) {
-        beginValue(false, byteOffset)
-        pending.writeByte(tag)
-        when (tag) {
-            PayloadTag.NULL -> hash.nullValue(valueHash, 0)
-            else -> hash.booleanValue(tag == PayloadTag.TRUE, valueHash, 0)
+    // ---- the vector ------------------------------------------------------------------------------------------------
+
+    /** Whether the value starting now is an element of the vector's array. */
+    private fun inVector(): Boolean = vectorFrame >= 0 && depth == vectorFrame + 1
+
+    /** The value at the vector field's path starts with [token]: an array is the vector, `null` none. */
+    private fun beginVector(token: Int, byteOffset: Long) {
+        when (token) {
+            // The frame the array opens next.
+            JsonToken.START_ARRAY -> {
+                vectorFrame = depth
+                vectorOffset = byteOffset
+                // A second array here repeats a key, which rejects the document: count it afresh until that shows.
+                vectorCount = 0
+            }
+            JsonToken.NULL -> if (paths.vector!!.required) rejectVector(byteOffset, "the vector is null, and the store requires one")
+            else -> rejectVector(byteOffset, "the value at the vector field's path isn't an array")
+        }
+    }
+
+    /**
+     * Adds the number of [source] to the vector: converted from its decimal text straight to the nearest float32, as
+     * `Float.parseFloat` is specified to, so it's rounded once.
+     */
+    private fun vectorElement(source: JsonTokenSource) {
+        val dimensions = vectorValues.size
+        if (vectorCount == dimensions) rejectVector(source.byteOffset, "the vector has more than $dimensions numbers")
+        // A JSON number is ASCII and a valid Java floating-point literal.
+        val value = String(source.bytes, source.offset, source.length, Charsets.ISO_8859_1).toFloat()
+        if (value.isInfinite()) rejectVector(source.byteOffset, "element $vectorCount of the vector is too large for a 32-bit float")
+        vectorValues[vectorCount++] = value
+    }
+
+    /** The vector's array closes. */
+    private fun endVector() {
+        val dimensions = vectorValues.size
+        if (vectorCount != dimensions) rejectVector(vectorOffset, "the vector has $vectorCount numbers, not $dimensions")
+        if (paths.vector!!.metric == VectorMetric.COSINE && Vectors.isZero(vectorValues)) {
+            rejectVector(vectorOffset, "the vector is all zeros, which has no direction under COSINE")
+        }
+        vectorFrame = -1
+        vectorFound = true
+    }
+
+    private fun rejectVector(byteOffset: Long, detail: String): Nothing =
+        throw DocumentRejectedException(RejectReason.INVALID_VECTOR, byteOffset, jsonPath = paths.vector!!.path, detail = detail)
+
+    private fun literal(token: Int, byteOffset: Long) {
+        beginValue(token, byteOffset)
+        when (token) {
+            JsonToken.NULL -> {
+                pending.writeByte(PayloadTag.NULL)
+                hash.nullValue(valueHash, 0)
+            }
+            else -> {
+                pending.writeByte(if (token == JsonToken.TRUE) PayloadTag.TRUE else PayloadTag.FALSE)
+                hash.booleanValue(token == JsonToken.TRUE, valueHash, 0)
+            }
         }
         endScalar()
     }
@@ -310,7 +386,8 @@ internal class Splitter(
         if (source.length > options.maxAtomBytes) {
             throw DocumentRejectedException(RejectReason.LIMIT_EXCEEDED, source.byteOffset, detail = "number longer than ${options.maxAtomBytes} characters")
         }
-        beginValue(false, source.byteOffset)
+        val element = inVector()
+        beginValue(JsonToken.NUMBER, source.byteOffset)
         numberKey.clear()
         val keyLength = if (CanonicalNumber.parseCanonicalLong(source.bytes, source.offset, source.length, longSlot, 0)) {
             PayloadWriter.intValue(pending, longSlot[0])
@@ -323,6 +400,7 @@ internal class Splitter(
             CanonicalNumber.MALFORMED -> throw DocumentRejectedException(RejectReason.MALFORMED_JSON, source.byteOffset, detail = "invalid number")
             CanonicalNumber.OUT_OF_RANGE -> throw DocumentRejectedException(RejectReason.NUMBER_OUT_OF_RANGE, source.byteOffset)
         }
+        if (element) vectorElement(source)
         hash.number(numberKey.array, 0, keyLength, valueHash, 0)
         endScalar()
     }
@@ -332,7 +410,7 @@ internal class Splitter(
         val offset = source.offset
         val length = source.length
         if (!inString) {
-            stringPre = beginValue(false, source.byteOffset, isString = true)
+            stringPre = beginValue(JsonToken.STRING, source.byteOffset)
             if (capturingKey) captureKey(bytes, offset, length, last, source.byteOffset)
             if (last && length <= options.inlineStringBytes) {
                 // Whole short string: the common case.
@@ -445,7 +523,7 @@ internal class Splitter(
     }
 
     private fun openContainer(isObject: Boolean, byteOffset: Long) {
-        val pre = beginValue(isObject, byteOffset)
+        val pre = beginValue(if (isObject) JsonToken.START_OBJECT else JsonToken.START_ARRAY, byteOffset)
         if (depth == fObject.size) growFrames()
         val f = depth++
         fObject[f] = isObject
@@ -480,6 +558,7 @@ internal class Splitter(
 
     private fun closeContainer(byteOffset: Long) {
         val c = --depth
+        if (c == vectorFrame) endVector()
         val size = nextPre - fPre[c] - 1
         val slot = c * CanonicalHash.FRAME_SLOTS
         val kind = if (fObject[c]) PayloadTag.OBJ else PayloadTag.ARR

@@ -34,6 +34,9 @@ import kotlin.test.assertTrue
 
 private val MANIFEST_PATH: Path = Path.of("db", "MANIFEST-000006")
 
+/** A vector with negative zero, the largest float32 and the smallest subnormal. */
+private val VECTOR = floatArrayOf(1f, -0f, Float.MAX_VALUE, Float.MIN_VALUE)
+
 class LogFormatTest {
     private fun commit(): CommitInfo = CommitInfo().apply {
         docId = 42
@@ -100,7 +103,55 @@ class LogFormatTest {
         lines += "manifest-keyed ${keyed.encode().toHex()}"
         lines += "dictionary ${DictionaryFiles.encode(CompressionDictionary(3, "{\"id\":".toByteArray())).toHex()}"
         lines += "manifest-vector ${vectorManifest(VectorField("$.embedding", 768, VectorMetric.COSINE, required = true)).encode().toHex()}"
-        Golden.verify("log-records.txt", "Fragment-log file headers, records and MANIFEST (LogFormat FORMAT_VERSION 2, Manifest FORMAT_VERSION 1, and 2 for manifest-vector): <case> <hex>", lines)
+        lines += "commit-vector ${record { ControlRecords.writeCommit(it, 20, vectorCommit()) }.toHex()}"
+        Golden.verify(
+            "log-records.txt",
+            "Fragment-log file headers, records and MANIFEST (LogFormat FORMAT_VERSION 2, Manifest FORMAT_VERSION 1, and 2 for manifest-vector and commit-vector): <case> <hex>",
+            lines,
+        )
+    }
+
+    /** A COMMIT with a key and a vector: the key comes first. */
+    private fun vectorCommit(vector: FloatArray = VECTOR): CommitInfo = commit().also { c ->
+        c.flags = ControlRecords.COMMIT_IMPLICIT_BEGIN or ControlRecords.COMMIT_KEYED or ControlRecords.COMMIT_VECTOR
+        c.key = "k".toByteArray()
+        c.vector = vector
+    }
+
+    @Test
+    fun `a COMMIT keeps its vector bit for bit, and a damaged vector is damage`() {
+        val body = ControlRecords.Body("test")
+        val read = CommitInfo()
+        fun decode(bytes: ByteArray, bodyLength: Int = lengthOf(bytes)) {
+            body.open(bytes, LogFormat.RECORD_HEADER_BYTES, bodyLength, RecordType.COMMIT)
+            body.readCommit(read)
+        }
+        val bytes = record { ControlRecords.writeCommit(it, 20, vectorCommit()) }
+        decode(bytes)
+        assertEquals(VECTOR.map { it.toRawBits() }, read.vector?.map { it.toRawBits() })
+        assertEquals("k", read.key?.toString(Charsets.UTF_8))
+        // A COMMIT read next into the same CommitInfo has no vector.
+        decode(record { ControlRecords.writeCommit(it, 8, commit()) })
+        assertNull(read.vector)
+
+        val longest = FloatArray(VectorField.MAX_DIMENSIONS) { it.toFloat() }
+        decode(record { ControlRecords.writeCommit(it, 20, vectorCommit(longest)) })
+        assertEquals(longest.toList(), read.vector?.toList())
+
+        // The vector ends the body: its one-byte count, then 4 bytes per value. Bodies are decoded unchecked.
+        val values = LogFormat.RECORD_HEADER_BYTES + lengthOf(bytes) - 4 * VECTOR.size
+        for ((name, bits) in listOf("NaN" to Float.NaN.toRawBits(), "infinity" to Float.NEGATIVE_INFINITY.toRawBits())) {
+            val damaged = bytes.copyOf().also { LittleEndian.putInt(it, values + 4, bits) }
+            assertFailsWith<CorruptionException>(name) { decode(damaged) }
+        }
+        val empty = bytes.copyOf().also { it[values - 1] = 0 }
+        assertFailsWith<CorruptionException>("no values") { decode(empty, lengthOf(bytes) - 4 * VECTOR.size) }
+        val tooLong = bytes.copyOf().also { it[values - 1] = (VECTOR.size + 1).toByte() }
+        assertFailsWith<CorruptionException>("more values than the body holds") { decode(tooLong) }
+        assertFailsWith<IllegalArgumentException> { record { ControlRecords.writeCommit(it, 20, vectorCommit(FloatArray(0))) } }
+        assertFailsWith<IllegalStateException>("a vector without the flag") {
+            record { ControlRecords.writeCommit(it, 20, commit().also { c -> c.vector = VECTOR }) }
+        }
     }
 
     private fun vectorManifest(field: VectorField?): Manifest =
@@ -244,13 +295,18 @@ class LogFormatTest {
         val ownInsert = record { ControlRecords.writeDelete(it, 16, docIds, 1, 2, ControlRecords.DELETE_AT_INSERT, insertDocId = 9) }
         body.open(ownInsert, LogFormat.RECORD_HEADER_BYTES, lengthOf(ownInsert), RecordType.DELETE)
         assertFailsWith<CorruptionException>("a replace deleting its own insert") { body.readDelete(deleteRecord) }
-        for (flags in 0..8) {
+        for (flags in 0..16) {
             val key = if (flags and ControlRecords.COMMIT_KEYED != 0) "k".toByteArray() else null
-            val bytes = record { ControlRecords.writeCommit(it, 8, commit().also { c -> c.flags = flags; c.key = key }) }
+            val vector = if (flags and ControlRecords.COMMIT_VECTOR != 0) VECTOR else null
+            val bytes = record { ControlRecords.writeCommit(it, 8, commit().also { c -> c.flags = flags; c.key = key; c.vector = vector }) }
             body.open(bytes, LogFormat.RECORD_HEADER_BYTES, lengthOf(bytes), RecordType.COMMIT)
-            if (flags < 8) {
+            if (flags < 16) {
                 body.readCommit(read)
-                assertEquals(listOf(flags and 1 != 0, flags and 2 != 0, key != null), listOf(read.implicitBegin, read.replaces, read.key != null), "COMMIT flags $flags")
+                assertEquals(
+                    listOf(flags and 1 != 0, flags and 2 != 0, key != null, vector != null),
+                    listOf(read.implicitBegin, read.replaces, read.key != null, read.vector != null),
+                    "COMMIT flags $flags",
+                )
             } else {
                 assertFailsWith<CorruptionException>("COMMIT flags $flags") { body.readCommit(read) }
             }

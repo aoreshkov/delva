@@ -29,6 +29,7 @@ import app.oreshkov.delva.internal.lsm.KeySegments
 import app.oreshkov.delva.internal.lsm.SegmentHandle
 import app.oreshkov.delva.internal.lsm.Version
 import app.oreshkov.delva.internal.store.LogFragmentStore
+import app.oreshkov.delva.internal.vector.Vectors
 import app.oreshkov.delva.internal.visibility.Visibility
 import java.io.IOException
 
@@ -255,6 +256,9 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
                 }
                 if ((commit.key != null) != (options.creation.documentKey != null)) {
                     issue(VerifyIssueKind.COMMIT, location, "COMMIT of document $docId ${if (commit.key == null) "without" else "with"} a document key", document = DocId(docId))
+                }
+                Vectors.commitProblem(commit.vector, options.creation.vectorField)?.let {
+                    issue(VerifyIssueKind.COMMIT, location, "COMMIT of document $docId $it", document = DocId(docId))
                 }
             }
             type == RecordType.ABORT -> replaceChains.remove(abortedDocId)

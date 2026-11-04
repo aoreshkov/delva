@@ -693,6 +693,7 @@ public final class app/oreshkov/delva/RejectReason : java/lang/Enum {
 	public static final field DUPLICATE_KEY Lapp/oreshkov/delva/RejectReason;
 	public static final field INVALID_STRING Lapp/oreshkov/delva/RejectReason;
 	public static final field INVALID_UTF8 Lapp/oreshkov/delva/RejectReason;
+	public static final field INVALID_VECTOR Lapp/oreshkov/delva/RejectReason;
 	public static final field KEY_MISSING Lapp/oreshkov/delva/RejectReason;
 	public static final field LIMIT_EXCEEDED Lapp/oreshkov/delva/RejectReason;
 	public static final field MALFORMED_JSON Lapp/oreshkov/delva/RejectReason;

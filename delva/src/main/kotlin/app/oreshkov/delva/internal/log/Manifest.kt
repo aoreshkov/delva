@@ -194,8 +194,9 @@ internal class Manifest(
         const val FORMAT_VERSION: Int = 1
 
         /**
-         * The format of a store with a vector field: [FORMAT_VERSION] plus the vector field in the MANIFEST. A version
-         * that reads only format 1 refuses such a store before it reads a vector of it.
+         * The format of a store with a vector field: [FORMAT_VERSION] plus the vector field in the MANIFEST and the
+         * vectors in COMMIT records (flag `VECTOR` in [ControlRecords]). A version that reads only format 1 refuses such
+         * a store before it reads a vector of it.
          */
         const val VECTOR_FORMAT_VERSION: Int = 2
 
