@@ -12,3 +12,10 @@ dependencies {
 application {
     mainClass = "app.oreshkov.delva.examples.TypedSearchKt"
 }
+
+tasks.register<JavaExec>("runEmbeddingSearch") {
+    description = "Runs the EmbeddingSearch example."
+    group = ApplicationPlugin.APPLICATION_GROUP
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "app.oreshkov.delva.examples.EmbeddingSearchKt"
+}

@@ -22,6 +22,9 @@ The on-disk format is versioned, and everything below is designed to be addable 
 
 ## Engine
 
+- **Vector search.** Exact nearest-neighbor search over one float32 vector per document, declared when the store is
+  created and narrowed by document filters; approximate indexes only after it. Until then, embeddings are stored and
+  searched as the [guide](GUIDE.md#storing-embeddings) shows.
 - **Retiring deleted documents from the index.** Postings of deleted documents are skipped at read time and dropped
   when segments are compacted; the set of document ids a store tracks only grows. Long-lived stores with heavy delete
   traffic pay for that in memory.

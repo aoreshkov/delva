@@ -59,7 +59,7 @@ val specialTestSuffixes = mapOf(
 
 val testProfile = providers.gradleProperty("delva.testProfile").orElse("short")
 // Forwarded from the Gradle command line to the test JVM.
-val forwardedSystemProperties = listOf("delva.seed", "delva.size", "delva.updateGolden", "delva.heapCapped.bytes", "delva.sample.json", "delva.model.iterations", "delva.compare.iterations", "delva.sim.scenarios", "delva.sim.operations", "delva.sample.key", "delva.sample.value", "delva.report.megabytes", "delva.report.shapes")
+val forwardedSystemProperties = listOf("delva.seed", "delva.size", "delva.updateGolden", "delva.heapCapped.bytes", "delva.sample.json", "delva.model.iterations", "delva.compare.iterations", "delva.sim.scenarios", "delva.sim.operations", "delva.sample.key", "delva.sample.value", "delva.report.megabytes", "delva.report.shapes", "delva.report.embeddings")
     .associateWith { providers.systemProperty(it) }
 
 tasks.withType<Test>().configureEach {
