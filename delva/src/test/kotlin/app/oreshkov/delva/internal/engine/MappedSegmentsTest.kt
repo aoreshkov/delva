@@ -48,7 +48,7 @@ class MappedSegmentsTest {
                 assertTrue(store.indexes.compactor.compactions > 0, "nothing was compacted")
                 assertEquals(documents, store.documents())
                 assertEquals(12, store.search(KeyValueQuery("qty", JsonQueryValue.Num(7), ResultMode.CONTAINING_ELEMENT, limit = 1000)).use { it.iterator().asSequence().count() })
-                live = store.indexes.versions.current().let { it.postingSegments + it.fragmentSegments + it.typeSegments + it.keySegments }
+                live = store.indexes.versions.current().allSegments
                     .map { it.path.fileName }.toSet()
             }
             // Before the reopen sweeps them: a mapped segment that couldn't be deleted stays in the index directory, or

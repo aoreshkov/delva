@@ -17,6 +17,7 @@ import app.oreshkov.delva.internal.lsm.SegmentReader
 import app.oreshkov.delva.internal.lsm.SegmentStats
 import app.oreshkov.delva.internal.lsm.TypeEntry
 import app.oreshkov.delva.internal.lsm.TypeSegments
+import app.oreshkov.delva.internal.lsm.VectorSegments
 import app.oreshkov.delva.internal.lsm.Version
 import java.util.concurrent.locks.LockSupport
 import java.util.concurrent.locks.ReentrantLock
@@ -379,6 +380,10 @@ internal class Compactor(private val indexes: Indexes, private val options: Comp
                     }, options.maxRunBytes, options.listMemoryBytes).write(file, blockBytes)
                     SegmentFormat.INDEX_FRAGMENT -> FragmentSegments.merge(readers, file, blockBytes, job.hidden, control, drops)
                     SegmentFormat.INDEX_KEY -> KeySegments.merge(readers, job.hidden, control, file, blockBytes)
+                    SegmentFormat.INDEX_VECTOR -> {
+                        val field = checkNotNull(indexes.options.creation.vectorField) { "vector segments in a store without a vector field" }
+                        VectorSegments.merge(readers, field, job.hidden, control, file, blockBytes)
+                    }
                     else -> TypeSegments.merge(readers, olderMayHold(job.older), job.hidden, control, file, blockBytes)
                 }
                 control.checkContinue()
@@ -427,6 +432,6 @@ internal class Compactor(private val indexes: Indexes, private val options: Comp
     }
 
     private companion object {
-        val INDEX_KINDS = intArrayOf(SegmentFormat.INDEX_POSTING, SegmentFormat.INDEX_FRAGMENT, SegmentFormat.INDEX_TYPE, SegmentFormat.INDEX_KEY)
+        val INDEX_KINDS = intArrayOf(SegmentFormat.INDEX_POSTING, SegmentFormat.INDEX_FRAGMENT, SegmentFormat.INDEX_TYPE, SegmentFormat.INDEX_KEY, SegmentFormat.INDEX_VECTOR)
     }
 }

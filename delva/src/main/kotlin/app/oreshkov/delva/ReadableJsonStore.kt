@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.Flow
  *
  * [search] and [select] aren't suspending: their results are resources read on the caller's thread, and starting one
  * already reads — [select] locates its node, and a JSONPath search with a range reads the range's postings. Call them,
- * and read their results, on a dispatcher that allows blocking work, such as `Dispatchers.IO`.
+ * and read their results, on a dispatcher that allows blocking work, such as `Dispatchers.IO`. A vector search is the
+ * exception: it compares every candidate before it returns, so it suspends while it does, and only reading its hits
+ * blocks.
  *
  * Every operation reads one consistent state of the store (SPEC.md §8), and a result keeps reading the state it started
  * on until it is closed, whatever is written meanwhile.
@@ -77,6 +79,26 @@ public interface ReadableJsonStore : AutoCloseable {
      */
     @ExperimentalDelvaApi
     public suspend fun get(key: String): DocId?
+
+    /**
+     * The `k` visible documents whose vectors are nearest to the query vector, on the current state (SPEC.md §11.3):
+     * an exact search, which compares every candidate's vector before it returns. Close the result when done; its
+     * hits' documents are read when a hit is read. Cancelling the call stops the comparisons within a few hundred
+     * vectors.
+     *
+     * Throws [IllegalStateException] in a store without a [CreationOptions.vectorField], [IllegalArgumentException]
+     * for a query vector of other dimensions or, under [VectorMetric.COSINE], a zero one, and [QueryRejectedException]
+     * when the query's document filter names no index term and the query doesn't allow a scan.
+     */
+    @ExperimentalDelvaApi
+    public suspend fun search(query: VectorQuery): VectorSearchResult
+
+    /**
+     * How the vector [search] would find the candidates of [query], without running it. It refuses a store and a query
+     * vector as [search] does; a document filter that would need a scan is reported, not refused.
+     */
+    @ExperimentalDelvaApi
+    public fun explain(query: VectorQuery): VectorQueryPlan
 
     /** The type of [node], or null, which nodes that aren't objects always get. Errors as in [JsonStore.assignType]. */
     public suspend fun typeOf(node: NodeRef): String?
@@ -203,6 +225,14 @@ public interface BlockingReadableJsonStore {
     /** See [ReadableJsonStore.get]. */
     @ExperimentalDelvaApi
     public fun get(key: String): DocId?
+
+    /** See [ReadableJsonStore.search]; the search runs on the caller's thread. */
+    @ExperimentalDelvaApi
+    public fun search(query: VectorQuery): VectorSearchResult
+
+    /** See [ReadableJsonStore.explain]. */
+    @ExperimentalDelvaApi
+    public fun explain(query: VectorQuery): VectorQueryPlan
 
     /** See [ReadableJsonStore.typeOf]. */
     public fun typeOf(node: NodeRef): String?

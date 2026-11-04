@@ -49,6 +49,7 @@ internal object StoreReset {
                 indexPolicy = old.indexPolicy,
                 normalization = old.normalization,
                 documentKey = old.documentKey,
+                vectorField = old.vectorField,
             )
             // The commit point.
             manifests.write(empty)

@@ -32,7 +32,7 @@ internal class RunMerger {
     var locatorOffset: Int = 0
         private set
 
-    /** Path hash of the container's parent (SPEC.md §15), 16 bits. */
+    /** Path hash of the container's parent (SPEC.md §16), 16 bits. */
     var pathHash: Int = 0
         private set
 

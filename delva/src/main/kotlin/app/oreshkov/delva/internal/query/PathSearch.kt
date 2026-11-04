@@ -78,6 +78,9 @@ internal sealed interface Requirement {
 internal class PathPlanner(private val policy: IndexPolicy, private val hashTerms: Boolean, private val maxDepth: Int, private val normalization: Normalization) {
     fun requirement(query: PathQuery, filter: LogicalExpr? = null): Requirement? = all(listOf(filter?.let { expr(it) }) + query.segments.map { segment(it) })
 
+    /** What a document filter alone requires, for a search whose candidates only it narrows (a vector search). */
+    fun filterRequirement(filter: LogicalExpr): Requirement? = expr(filter)
+
     /**
      * Terms one of which every document [filter] accepts has with its root as the containing object: the filter's
      * comparisons of `@.name` or `@.name[i]` with a literal, and of `$.name` or `$.name[i]`, since both `@` and `$` are
@@ -107,7 +110,7 @@ internal class PathPlanner(private val policy: IndexPolicy, private val hashTerm
      * The path of the nodes whose children segment [k] filters, when segments `0 until k` fix it — each a child segment
      * of one name or index — and segment [k] is a child segment too: its path hash, and its text with every index
      * written `[*]`. The containing objects of the anchor's postings are then children of a node at that path, so their
-     * postings carry its hash (SPEC.md §15).
+     * postings carry its hash (SPEC.md §16).
      */
     private fun parentPath(query: PathQuery, k: Int): Pair<Int, String>? {
         if (query.segments[k].descendant) return null

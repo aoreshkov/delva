@@ -43,7 +43,7 @@ internal class FragmentIndexer(private val hashTerms: Boolean, private val polic
     private var fOffset = IntArray(16)
     private var fHash = LongArray(16 * CanonicalHash.FRAME_SLOTS)
 
-    // Path hashes (SPEC.md §15) of each open container and of its parent; frame 0 of a PART is its split container.
+    // Path hashes (SPEC.md §16) of each open container and of its parent; frame 0 of a PART is its split container.
     private var fPath = IntArray(16)
     private var fParentPath = IntArray(16)
 

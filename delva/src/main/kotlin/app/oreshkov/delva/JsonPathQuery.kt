@@ -153,7 +153,7 @@ public class QueryPlan internal constructor(
     /**
      * When the query fixes where the objects its filter tests are — each segment before the filter one name or index —
      * the path of their parent, with indexes written `[*]`, such as `$['orders']`. Postings carry a hash of that path
-     * (SPEC.md §15), so documents whose matching objects are elsewhere are skipped without being read. Null otherwise.
+     * (SPEC.md §16), so documents whose matching objects are elsewhere are skipped without being read. Null otherwise.
      */
     public val within: String? = null,
 ) {

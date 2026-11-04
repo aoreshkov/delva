@@ -26,6 +26,9 @@ import app.oreshkov.delva.SelectResult
 import app.oreshkov.delva.StoreInfo
 import app.oreshkov.delva.TypeInfo
 import app.oreshkov.delva.TypePage
+import app.oreshkov.delva.VectorQuery
+import app.oreshkov.delva.VectorQueryPlan
+import app.oreshkov.delva.VectorSearchResult
 import app.oreshkov.delva.VerifyProgress
 import app.oreshkov.delva.VerifyReport
 import app.oreshkov.delva.internal.engine.Engine
@@ -124,6 +127,22 @@ internal abstract class CoroutineReadableJsonStore(private val reader: ReadEngin
     override fun search(query: DocumentKeyQuery): SearchResult = reader.search(query)
 
     override suspend fun count(query: DocumentKeyQuery, atMost: Long): Long = withContext(dispatcher) { reader.count(query, atMost) }
+
+    /** Cancellation stops the comparisons at the next checkpoint; once the result exists, it is returned, as a write's is. */
+    override suspend fun search(query: VectorQuery): VectorSearchResult {
+        val caller = currentCoroutineContext().job
+        caller.ensureActive()
+        // withContext drops its value when it dispatches back to a cancelled caller, and this value must be closed: the
+        // outer call can't be cancelled, and the caller's next suspension point throws instead.
+        return withContext(NonCancellable) {
+            withContext(dispatcher) {
+                caller.ensureActive()
+                reader.searchVectors(query) { caller.ensureActive() }
+            }
+        }
+    }
+
+    override fun explain(query: VectorQuery): VectorQueryPlan = reader.explain(query)
 
     override fun close() = reader.close()
 }

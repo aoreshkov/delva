@@ -23,6 +23,17 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   search's result, and its `count`, after the hits of that many documents; with `SearchOrder.DESCENDING`, `1` gives
   every hit of the newest matching document, and no further document is read.
 - `delva-cli`: `--max-documents` (`-m`) on `search kv` and `search path`.
+- `delva`: a vector field (experimental), set with `CreationOptions.withVectorField`: a `VectorField` names the path,
+  dimensions and `VectorMetric` of the one vector each document of the store may hold. A store created with one is in
+  format version 2, which earlier versions of Delva refuse; every other store stays in format version 1.
+- `delva`: in a store with a vector field, each insert reads the document's vector as 32-bit floats, and
+  `RejectReason.INVALID_VECTOR` rejects a document whose value at the field's path isn't one.
+- `delva`: `verify` checks the vector index of a store with a vector field, and reports its damage as
+  `VerifyIssueKind.VECTOR_INDEX`.
+- `delva`: exact vector search (experimental): `search(VectorQuery)` returns the `k` documents nearest to a query
+  vector, each `VectorHit` with its distance, optionally within `maxDistance` and among the documents a
+  `DocumentFilter` accepts; `explain(VectorQuery)` tells how it finds its candidates.
+- `delva-cli`: `info` shows the store's vector field.
 
 ### Changed
 

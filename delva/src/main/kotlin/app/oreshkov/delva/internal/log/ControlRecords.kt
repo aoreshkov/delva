@@ -2,6 +2,7 @@ package app.oreshkov.delva.internal.log
 
 import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions.Companion.MAX_DOCUMENT_KEY_BYTES
+import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.internal.bytes.ByteReader
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.canon.Utf8
@@ -111,6 +112,12 @@ internal class CommitInfo {
 
     /** The document key (UTF-8) in a store with document keys, else null; the record has flag `KEYED` exactly when set. */
     var key: ByteArray? = null
+
+    /**
+     * The document's vector in a store with a vector field, or null when the document has none; the record has flag
+     * `VECTOR` exactly when set.
+     */
+    var vector: FloatArray? = null
 }
 
 /**
@@ -130,6 +137,7 @@ internal class RelocateInfo {
  * COMMIT     := lsn | docId:u64 | flags:u8 | fragmentCount:u32 | rootKind:u8 | rootHash:16B | encodedBytes:u64
  *               | typeCount:u32 | extentCount:varint | { fileNo:u32 startOffset:u64 endOffset:u64 }*
  *               | [ keyLength:varint | utf8 ]                  key only with KEYED, of at most 1024 bytes
+ *               | [ dimensions:varint | { value:f32 }* ]        vector only with VECTOR, of 1 to 4096 finite values
  * ABORT      := lsn | docId:u64 | reason:u16
  * TYPEDEF    := lsn | typeId:u32 | nameLength:varint | utf8
  * TYPE       := lsn | docId:u64 | nodePre:u64 | typeId:u32 (0 = none) | flags:u8
@@ -142,8 +150,9 @@ internal class RelocateInfo {
  * ```
  * `rootHash` is high 64 bits then low 64 bits, big-endian, like every stored hash. COMMIT flag bit 0 is
  * `IMPLICIT_BEGIN` (a small insert without BEGIN), bit 1 `REPLACES` (`AT_INSERT` DELETE records of the document come
- * before it), bit 2 `KEYED` (the document key follows the extents; set exactly in a store with document keys); other
- * bits are refused.
+ * before it), bit 2 `KEYED` (the document key follows the extents; set exactly in a store with document keys), bit 3
+ * `VECTOR` (the document's vector follows, as the little-endian bits of float32 values; only in a store with a vector
+ * field); other bits are refused.
  *
  * TYPE flag bit 0 is `AT_INSERT`: the assignment was given with the insert of `docId`. Such records come right before
  * that document's COMMIT, whose `typeCount` counts them, and take effect with it; without the COMMIT they have none.
@@ -169,6 +178,7 @@ internal object ControlRecords {
     const val COMMIT_IMPLICIT_BEGIN: Int = 1
     const val COMMIT_REPLACES: Int = 2
     const val COMMIT_KEYED: Int = 4
+    const val COMMIT_VECTOR: Int = 8
     const val TYPE_AT_INSERT: Int = 1
     const val TYPE_CONTINUED: Int = 2
     const val TYPE_FIRST: Int = 4
@@ -205,6 +215,14 @@ internal object ControlRecords {
         if (key != null) {
             out.writeVarLong(key.size.toLong())
             out.writeBytes(key)
+        }
+        val vector = commit.vector
+        check((vector != null) == (commit.flags and COMMIT_VECTOR != 0)) { "COMMIT flag VECTOR and vector disagree" }
+        if (vector != null) {
+            require(vector.size in 1..VectorField.MAX_DIMENSIONS) { "a vector of ${vector.size} numbers" }
+            out.writeVarLong(vector.size.toLong())
+            // Raw bits: negative zero stays negative zero.
+            for (v in vector) out.writeIntLE(v.toRawBits())
         }
         LogFormat.endRecord(out, start, RecordType.COMMIT)
     }
@@ -303,7 +321,7 @@ internal object ControlRecords {
         fun readCommit(into: CommitInfo) {
             into.docId = nonNegative(reader.readLongLE(), "docId")
             into.flags = reader.readByte()
-            if (into.flags and (COMMIT_IMPLICIT_BEGIN or COMMIT_REPLACES or COMMIT_KEYED).inv() != 0) throw CorruptionException(source, "COMMIT record with flags ${into.flags}")
+            if (into.flags and (COMMIT_IMPLICIT_BEGIN or COMMIT_REPLACES or COMMIT_KEYED or COMMIT_VECTOR).inv() != 0) throw CorruptionException(source, "COMMIT record with flags ${into.flags}")
             into.fragmentCount = reader.readIntLE().toLong() and 0xFFFFFFFFL
             into.rootKind = reader.readByte()
             into.rootHashHigh = reader.readLongBE()
@@ -319,7 +337,19 @@ internal object ControlRecords {
             } else {
                 null
             }
+            into.vector = if (into.flags and COMMIT_VECTOR != 0) readVector() else null
             end()
+        }
+
+        /** A new array: the vector outlives the reused [CommitInfo] in the memtable it goes to. */
+        private fun readVector(): FloatArray {
+            val dimensions = reader.readVarInt(VectorField.MAX_DIMENSIONS)
+            if (dimensions == 0) throw CorruptionException(source, "COMMIT record with an empty vector")
+            return FloatArray(dimensions) {
+                Float.fromBits(reader.readIntLE()).also { v ->
+                    if (!v.isFinite()) throw CorruptionException(source, "COMMIT record with a vector value that isn't finite")
+                }
+            }
         }
 
         /** Reads a RELOCATE body into [into]; it moves at least one fragment, and never within its old file. */

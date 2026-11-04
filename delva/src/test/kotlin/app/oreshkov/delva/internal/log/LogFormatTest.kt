@@ -2,6 +2,8 @@ package app.oreshkov.delva.internal.log
 
 import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.UnsupportedFormatException
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.internal.bits.DocIdSet
 import app.oreshkov.delva.internal.bytes.ByteReader
 import app.oreshkov.delva.internal.bytes.Crc32c
@@ -31,6 +33,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val MANIFEST_PATH: Path = Path.of("db", "MANIFEST-000006")
+
+/** A vector with negative zero, the largest float32 and the smallest subnormal. */
+private val VECTOR = floatArrayOf(1f, -0f, Float.MAX_VALUE, Float.MIN_VALUE)
 
 class LogFormatTest {
     private fun commit(): CommitInfo = CommitInfo().apply {
@@ -97,7 +102,134 @@ class LogFormatTest {
         val keyed = Manifest(1, 4096, 8192, false, nextFileNo = 2, nextDocId = 1, lastLsn = 0, files = emptyList(), segments = listOf(ManifestSegment(1, 4, 99)), documentKey = "$.id")
         lines += "manifest-keyed ${keyed.encode().toHex()}"
         lines += "dictionary ${DictionaryFiles.encode(CompressionDictionary(3, "{\"id\":".toByteArray())).toHex()}"
-        Golden.verify("log-records.txt", "Fragment-log file headers, records and MANIFEST (LogFormat FORMAT_VERSION 2, Manifest FORMAT_VERSION 1): <case> <hex>", lines)
+        lines += "manifest-vector ${vectorManifest(VectorField("$.embedding", 768, VectorMetric.COSINE, required = true)).encode().toHex()}"
+        lines += "commit-vector ${record { ControlRecords.writeCommit(it, 20, vectorCommit()) }.toHex()}"
+        Golden.verify(
+            "log-records.txt",
+            "Fragment-log file headers, records and MANIFEST (LogFormat FORMAT_VERSION 2, Manifest FORMAT_VERSION 1, and 2 for manifest-vector and commit-vector): <case> <hex>",
+            lines,
+        )
+    }
+
+    /** A COMMIT with a key and a vector: the key comes first. */
+    private fun vectorCommit(vector: FloatArray = VECTOR): CommitInfo = commit().also { c ->
+        c.flags = ControlRecords.COMMIT_IMPLICIT_BEGIN or ControlRecords.COMMIT_KEYED or ControlRecords.COMMIT_VECTOR
+        c.key = "k".toByteArray()
+        c.vector = vector
+    }
+
+    @Test
+    fun `a COMMIT keeps its vector bit for bit, and a damaged vector is damage`() {
+        val body = ControlRecords.Body("test")
+        val read = CommitInfo()
+        fun decode(bytes: ByteArray, bodyLength: Int = lengthOf(bytes)) {
+            body.open(bytes, LogFormat.RECORD_HEADER_BYTES, bodyLength, RecordType.COMMIT)
+            body.readCommit(read)
+        }
+        val bytes = record { ControlRecords.writeCommit(it, 20, vectorCommit()) }
+        decode(bytes)
+        assertEquals(VECTOR.map { it.toRawBits() }, read.vector?.map { it.toRawBits() })
+        assertEquals("k", read.key?.toString(Charsets.UTF_8))
+        // A COMMIT read next into the same CommitInfo has no vector.
+        decode(record { ControlRecords.writeCommit(it, 8, commit()) })
+        assertNull(read.vector)
+
+        val longest = FloatArray(VectorField.MAX_DIMENSIONS) { it.toFloat() }
+        decode(record { ControlRecords.writeCommit(it, 20, vectorCommit(longest)) })
+        assertEquals(longest.toList(), read.vector?.toList())
+
+        // The vector ends the body: its one-byte count, then 4 bytes per value. Bodies are decoded unchecked.
+        val values = LogFormat.RECORD_HEADER_BYTES + lengthOf(bytes) - 4 * VECTOR.size
+        for ((name, bits) in listOf("NaN" to Float.NaN.toRawBits(), "infinity" to Float.NEGATIVE_INFINITY.toRawBits())) {
+            val damaged = bytes.copyOf().also { LittleEndian.putInt(it, values + 4, bits) }
+            assertFailsWith<CorruptionException>(name) { decode(damaged) }
+        }
+        val empty = bytes.copyOf().also { it[values - 1] = 0 }
+        assertFailsWith<CorruptionException>("no values") { decode(empty, lengthOf(bytes) - 4 * VECTOR.size) }
+        val tooLong = bytes.copyOf().also { it[values - 1] = (VECTOR.size + 1).toByte() }
+        assertFailsWith<CorruptionException>("more values than the body holds") { decode(tooLong) }
+        assertFailsWith<IllegalArgumentException> { record { ControlRecords.writeCommit(it, 20, vectorCommit(FloatArray(0))) } }
+        assertFailsWith<IllegalStateException>("a vector without the flag") {
+            record { ControlRecords.writeCommit(it, 20, commit().also { c -> c.vector = VECTOR }) }
+        }
+    }
+
+    private fun vectorManifest(field: VectorField?): Manifest =
+        Manifest(1, 4096, 8192, false, nextFileNo = 2, nextDocId = 1, lastLsn = 0, files = emptyList(), documentKey = "$.id", vectorField = field)
+
+    @Test
+    fun `a MANIFEST records the vector field, in format 2, and only a store with one is in format 2`() {
+        for (metric in VectorMetric.entries) {
+            for (required in listOf(false, true)) {
+                val field = VectorField("$['the vector'][2]", 4096, metric, required)
+                val bytes = vectorManifest(field).encode()
+                assertEquals(Manifest.VECTOR_FORMAT_VERSION, LittleEndian.getShort(bytes, 4).toInt())
+                val decoded = Manifest.decode(bytes, MANIFEST_PATH)
+                assertEquals(field, decoded.vectorField)
+                assertEquals(Manifest.VECTOR_FORMAT_VERSION, decoded.formatVersion)
+                assertEquals(field, decoded.creationOptions().vectorField)
+                assertEquals("$.id", decoded.creationOptions().documentKey)
+            }
+        }
+        val plain = vectorManifest(null)
+        assertEquals(Manifest.FORMAT_VERSION, plain.formatVersion)
+        assertEquals(Manifest.FORMAT_VERSION, LittleEndian.getShort(plain.encode(), 4).toInt())
+        assertNull(Manifest.decode(plain.encode(), MANIFEST_PATH).vectorField)
+    }
+
+    @Test
+    fun `only a store with a vector field lists vector segments`() {
+        fun manifest(field: VectorField?) = Manifest(
+            1, 4096, 8192, false, nextFileNo = 3, nextDocId = 1, lastLsn = 0, files = emptyList(),
+            segments = listOf(ManifestSegment(1, 4, 99), ManifestSegment(2, SegmentFormat.INDEX_VECTOR, 120)), vectorField = field,
+        )
+        val field = VectorField("$.v", 3, VectorMetric.DOT_PRODUCT)
+        assertEquals(listOf(4, 5), Manifest.decode(manifest(field).encode(), MANIFEST_PATH).segments.map { it.index })
+        val e = assertFailsWith<CorruptionException> { Manifest.decode(manifest(null).encode(), MANIFEST_PATH) }
+        assertEquals("vector segment 2 in a store without a vector field", e.detail)
+    }
+
+    @Test
+    fun `a damaged vector field, or a format version that doesn't fit the MANIFEST, is damage`() {
+        val bytes = vectorManifest(VectorField("$.v", 3, VectorMetric.EUCLIDEAN)).encode()
+        // The field's last bytes, before the checksum: dimensions:u32 | metric:u8 | flags:u8.
+        val flags = bytes.size - 5
+        val metric = flags - 1
+        val dimensions = metric - 4
+        fun damaged(offset: Int, value: Int, width: Int = 1): ByteArray = bytes.copyOf().also {
+            if (width == 1) it[offset] = value.toByte() else LittleEndian.putInt(it, offset, value)
+            LittleEndian.putInt(it, it.size - 4, Crc32c.of(it, 0, it.size - 4))
+        }
+        assertEquals("unknown vector metric 0", assertFailsWith<CorruptionException> { Manifest.decode(damaged(metric, 0), MANIFEST_PATH) }.detail)
+        assertEquals("unknown vector metric 4", assertFailsWith<CorruptionException> { Manifest.decode(damaged(metric, 4), MANIFEST_PATH) }.detail)
+        assertEquals("unknown vector flags 2", assertFailsWith<CorruptionException> { Manifest.decode(damaged(flags, 2), MANIFEST_PATH) }.detail)
+        for (value in listOf(0, VectorField.MAX_DIMENSIONS + 1, -1)) {
+            val e = assertFailsWith<CorruptionException> { Manifest.decode(damaged(dimensions, value, width = 4), MANIFEST_PATH) }
+            assertEquals("invalid vector field: dimensions $value outside 1..${VectorField.MAX_DIMENSIONS}", e.detail)
+        }
+        // A vector field that overlaps the document key: options no store could have been created with.
+        val overlapping = Manifest(1, 4096, 8192, false, nextFileNo = 2, nextDocId = 1, lastLsn = 0, files = emptyList(), vectorField = VectorField("$.id.v", 3, VectorMetric.COSINE))
+        val withKey = Manifest(1, 4096, 8192, false, nextFileNo = 2, nextDocId = 1, lastLsn = 0, files = emptyList(), documentKey = "$.id")
+        val spliced = spliceKey(overlapping.encode(), withKey.encode())
+        assertTrue(assertFailsWith<CorruptionException> { Manifest.decode(spliced, MANIFEST_PATH) }.detail.startsWith("invalid creation options: "))
+        // Format 1 bytes read as format 2 lack the field; format 2 bytes read as format 1 have bytes left over.
+        assertFailsWith<CorruptionException> { Manifest.decode(withFormatVersion(vectorManifest(null).encode(), Manifest.VECTOR_FORMAT_VERSION), MANIFEST_PATH) }
+        assertEquals("${1 + 3 + 4 + 1 + 1} trailing bytes", assertFailsWith<CorruptionException> { Manifest.decode(withFormatVersion(bytes, Manifest.FORMAT_VERSION), MANIFEST_PATH) }.detail)
+    }
+
+    /**
+     * The MANIFEST [vector] encodes, with the empty document key it ends with replaced by the one [keyed] ends with,
+     * and its checksum made to match: `$.id`, which a creation option would refuse beside the vector field.
+     */
+    private fun spliceKey(vector: ByteArray, keyed: ByteArray): ByteArray {
+        val key = byteArrayOf(4) + "$.id".toByteArray()
+        assertEquals(key.toList(), keyed.copyOfRange(keyed.size - 4 - key.size, keyed.size - 4).toList())
+        // In vector: … | documentKeyLength 0 | vectorPath (1 + 6 bytes) | dimensions:4 | metric:1 | flags:1 | crc:4.
+        val keyAt = vector.size - 4 - 6 - 7 - 1
+        assertEquals(0, vector[keyAt].toInt())
+        val out = vector.copyOfRange(0, keyAt) + key + vector.copyOfRange(keyAt + 1, vector.size)
+        LittleEndian.putInt(out, out.size - 4, Crc32c.of(out, 0, out.size - 4))
+        return out
     }
 
     @Test
@@ -175,13 +307,18 @@ class LogFormatTest {
         val ownInsert = record { ControlRecords.writeDelete(it, 16, docIds, 1, 2, ControlRecords.DELETE_AT_INSERT, insertDocId = 9) }
         body.open(ownInsert, LogFormat.RECORD_HEADER_BYTES, lengthOf(ownInsert), RecordType.DELETE)
         assertFailsWith<CorruptionException>("a replace deleting its own insert") { body.readDelete(deleteRecord) }
-        for (flags in 0..8) {
+        for (flags in 0..16) {
             val key = if (flags and ControlRecords.COMMIT_KEYED != 0) "k".toByteArray() else null
-            val bytes = record { ControlRecords.writeCommit(it, 8, commit().also { c -> c.flags = flags; c.key = key }) }
+            val vector = if (flags and ControlRecords.COMMIT_VECTOR != 0) VECTOR else null
+            val bytes = record { ControlRecords.writeCommit(it, 8, commit().also { c -> c.flags = flags; c.key = key; c.vector = vector }) }
             body.open(bytes, LogFormat.RECORD_HEADER_BYTES, lengthOf(bytes), RecordType.COMMIT)
-            if (flags < 8) {
+            if (flags < 16) {
                 body.readCommit(read)
-                assertEquals(listOf(flags and 1 != 0, flags and 2 != 0, key != null), listOf(read.implicitBegin, read.replaces, read.key != null), "COMMIT flags $flags")
+                assertEquals(
+                    listOf(flags and 1 != 0, flags and 2 != 0, key != null, vector != null),
+                    listOf(read.implicitBegin, read.replaces, read.key != null, read.vector != null),
+                    "COMMIT flags $flags",
+                )
             } else {
                 assertFailsWith<CorruptionException>("COMMIT flags $flags") { body.readCommit(read) }
             }
@@ -265,11 +402,12 @@ class LogFormatTest {
     @Test
     fun `an intact MANIFEST of another format version is another format, and a damaged one is damage`() {
         val bytes = Manifest(6, 1024, 4096, false, 10, 43, 9, emptyList()).encode()
-        for (version in listOf(0, Manifest.FORMAT_VERSION + 1, 0xFFFF)) {
+        assertEquals(listOf(Manifest.FORMAT_VERSION, Manifest.VECTOR_FORMAT_VERSION), Manifest.SUPPORTED_VERSIONS)
+        for (version in listOf(0, Manifest.SUPPORTED_VERSIONS.last() + 1, 0xFFFF)) {
             val e = assertFailsWith<UnsupportedFormatException> { Manifest.decode(withFormatVersion(bytes, version), MANIFEST_PATH) }
             assertEquals(MANIFEST_PATH.parent, e.directory)
             assertEquals(version, e.version)
-            assertEquals(listOf(Manifest.FORMAT_VERSION), e.supportedVersions)
+            assertEquals(Manifest.SUPPORTED_VERSIONS, e.supportedVersions)
         }
         // The same version field changed without the checksum: a bit flipped in a MANIFEST of this format.
         val flipped = bytes.copyOf().also { it[4] = (it[4].toInt() xor 2).toByte() }
@@ -292,12 +430,14 @@ class LogFormatTest {
     /**
      * Every format version the store's files are written in, by file. A change to one changes the store's format, so
      * [Manifest.FORMAT_VERSION] must change with it, or an older Delva would read the store's MANIFEST and then misread
-     * or refuse its other files as damage; then update this list.
+     * or refuse its other files as damage; then update this list. A store with a vector field is in
+     * [Manifest.VECTOR_FORMAT_VERSION]: these files, with what only such a store writes.
      */
     @Test
     fun `a file format changes only with the store's format version`() {
         val versions = mapOf(
             "store (MANIFEST)" to Manifest.FORMAT_VERSION,
+            "store with a vector field (MANIFEST)" to Manifest.VECTOR_FORMAT_VERSION,
             "log files" to LogFormat.FORMAT_VERSION,
             "segments" to SegmentFormat.FORMAT_VERSION,
             "payloads" to PayloadFormat.FORMAT_VERSION,
@@ -306,7 +446,7 @@ class LogFormatTest {
             "docId bitmaps" to DocIdSet.FORMAT_VERSION,
         )
         val store1 = mapOf(
-            "store (MANIFEST)" to 1, "log files" to 2, "segments" to 2, "payloads" to 1, "compression dictionaries" to 1,
+            "store (MANIFEST)" to 1, "store with a vector field (MANIFEST)" to 2, "log files" to 2, "segments" to 2, "payloads" to 1, "compression dictionaries" to 1,
             "type dictionary" to 1, "docId bitmaps" to 1,
         )
         assertEquals(store1, versions)

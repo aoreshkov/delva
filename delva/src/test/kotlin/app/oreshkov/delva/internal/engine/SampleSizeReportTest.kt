@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 
 /**
  * The size half of the benchmark report on a real document: how large the index and the lane files are against the
- * raw JSON, by compression setting. That index ÷ raw stays at or below 37 % with hash terms on (and a path hash per posting, SPEC.md §15) is asserted here.
+ * raw JSON, by compression setting. That index ÷ raw stays at or below 37 % with hash terms on (and a path hash per posting, SPEC.md §16) is asserted here.
  *
  * Needs a JSON file in `-Ddelva.sample.json=<file>`; skipped without it. `-Ddelva.size=<T>` sets the fragment size.
  */

@@ -11,7 +11,7 @@ import app.oreshkov.delva.internal.io.readFully
 import java.util.Arrays
 
 /**
- * Byte layout of a segment file, shared by the posting, fragment and type indexes. Integers are
+ * Byte layout of a segment file, shared by the posting, fragment, type, document-key and vector indexes. Integers are
  * little-endian unless noted; keys compare as unsigned bytes.
  * ```
  * segment  := { dataBlock | externalValue }* | index | bloom | stats | footer
@@ -40,6 +40,9 @@ internal object SegmentFormat {
     const val INDEX_FRAGMENT: Int = 2
     const val INDEX_TYPE: Int = 3
     const val INDEX_KEY: Int = 4
+
+    /** Only in stores with a vector field, whose format version tells older versions of Delva to refuse them. */
+    const val INDEX_VECTOR: Int = 5
 }
 
 /**

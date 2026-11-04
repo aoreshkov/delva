@@ -93,6 +93,13 @@ public enum class RejectReason {
      * the value isn't a string.
      */
     KEY_MISSING,
+
+    /**
+     * The store has a [CreationOptions.vectorField] and the value at its path isn't a vector the field accepts: not an
+     * array of [VectorField.dimensions] numbers, a number too large for a 32-bit float, all zeros under
+     * [VectorMetric.COSINE], or no vector at all when the field is [required][VectorField.required].
+     */
+    INVALID_VECTOR,
 }
 
 private fun buildRejectMessage(reason: RejectReason, byteOffset: Long, jsonPath: String?, detail: String?): String =
@@ -190,6 +197,7 @@ private fun differences(stored: CreationOptions, requested: CreationOptions): St
         "maxIndexedStringBytes" to { it.maxIndexedStringBytes },
         "normalization" to { it.normalization },
         "documentKey" to { it.documentKey ?: "none" },
+        "vectorField" to { it.vectorField ?: "none" },
     ).mapNotNull { (name, get) -> get(stored).takeIf { it != get(requested) }?.let { "$name $it, not ${get(requested)}" } }
     return if (parts.isEmpty()) "other options than $requested" else parts.joinToString("; ")
 }

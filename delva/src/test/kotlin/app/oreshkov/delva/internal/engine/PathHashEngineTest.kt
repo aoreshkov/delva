@@ -18,7 +18,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The path hash in every posting (SPEC.md §15) is the hash of the label path of its containing object's parent,
+ * The path hash in every posting (SPEC.md §16) is the hash of the label path of its containing object's parent,
  * computed here from the JSON tree alone. Documents are split into tiny fragments, so postings come from SUBTREEs,
  * PARTs of objects and arrays, and in-array postings whose owner object is in another fragment; and the store is reopened,
  * so the postings rebuilt from the log's fragment contexts are checked too.

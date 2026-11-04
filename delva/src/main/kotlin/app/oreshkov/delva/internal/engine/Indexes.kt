@@ -20,6 +20,7 @@ import app.oreshkov.delva.internal.lsm.SegmentHandle
 import app.oreshkov.delva.internal.lsm.SegmentReader
 import app.oreshkov.delva.internal.lsm.SegmentStats
 import app.oreshkov.delva.internal.lsm.TypeSegments
+import app.oreshkov.delva.internal.lsm.VectorSegments
 import app.oreshkov.delva.internal.lsm.Version
 import app.oreshkov.delva.internal.lsm.VersionSet
 import app.oreshkov.delva.internal.store.LogFragmentStore
@@ -79,7 +80,7 @@ internal class FrozenMemtable(
  * - **Writes** to the active memtable run under the memtable read lock ([withActive]); a **freeze** takes the write
  *   lock, so it swaps memtables and captures the watermarks of in-flight large inserts atomically and never
  *   waits for a client stream.
- * - **Flush** (on the flush thread, or inline without one): write the posting, fragment, type and key segments that have
+ * - **Flush** (on the flush thread, or inline without one): write the posting, fragment, type, key and vector segments that have
  *   entries to `*.tmp`, leaving out the entries of docIds aborted or deleted by the freeze and fragment entries
  *   of reclaimed lane files, counting the lane bytes of the hidden fragment entries as discarded, sync, rename → the
  *   type dictionary file if names were added → sync the directory → the aborted and the deleted docIds
@@ -179,8 +180,7 @@ internal class Indexes(
     /** Bytes of every live segment file; for tests and diagnostics. */
     val segmentBytes: Long
         get() {
-            val v = versions.current()
-            return (v.postingSegments + v.fragmentSegments + v.typeSegments + v.keySegments).sumOf { it.fileBytes }
+            return versions.current().allSegments.sumOf { it.fileBytes }
         }
 
     /**
@@ -243,7 +243,7 @@ internal class Indexes(
                 val v = versions.current()
                 if (v.active.isEmpty && !allowEmpty) return null
                 val frozen = FrozenMemtable(v.active, lsn, capture(), committedEnd, visibility.aborted, visibility.deleted, typeNames)
-                versions.install(Version(Memtable(), v.frozen + v.active, v.postingSegments, v.fragmentSegments, v.typeSegments, v.keySegments, v.flushedLsn))
+                versions.install(v.withMemtables(active = Memtable(), frozen = v.frozen + v.active))
                 frozen
             }
         }
@@ -294,6 +294,7 @@ internal class Indexes(
         var fragment: SegmentHandle? = null
         var type: SegmentHandle? = null
         var key: SegmentHandle? = null
+        var vector: SegmentHandle? = null
         if (memtable.postings.runCount > 0) {
             posting = writeSegment(SegmentFormat.INDEX_POSTING) { file -> PostingSegments.write(memtable.postings, file, blockBytes, hidden) }
         }
@@ -317,6 +318,10 @@ internal class Indexes(
             if (!memtable.keys.isEmpty) {
                 key = writeSegment(SegmentFormat.INDEX_KEY) { file -> KeySegments.write(memtable.keys, file, blockBytes, hidden) }
             }
+            if (!memtable.vectors.isEmpty) {
+                val field = checkNotNull(options.creation.vectorField) { "vectors in a store without a vector field" }
+                vector = writeSegment(SegmentFormat.INDEX_VECTOR) { file -> VectorSegments.write(memtable.vectors, field.dimensions, file, blockBytes, hidden) }
+            }
             // Names are only ever added, so a different count is a change.
             val dictionaryChanged = frozen.typeNames != persistedTypeNames
             val dictionaryFileNo = if (dictionaryChanged) writeTypeDictionary(dictionary.names(frozen.typeNames)) else files.index.typeDictionaryFileNo
@@ -325,7 +330,7 @@ internal class Indexes(
             commitLock.withLock {
                 val current = files.index
                 val mergedFileNos = merged.mapTo(HashSet()) { it.fileNo }
-                val added = listOfNotNull(posting, fragment, type, key).map { ManifestSegment(it.fileNo, it.reader.indexKind, it.fileBytes) }
+                val added = listOfNotNull(posting, fragment, type, key, vector).map { ManifestSegment(it.fileNo, it.reader.indexKind, it.fileBytes) }
                 val abortedFileNo = abortedFile.fileFor(frozen.aborted, current.abortedFileNo)
                 val deletedFileNo = deletedFile.fileFor(frozen.deleted, current.deletedFileNo)
                 files.updateIndex(
@@ -351,7 +356,8 @@ internal class Indexes(
                     val fragmentSegments = v.fragmentSegments.dropLast(merged.size) + listOfNotNull(fragment)
                     val typeSegments = if (type != null) v.typeSegments + type else v.typeSegments
                     val keySegments = if (key != null) v.keySegments + key else v.keySegments
-                    versions.install(Version(v.active, v.frozen.filter { it !== memtable }, postingSegments, fragmentSegments, typeSegments, keySegments, maxOf(v.flushedLsn, frozen.lsn)))
+                    val vectorSegments = if (vector != null) v.vectorSegments + vector else v.vectorSegments
+                    versions.install(Version(v.active, v.frozen.filter { it !== memtable }, postingSegments, fragmentSegments, typeSegments, keySegments, vectorSegments, maxOf(v.flushedLsn, frozen.lsn)))
                 }
             }
         } finally {
@@ -360,7 +366,7 @@ internal class Indexes(
         // Deleted once no search pins a version holding them.
         for (s in merged) s.markObsolete()
         fragmentMerges += merged.size
-        flushedBytes += listOfNotNull(posting, fragment, type, key).sumOf { it.fileBytes }
+        flushedBytes += listOfNotNull(posting, fragment, type, key, vector).sumOf { it.fileBytes }
         flushes++
         signalRoom()
         onIndexChanged()
@@ -435,7 +441,7 @@ internal class Indexes(
      */
     fun newVersion(): Long = synchronized(versionLock) {
         val v = versions.current()
-        val next = Version(v.active, v.frozen, v.postingSegments, v.fragmentSegments, v.typeSegments, v.keySegments, v.flushedLsn)
+        val next = v.withMemtables()
         versions.install(next)
         next.seq
     }
