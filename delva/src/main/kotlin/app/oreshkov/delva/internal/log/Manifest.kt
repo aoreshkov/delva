@@ -15,6 +15,7 @@ import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.discard
 import app.oreshkov.delva.internal.io.readFully
 import app.oreshkov.delva.internal.io.replace
+import app.oreshkov.delva.internal.lsm.SegmentFormat
 import app.oreshkov.delva.internal.path.SingularPath
 import app.oreshkov.delva.internal.term.IndexPolicy
 import java.nio.file.Path
@@ -45,7 +46,7 @@ internal class ManifestWatermark(val docId: Long, val fileNo: Long, val offset: 
  *           | typeDictionaryFileNo:u64 (0 = none) | deletedFileNo:u64 (0 = none)
  *           | fileCount:varint | { fileNo:u64 | kind:u8 (1 control, 2 lane) | laneId:u32 | state:u8 (0 active, 1 sealed)
  *                                | committedEnd:u64 | discardedBytes:u64 (both 0 for control files) }*
- *           | segmentCount:varint | { fileNo:u64 | index:u8 (1 posting, 2 fragment, 3 type, 4 key) | fileBytes:u64 }*
+ *           | segmentCount:varint | { fileNo:u64 | index:u8 (1 posting, 2 fragment, 3 type, 4 key, 5 vector) | fileBytes:u64 }*
  *           | watermarkCount:varint | { docId:u64 | fileNo:u64 | offset:u64 }*
  *           | dictionaryCount:varint | { dictId:u16 }*                     ascending
  *           | minIndexedStringBytes:u32 | maxIndexedStringBytes:u32                index controls
@@ -195,8 +196,9 @@ internal class Manifest(
 
         /**
          * The format of a store with a vector field: [FORMAT_VERSION] plus the vector field in the MANIFEST and the
-         * vectors in COMMIT records (flag `VECTOR` in [ControlRecords]). A version that reads only format 1 refuses such
-         * a store before it reads a vector of it.
+         * vectors in COMMIT records (flag `VECTOR` in [ControlRecords]) and in vector segments (index 5,
+         * [app.oreshkov.delva.internal.lsm.VectorSegments]). A version that reads only format 1 refuses such a store
+         * before it reads a vector of it.
          */
         const val VECTOR_FORMAT_VERSION: Int = 2
 
@@ -266,7 +268,7 @@ internal class Manifest(
                 val fileNo = r.readLongLE()
                 val index = r.readByte()
                 val bytes = r.readLongLE()
-                if (fileNo <= 0 || fileNo >= nextFileNo || index !in 1..4 || bytes <= 0) throw CorruptionException(source, "invalid segment entry ($fileNo, $index, $bytes)")
+                if (fileNo <= 0 || fileNo >= nextFileNo || index !in 1..5 || bytes <= 0) throw CorruptionException(source, "invalid segment entry ($fileNo, $index, $bytes)")
                 segments += ManifestSegment(fileNo, index, bytes)
             }
             val watermarkCount = r.readVarInt(r.remaining / WATERMARK_BYTES)
@@ -314,6 +316,7 @@ internal class Manifest(
             }
             val vectorField = if (version == VECTOR_FORMAT_VERSION) readVectorField(r, source) else null
             if (r.remaining != 0) throw CorruptionException(source, "${r.remaining} trailing bytes")
+            if (vectorField == null) segments.firstOrNull { it.index == SegmentFormat.INDEX_VECTOR }?.let { throw CorruptionException(source, "vector segment ${it.fileNo} in a store without a vector field") }
             if (manifestNo <= 0 || fragmentBytes <= 0 || nextDocId < 0 || lastLsn < 0 || indexedUpToLsn < 0 || indexedUpToLsn > lastLsn || abortedFileNo !in 0 until nextFileNo || typeDictionaryFileNo !in 0 until nextFileNo || deletedFileNo !in 0 until nextFileNo) {
                 throw CorruptionException(source, "invalid field values")
             }

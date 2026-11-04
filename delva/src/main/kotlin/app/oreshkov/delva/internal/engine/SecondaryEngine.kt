@@ -396,6 +396,7 @@ internal class SecondaryEngine private constructor(
             segments.values.filter { it.reader.indexKind == SegmentFormat.INDEX_FRAGMENT },
             segments.values.filter { it.reader.indexKind == SegmentFormat.INDEX_TYPE },
             segments.values.filter { it.reader.indexKind == SegmentFormat.INDEX_KEY },
+            segments.values.filter { it.reader.indexKind == SegmentFormat.INDEX_VECTOR },
             manifest.indexedUpToLsn,
         )
 

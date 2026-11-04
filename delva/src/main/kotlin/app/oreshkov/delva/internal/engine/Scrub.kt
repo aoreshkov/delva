@@ -27,6 +27,8 @@ import app.oreshkov.delva.internal.lsm.FragmentSegments
 import app.oreshkov.delva.internal.lsm.KeyIndexView
 import app.oreshkov.delva.internal.lsm.KeySegments
 import app.oreshkov.delva.internal.lsm.SegmentHandle
+import app.oreshkov.delva.internal.lsm.VectorIndexView
+import app.oreshkov.delva.internal.lsm.VectorSegments
 import app.oreshkov.delva.internal.lsm.Version
 import app.oreshkov.delva.internal.store.LogFragmentStore
 import app.oreshkov.delva.internal.vector.Vectors
@@ -39,10 +41,10 @@ import java.io.IOException
  *
  * 1. [VerifyPhase.LOG] — every listed file's header, then every control-log record (frame CRC and body), and for each
  *    COMMIT still in the log the fragment records its extents name, which must be as many, and hold as many payload
- *    bytes, as the COMMIT recorded.
+ *    bytes, as the COMMIT recorded; a visible document's COMMIT also has the vector the vector index holds for it.
  * 2. [VerifyPhase.INDEX] — every entry of every segment of the pinned version, which reads each data block through its
  *    CRC, each external value through its chunk CRCs, and each bloom-filter page through the CRC taken when the
- *    segment opened.
+ *    segment opened; then the document-key index and the vector index against themselves.
  * 3. [VerifyPhase.FRAGMENTS] — every fragment-index entry against the record it locates: the file is still listed, the
  *    record is a valid FRAGMENT, and its key and payload bounds are the entry's.
  *
@@ -87,6 +89,7 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
             checkLog(listed, snapshot)
             checkSegments(version)
             checkKeyIndex(version, snapshot)
+            checkVectorIndex(version)
             checkFragmentIndex(version, listed, snapshot)
         } finally {
             version.release()
@@ -201,7 +204,41 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
         }
         checkReplacePairing("$name@$at", type)
         // A deleted document's fragments may already have been reclaimed; a document still in flight has no COMMIT.
-        if (isCommit && snapshot.visibility.isVisible(commit.docId)) checkCommitExtents("$name@$at")
+        if (isCommit && snapshot.visibility.isVisible(commit.docId)) {
+            checkCommitExtents("$name@$at")
+            checkCommitVector("$name@$at")
+        }
+    }
+
+    /** Point lookups in the pinned version's vector index; null without a vector field, or once a lookup met damage. */
+    private var vectorLookups: VectorIndexView? = options.creation.vectorField?.let { VectorIndexView(scrubbed.version, it.dimensions) }
+
+    /**
+     * The visible document's vector in the index against the one its COMMIT logs, bit for bit, or its absence. The
+     * pinned version holds everything the snapshot sees, and flushes and compactions drop only hidden documents, so
+     * the two always agree. Damage that stops a lookup ends these checks; the segment walk reports it.
+     */
+    private fun checkCommitVector(location: String) {
+        val lookups = vectorLookups ?: return
+        val docId = commit.docId
+        val indexed = try {
+            lookups.vectorOf(docId)
+        } catch (_: CorruptionException) {
+            vectorLookups = null
+            return
+        } catch (_: IOException) {
+            vectorLookups = null
+            return
+        }
+        val logged = commit.vector
+        val detail = when {
+            logged == null -> if (indexed == null) return else "document $docId has a vector in the index, but its COMMIT at $location has none"
+            indexed == null -> "document $docId has no vector in the index, but its COMMIT at $location has one"
+            // Arrays.equals compares floats by their bits, so -0 and 0 differ as they should.
+            !logged.contentEquals(indexed.values) -> "the vector of document $docId in the index isn't the one its COMMIT at $location logs"
+            else -> return
+        }
+        issue(VerifyIssueKind.VECTOR_INDEX, "vector index", detail, document = DocId(docId))
     }
 
     /** Whether the records read so far are in the first listed control file, whose older records may be gone. */
@@ -385,7 +422,7 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
     // ---- phase 2: segments -------------------------------------------------------------------------------------
 
     private fun checkSegments(version: Version) {
-        val segments = version.postingSegments + version.fragmentSegments + version.typeSegments + version.keySegments
+        val segments = version.allSegments
         startPhase(VerifyPhase.INDEX, segments.sumOf { it.reader.fileBytes })
         for (handle in segments) {
             filesChecked++
@@ -446,6 +483,47 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
     }
 
     private fun quoted(key: ByteArray): String = "\"${DocumentKeys.decode(key)}\""
+
+    /**
+     * The vector index against the vector field, still in the INDEX phase: in every memtable and segment, each vector,
+     * hidden or not, fits the field and has the norm its numbers give, and the docIds ascend. Damage that stops the walk
+     * of a segment is reported once, and the walk goes on with the next one.
+     */
+    private fun checkVectorIndex(version: Version) {
+        val field = options.creation.vectorField ?: return
+        val values = FloatArray(field.dimensions)
+        val check = { source: String, docId: Long, previous: Long, vector: FloatArray, norm: Float ->
+            if (docId <= previous) issue(VerifyIssueKind.VECTOR_INDEX, source, "the vector of document $docId follows that of document $previous", document = DocId(docId))
+            VectorSegments.problem(vector, norm, field)?.let { issue(VerifyIssueKind.VECTOR_INDEX, source, "document $docId is indexed $it", document = DocId(docId)) }
+        }
+        for (m in version.memtables) {
+            var previous = -1L
+            for (e in m.vectors.entries()) {
+                check("vector index", e.docId, previous, e.values, e.norm)
+                previous = e.docId
+            }
+        }
+        for (handle in version.vectorSegments) {
+            val segment = handle.reader
+            try {
+                val cursor = segment.cursor()
+                var ok = cursor.first()
+                var previous = -1L
+                while (ok) {
+                    val docId = VectorSegments.docIdOf(cursor, segment.source)
+                    val norm = VectorSegments.read(cursor, values, segment.source)
+                    check("${segment.source} block ${cursor.block}", docId, previous, values, norm)
+                    previous = docId
+                    ok = cursor.next()
+                }
+            } catch (e: CorruptionException) {
+                // The segment walk reports damage to a block; anything else is reported here.
+                if (issues.none { it.location == e.location }) issue(VerifyIssueKind.VECTOR_INDEX, e.location, e.detail)
+            } catch (e: IOException) {
+                if (issues.none { it.location == segment.source }) issue(VerifyIssueKind.VECTOR_INDEX, segment.source, "can't be read: ${e.message}")
+            }
+        }
+    }
 
     /**
      * Reads every block, external value and bloom page of one segment; each read checks a CRC. The first damaged one

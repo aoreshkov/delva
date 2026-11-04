@@ -13,15 +13,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Crash simulation for captured vectors before any flush: workloads of inserts, replaces and deletes of documents with
- * and without a vector, small and in large lanes, and a crash at a random disk call, then power loss and reopen. After
- * each crash the vectors replayed from the log are exactly those of the documents that are visible, plus those of
- * documents deleted since, and the operation in progress took effect completely or not at all.
+ * Crash simulation for the vector index: workloads of inserts, replaces and deletes of documents with and without a
+ * vector, small and in large lanes, with flushes (also forced by a small memtable), compactions and space reclamation,
+ * and a crash at a random disk call (log appends, syncs, vector segments, MANIFESTs), then power loss and reopen. After
+ * each crash:
+ *
+ * - every visible document has exactly the vector it was inserted with, or none, whether the vector comes back from a
+ *   segment or from replaying the log;
+ * - no memtable or segment holds a vector of a document that was never committed;
+ * - the operation in progress took effect completely or not at all, and `verify` finds nothing.
  *
  * `-Ddelva.sim.scenarios=N` sets the number of scenarios (200 by default, 3 000 with `-Pdelva.testProfile=long`);
  * `-Ddelva.seed=S` the first seed.
  */
-class VectorReplaySimTest {
+class VectorIndexSimTest {
     private sealed interface Step {
         /** An insert of document [n]. */
         class Insert(val n: Int) : Step
@@ -30,6 +35,9 @@ class VectorReplaySimTest {
         class Replace(val target: Int, val n: Int) : Step
 
         class Delete(val target: Int) : Step
+
+        /** Flush, compact and reclaim lane files. */
+        data object Reclaim : Step
     }
 
     /** The operation running when the store failed: the document it inserts, if any, and the ones it deletes. */
@@ -41,10 +49,11 @@ class VectorReplaySimTest {
         var applied = 0
         var lost = 0
         var vectorsChecked = 0L
+        var reopenedWithSegments = 0
     }
 
     @Test
-    fun `vectors replayed after a crash are those of the committed documents`() {
+    fun `after a crash at any disk call, the vector index holds the vectors of the visible documents`() {
         val long = System.getProperty("delva.testProfile") == "long"
         val count = System.getProperty("delva.sim.scenarios")?.toInt() ?: if (long) 3_000 else 200
         val base = System.getProperty("delva.seed")?.toLong() ?: 0x7EC5L
@@ -54,12 +63,12 @@ class VectorReplaySimTest {
             try {
                 scenario(seed, stats)
             } catch (e: Throwable) {
-                throw AssertionError("scenario $seed failed; reproduce: ./gradlew :delva:simTest --tests '*VectorReplaySimTest' -Ddelva.seed=$seed -Ddelva.sim.scenarios=1", e)
+                throw AssertionError("scenario $seed failed; reproduce: ./gradlew :delva:simTest --tests '*VectorIndexSimTest' -Ddelva.seed=$seed -Ddelva.sim.scenarios=1", e)
             }
         }
         println(
-            "vector replay simulation: ${stats.scenarios} scenarios (${stats.crashedMidway} crashes during work), in-progress writes " +
-                "${stats.applied} applied / ${stats.lost} lost, ${stats.vectorsChecked} vectors checked",
+            "vector index simulation: ${stats.scenarios} scenarios (${stats.crashedMidway} crashes during work), in-progress writes " +
+                "${stats.applied} applied / ${stats.lost} lost, ${stats.vectorsChecked} vectors checked, ${stats.reopenedWithSegments} reopenings with vector segments",
         )
     }
 
@@ -80,9 +89,12 @@ class VectorReplaySimTest {
                 preallocateBytes = listOf(0L, 512L)[random.nextInt(2)],
                 writeBufferBytes = 4096,
             ),
-            // Nothing is flushed: until vectors have segments of their own, the log is where they come back from.
+            memtableBytes = listOf(0L, 4L shl 10, EngineOptions.DEFAULT_MEMTABLE_BYTES)[random.nextInt(3)],
             backgroundFlush = false,
+            segmentBlockBytes = listOf(256, 4096)[random.nextInt(2)],
             maxDeleteRecordDocIds = listOf(1, EngineOptions.DEFAULT_MAX_DELETE_RECORD_DOC_IDS)[random.nextInt(2)],
+            reclaim = ReclaimOptions(maxLiveRatio = 0.95, bytesPerSecond = 0, maxRelocateFragments = listOf(1, 16_384)[random.nextInt(2)]),
+            compaction = CompactionOptions(minMergeSegments = 2, deletedRatio = 0.01, tombstoneRatio = 0.01, bytesPerSecond = 0),
             compression = TestEngines.compression(random.nextInt(3)),
         )
         // Document n's vector, or null when it has none; never zero, so every metric takes it.
@@ -105,10 +117,12 @@ class VectorReplaySimTest {
         var calls = 0L
         repeat(CYCLES) { cycle ->
             val work = List(random.nextInt(4, 14)) {
-                when (random.nextInt(6)) {
+                when (random.nextInt(8)) {
                     in 0..2 -> Step.Insert(newDocument())
                     in 3..4 -> Step.Replace(random.nextInt(1000), newDocument())
-                    else -> Step.Delete(random.nextInt(1000))
+                    5 -> Step.Delete(random.nextInt(1000))
+                    6 -> Step.Reclaim
+                    else -> Step.Insert(newDocument())
                 }
             }
             if (cycle == 0) {
@@ -166,6 +180,11 @@ class VectorReplaySimTest {
                     assertTrue(store.delete(DocId(old)))
                     expected.remove(old)
                 }
+                Step.Reclaim -> {
+                    store.flush()
+                    store.compact()
+                    store.reclaim()
+                }
             }
             inProgress?.set(0, null)
         }
@@ -202,8 +221,8 @@ class VectorReplaySimTest {
             assertEquals(vectors[n]?.toList(), store.vectorOf(docId)?.toList(), "vector of document $docId (n = $n) after the crash in cycle $cycle")
             stats.vectorsChecked++
         }
-        val replayed = store.indexes.versions.current().memtables.flatMap { m -> m.vectors.entries().asSequence().map { it.docId }.toList() }
-        val stray = replayed.filter { it !in committed }
+        if (store.indexes.versions.current().vectorSegments.isNotEmpty()) stats.reopenedWithSegments++
+        val stray = store.indexedVectorDocIds().filter { it !in committed }
         assertTrue(stray.isEmpty(), "vectors of documents never committed: $stray")
         assertEquals(emptyList(), store.verify().issues.map { it.toString() })
     }

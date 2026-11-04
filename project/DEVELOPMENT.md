@@ -93,11 +93,12 @@ light and the dark theme:
 
 - Documents are split into fragments and appended to a log with group commit and per-document lanes; payloads are
   compressed with dictionaries trained on what is inserted.
-- The indexes, the document-key index among them, are LSM trees: flushed from memory, merged by size-tiered
-  compaction, and recovered by replaying the log from the last flushed watermark.
+- The indexes, the document-key and vector indexes among them, are LSM trees: flushed from memory, merged by
+  size-tiered compaction, and recovered by replaying the log from the last flushed watermark.
 - Space held by deleted documents is reclaimed.
 - `verify` checks log record and segment block checksums, the fragments each COMMIT still in the log names, every
-  fragment-index entry against the record it locates, and the document-key index against itself.
+  fragment-index entry against the record it locates, the document-key and vector indexes against themselves, and the
+  vector index against the COMMITs still in the log.
 
 ## Reproducing a failure
 

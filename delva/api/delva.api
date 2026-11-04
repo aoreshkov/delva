@@ -911,6 +911,7 @@ public final class app/oreshkov/delva/VerifyIssueKind : java/lang/Enum {
 	public static final field KEY_INDEX Lapp/oreshkov/delva/VerifyIssueKind;
 	public static final field LOG_RECORD Lapp/oreshkov/delva/VerifyIssueKind;
 	public static final field SEGMENT Lapp/oreshkov/delva/VerifyIssueKind;
+	public static final field VECTOR_INDEX Lapp/oreshkov/delva/VerifyIssueKind;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/VerifyIssueKind;
 	public static fun values ()[Lapp/oreshkov/delva/VerifyIssueKind;

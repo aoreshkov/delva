@@ -377,7 +377,7 @@ internal class LogFiles(
             return fileNo to laneId
         }
 
-        private val SEGMENT_NAME = Regex("(posting|frag|type|key)-(\\d{6,18})\\.seg")
+        private val SEGMENT_NAME = Regex("(posting|frag|type|key|vector)-(\\d{6,18})\\.seg")
         private val BITMAP_NAME = Regex("(aborted|deleted)-(\\d{6,18})\\.dis")
         private val TYPE_DICTIONARY_NAME = Regex("types-(\\d{6,18})\\.dict")
 
@@ -385,6 +385,7 @@ internal class LogFiles(
             SegmentFormat.INDEX_POSTING -> "posting-%06d.seg"
             SegmentFormat.INDEX_FRAGMENT -> "frag-%06d.seg"
             SegmentFormat.INDEX_KEY -> "key-%06d.seg"
+            SegmentFormat.INDEX_VECTOR -> "vector-%06d.seg"
             else -> "type-%06d.seg"
         }.format(Locale.ROOT, fileNo)
 
@@ -403,6 +404,7 @@ internal class LogFiles(
                 "posting" -> SegmentFormat.INDEX_POSTING
                 "frag" -> SegmentFormat.INDEX_FRAGMENT
                 "key" -> SegmentFormat.INDEX_KEY
+                "vector" -> SegmentFormat.INDEX_VECTOR
                 else -> SegmentFormat.INDEX_TYPE
             }
             return (m.groupValues[2].toLongOrNull() ?: return null) to kind

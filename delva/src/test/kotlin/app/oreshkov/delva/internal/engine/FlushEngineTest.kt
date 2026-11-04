@@ -11,7 +11,7 @@ import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.log.LogFiles
 import app.oreshkov.delva.internal.log.LogOptions
-import app.oreshkov.delva.internal.lsm.Version
+import app.oreshkov.delva.internal.lsm.SegmentFormat
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
@@ -335,7 +335,7 @@ class FlushEngineTest {
                 val version = store.indexes.versions.current()
                 val retired = version.postingSegments.last()
                 retired.markObsolete()
-                store.indexes.versions.install(Version(version.active, version.frozen, version.postingSegments.dropLast(1), version.fragmentSegments, version.typeSegments, version.keySegments, version.flushedLsn))
+                store.indexes.versions.install(version.withSegments(SegmentFormat.INDEX_POSTING, version.postingSegments.dropLast(1)))
                 assertTrue(fs.exists(retired.path), "still pinned by the open search")
                 assertTrue(pinned.nextPage()!!.hits.isNotEmpty())
                 pinned.close()

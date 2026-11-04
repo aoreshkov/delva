@@ -214,6 +214,7 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
         val fragmentSegments = ArrayList<SegmentHandle>()
         val typeSegments = ArrayList<SegmentHandle>()
         val keySegments = ArrayList<SegmentHandle>()
+        val vectorSegments = ArrayList<SegmentHandle>()
         // In MANIFEST order, which is age order within each index: a compaction's segment takes the place of its inputs.
         for (segment in manifest.segments) {
             val path = files.segmentPath(segment.fileNo, segment.index)
@@ -225,6 +226,7 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
                 SegmentFormat.INDEX_POSTING -> postingSegments += handle
                 SegmentFormat.INDEX_FRAGMENT -> fragmentSegments += handle
                 SegmentFormat.INDEX_KEY -> keySegments += handle
+                SegmentFormat.INDEX_VECTOR -> vectorSegments += handle
                 else -> typeSegments += handle
             }
         }
@@ -301,7 +303,7 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
         files.info.durableLsn = { lsn }
         files.writeManifest()
 
-        val initial = Version(memtable, emptyList(), postingSegments, fragmentSegments, typeSegments, keySegments, manifest.indexedUpToLsn)
+        val initial = Version(memtable, emptyList(), postingSegments, fragmentSegments, typeSegments, keySegments, vectorSegments, manifest.indexedUpToLsn)
         val indexes = Indexes(files, io, options, engine, engine.blockCache, initial, persistedAborted, persistedDeleted, dictionary, persistedTypeNames)
         for (h in handles) indexes.track(h)
         return Recovered(

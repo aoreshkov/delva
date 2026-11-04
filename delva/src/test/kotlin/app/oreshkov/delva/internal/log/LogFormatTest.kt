@@ -178,6 +178,18 @@ class LogFormatTest {
     }
 
     @Test
+    fun `only a store with a vector field lists vector segments`() {
+        fun manifest(field: VectorField?) = Manifest(
+            1, 4096, 8192, false, nextFileNo = 3, nextDocId = 1, lastLsn = 0, files = emptyList(),
+            segments = listOf(ManifestSegment(1, 4, 99), ManifestSegment(2, SegmentFormat.INDEX_VECTOR, 120)), vectorField = field,
+        )
+        val field = VectorField("$.v", 3, VectorMetric.DOT_PRODUCT)
+        assertEquals(listOf(4, 5), Manifest.decode(manifest(field).encode(), MANIFEST_PATH).segments.map { it.index })
+        val e = assertFailsWith<CorruptionException> { Manifest.decode(manifest(null).encode(), MANIFEST_PATH) }
+        assertEquals("vector segment 2 in a store without a vector field", e.detail)
+    }
+
+    @Test
     fun `a damaged vector field, or a format version that doesn't fit the MANIFEST, is damage`() {
         val bytes = vectorManifest(VectorField("$.v", 3, VectorMetric.EUCLIDEAN)).encode()
         // The field's last bytes, before the checksum: dimensions:u32 | metric:u8 | flags:u8.

@@ -28,6 +28,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   format version 2, which earlier versions of Delva refuse; every other store stays in format version 1.
 - `delva`: in a store with a vector field, each insert reads the document's vector as 32-bit floats, and
   `RejectReason.INVALID_VECTOR` rejects a document whose value at the field's path isn't one.
+- `delva`: `verify` checks the vector index of a store with a vector field, and reports its damage as
+  `VerifyIssueKind.VECTOR_INDEX`.
 - `delva-cli`: `info` shows the store's vector field.
 
 ### Changed

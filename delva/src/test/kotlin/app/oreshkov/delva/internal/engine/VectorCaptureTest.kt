@@ -11,6 +11,8 @@ import app.oreshkov.delva.StoreOptions
 import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
+import app.oreshkov.delva.internal.lsm.VectorIndexView
+import app.oreshkov.delva.internal.lsm.VectorSegments
 import java.io.ByteArrayInputStream
 import java.math.BigDecimal
 import java.math.MathContext
@@ -195,9 +197,26 @@ class VectorCaptureTest {
     }
 }
 
-/** The vector the memtables hold for [docId], or null. */
-internal fun Engine.vectorOf(docId: Long): FloatArray? =
-    indexes.versions.current().memtables.firstNotNullOfOrNull { it.vectors.vectorOf(docId) }?.values
+/** The vector the current view's memtables and segments hold for [docId], or null. */
+internal fun ReadEngine.vectorOf(docId: Long): FloatArray? {
+    val field = options.creation.vectorField ?: return null
+    return withView { _, version -> VectorIndexView(version, field.dimensions).vectorOf(docId)?.values }
+}
+
+/** The docIds of every vector in the current view's memtables and segments, hidden or not, with repeats. */
+internal fun ReadEngine.indexedVectorDocIds(): List<Long> = withView { _, version ->
+    val docIds = ArrayList<Long>()
+    for (m in version.memtables) m.vectors.entries().forEach { docIds += it.docId }
+    for (s in version.vectorSegments) {
+        val cursor = s.reader.cursor()
+        var ok = cursor.first()
+        while (ok) {
+            docIds += VectorSegments.docIdOf(cursor, s.reader.source)
+            ok = cursor.next()
+        }
+    }
+    docIds
+}
 
 /** A random finite float32, of any magnitude. */
 private fun randomFloat(random: Random): Float {

@@ -43,6 +43,14 @@ public enum class VerifyIssueKind {
      * have one key, or a document's key isn't indexed both ways.
      */
     KEY_INDEX,
+
+    /**
+     * The vector index of a store with [CreationOptions.vectorField] holds a vector that doesn't fit the field (a
+     * number that isn't finite, an all-zero vector under [VectorMetric.COSINE], a stored norm its numbers don't give),
+     * holds vectors out of docId order, or disagrees with a COMMIT still in the log: the visible document's vector is
+     * missing, different, or indexed though its COMMIT has none.
+     */
+    VECTOR_INDEX,
 }
 
 /**

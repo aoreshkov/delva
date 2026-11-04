@@ -92,7 +92,7 @@ internal class SegmentHandle(val reader: SegmentReader, val path: Path, private 
 
 /**
  * One consistent set of index sources: the [active] memtable, [frozen] memtables waiting for their
- * flush (oldest first) and the live segments of the four indexes (oldest first). [flushedLsn] is the LSN up to which
+ * flush (oldest first) and the live segments of the five indexes (oldest first). [flushedLsn] is the LSN up to which
  * the segments hold everything flushed (the newest flush's freeze LSN): a type segment keeps only the newest version of
  * a key, and flushes and compactions leave out the entries of docIds hidden by then, so a reader must not see
  * the segments with a snapshot older than that. Immutable; reference-counted, so a search that pins a version
@@ -106,6 +106,7 @@ internal class Version(
     val fragmentSegments: List<SegmentHandle>,
     val typeSegments: List<SegmentHandle>,
     val keySegments: List<SegmentHandle>,
+    val vectorSegments: List<SegmentHandle>,
     val flushedLsn: Long,
 ) {
     private val refs = AtomicInteger(1)
@@ -123,6 +124,7 @@ internal class Version(
         for (s in fragmentSegments) s.retain()
         for (s in typeSegments) s.retain()
         for (s in keySegments) s.retain()
+        for (s in vectorSegments) s.retain()
     }
 
     /** Takes a reference unless the version was already released for good. */
@@ -142,6 +144,7 @@ internal class Version(
             for (s in fragmentSegments) s.release()
             for (s in typeSegments) s.release()
             for (s in keySegments) s.release()
+            for (s in vectorSegments) s.release()
             set?.released(this)
         }
     }
@@ -154,8 +157,12 @@ internal class Version(
         SegmentFormat.INDEX_POSTING -> postingSegments
         SegmentFormat.INDEX_FRAGMENT -> fragmentSegments
         SegmentFormat.INDEX_KEY -> keySegments
+        SegmentFormat.INDEX_VECTOR -> vectorSegments
         else -> typeSegments
     }
+
+    /** Every live segment, of every index. */
+    val allSegments: List<SegmentHandle> get() = postingSegments + fragmentSegments + typeSegments + keySegments + vectorSegments
 
     /** This version with the segments of index [indexKind] replaced by [segments]. */
     fun withSegments(indexKind: Int, segments: List<SegmentHandle>, active: Memtable = this.active, frozen: List<Memtable> = this.frozen, flushedLsn: Long = this.flushedLsn): Version = Version(
@@ -164,8 +171,13 @@ internal class Version(
         if (indexKind == SegmentFormat.INDEX_FRAGMENT) segments else fragmentSegments,
         if (indexKind == SegmentFormat.INDEX_TYPE) segments else typeSegments,
         if (indexKind == SegmentFormat.INDEX_KEY) segments else keySegments,
+        if (indexKind == SegmentFormat.INDEX_VECTOR) segments else vectorSegments,
         flushedLsn,
     )
+
+    /** This version with other memtables, or another [flushedLsn], and the same segments. */
+    fun withMemtables(active: Memtable = this.active, frozen: List<Memtable> = this.frozen, flushedLsn: Long = this.flushedLsn): Version =
+        Version(active, frozen, postingSegments, fragmentSegments, typeSegments, keySegments, vectorSegments, flushedLsn)
 
     fun fragmentIndex(): FragmentIndexView = FragmentIndexView(this)
 }
