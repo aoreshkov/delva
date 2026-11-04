@@ -5,10 +5,10 @@ import java.util.concurrent.ConcurrentSkipListMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * A document's vector: its float32 [values] and their [norm] ([Vectors.norm]), which distances under every metric
- * need. Immutable; [values] must not be changed.
+ * A document's vector: its float32 [values] and the sum of their [squares] ([Vectors.squares]), which makes a cosine
+ * distance one dot product. Immutable; [values] must not be changed.
  */
-internal class VectorEntry(val docId: Long, val values: FloatArray, val norm: Float) {
+internal class VectorEntry(val docId: Long, val values: FloatArray, val squares: Double) {
     companion object {
         /** Heap estimate per document besides 4 bytes per value: the entry, its skip-list node, the boxed docId and the array header. */
         const val APPROXIMATE_BYTES: Long = 32 + 40 + 16 + 16
@@ -33,7 +33,7 @@ internal class VectorMemtable {
     /** Adds the vector of [docId], taking [values] over: the caller must not change them afterwards. */
     fun add(docId: Long, values: FloatArray) {
         require(docId >= 0 && values.isNotEmpty())
-        check(byDocId.putIfAbsent(docId, VectorEntry(docId, values, Vectors.norm(values))) == null) { "document $docId has two vectors" }
+        check(byDocId.putIfAbsent(docId, VectorEntry(docId, values, Vectors.squares(values))) == null) { "document $docId has two vectors" }
         bytes.addAndGet(VectorEntry.APPROXIMATE_BYTES + 4L * values.size)
     }
 

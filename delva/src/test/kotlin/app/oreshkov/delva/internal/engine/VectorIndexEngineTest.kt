@@ -117,21 +117,21 @@ class VectorIndexEngineTest {
         val path = vectorFiles(fs).single()
         val first = expected.entries.first { it.value == 1 }
 
-        // The first vector's norm one step off, checksums and all.
-        rewrite(fs, path) { docId, values, norm -> if (docId == first.key) values to norm.nextUp() else values to norm }
+        // The first vector's sum of squares one step off, checksums and all.
+        rewrite(fs, path) { docId, values, squares -> if (docId == first.key) values to squares.nextUp() else values to squares }
         TestEngines.open(options, fs).use { store ->
             val details = store.verify().issues.filter { it.kind == VerifyIssueKind.VECTOR_INDEX }.map { it.detail }
-            val norm = Vectors.norm(vector(first.value)!!)
-            assertEquals(listOf("document ${first.key} is indexed with the norm ${norm.nextUp()}, but its values give $norm"), details)
+            val squares = Vectors.squares(vector(first.value)!!)
+            assertEquals(listOf("document ${first.key} is indexed with the sum of squares ${squares.nextUp()}, but its values give $squares"), details)
         }
 
-        // Another vector with a norm that fits it: only the COMMIT in the log tells.
-        rewrite(fs, path) { docId, values, norm ->
+        // Another vector with the sum of squares that fits it: only the COMMIT in the log tells.
+        rewrite(fs, path) { docId, values, squares ->
             if (docId == first.key) {
                 val other = values.copyOf().also { it[0] += 1f }
-                other to Vectors.norm(other)
+                other to Vectors.squares(other)
             } else {
-                values to norm
+                values to squares
             }
         }
         TestEngines.open(options, fs).use { store ->
@@ -142,7 +142,7 @@ class VectorIndexEngineTest {
     }
 
     /** Rewrites the vector segment at [path] through [change], with the same keys, value lengths and stats, so its size stays. */
-    private fun rewrite(fs: SimulatedFileSystemIo, path: Path, change: (Long, FloatArray, Float) -> Pair<FloatArray, Float>) {
+    private fun rewrite(fs: SimulatedFileSystemIo, path: Path, change: (Long, FloatArray, Double) -> Pair<FloatArray, Double>) {
         val original = fs.bytes(path)
         val copy = path.resolveSibling("original.tmp")
         fs.delete(copy)
@@ -157,8 +157,8 @@ class VectorIndexEngineTest {
                 var ok = cursor.first()
                 while (ok) {
                     val docId = VectorSegments.docIdOf(cursor, reader.source)
-                    val norm = VectorSegments.read(cursor, values, reader.source)
-                    val (v, n) = change(docId, values.copyOf(), norm)
+                    val squares = VectorSegments.read(cursor, values, reader.source)
+                    val (v, n) = change(docId, values.copyOf(), squares)
                     VectorSegments.encode(v, n, value)
                     writer.add(cursor.key.array, 0, cursor.key.size, value, 0, value.size)
                     ok = cursor.next()

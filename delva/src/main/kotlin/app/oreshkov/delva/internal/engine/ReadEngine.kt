@@ -289,8 +289,12 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
                     }
                 }
             }
+            // A vector index of up to half the block cache stays cached for the next search. A larger one would push
+            // out every other block, the postings the next query needs among them, only to be pushed out itself
+            // before the next scan comes back to it.
+            val admit = version.vectorSegments.sumOf { it.reader.fileBytes } <= blockCache.capacityBytes / 2
             val search = VectorSearch(
-                VectorScan(version, field.dimensions), candidates, snapshot.visibility, VectorDistance(field.metric, query.queryValues),
+                VectorScan(version, field.dimensions, admit), candidates, snapshot.visibility, VectorDistance(field.metric, query.queryValues),
                 query.k, query.maxDistance, accept,
             ) {
                 checkUsable()

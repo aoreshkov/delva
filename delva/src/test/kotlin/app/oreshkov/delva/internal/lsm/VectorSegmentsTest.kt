@@ -37,16 +37,16 @@ class VectorSegmentsTest {
         return open(path)
     }
 
-    /** Every entry of [segment] as `docId → (values, norm)`, read through [VectorSegments.read]. */
-    private fun entries(segment: SegmentReader, dimensions: Int): List<Triple<Long, List<Float>, Float>> {
-        val out = ArrayList<Triple<Long, List<Float>, Float>>()
+    /** Every entry of [segment] as `docId → (values, sum of squares)`, read through [VectorSegments.read]. */
+    private fun entries(segment: SegmentReader, dimensions: Int): List<Triple<Long, List<Float>, Double>> {
+        val out = ArrayList<Triple<Long, List<Float>, Double>>()
         val cursor = segment.cursor()
         val values = FloatArray(dimensions)
         var ok = cursor.first()
         while (ok) {
             val docId = VectorSegments.docIdOf(cursor, segment.source)
-            val norm = VectorSegments.read(cursor, values, segment.source)
-            out += Triple(docId, values.toList(), norm)
+            val squares = VectorSegments.read(cursor, values, segment.source)
+            out += Triple(docId, values.toList(), squares)
             ok = cursor.next()
         }
         return out
@@ -85,9 +85,9 @@ class VectorSegmentsTest {
                 write(m, dimensions, blockBytes = listOf(256, 4096)[random.nextInt(2)])
             }
             for (input in inputs) {
-                for ((docId, values, norm) in entries(input, dimensions)) {
+                for ((docId, values, squares) in entries(input, dimensions)) {
                     assertEquals(vector(docId).toList(), values, "document $docId")
-                    assertEquals(Vectors.norm(vector(docId)).toRawBits(), norm.toRawBits(), "norm of document $docId")
+                    assertEquals(Vectors.squares(vector(docId)).toRawBits(), squares.toRawBits(), "sum of squares of document $docId")
                 }
             }
             val gone = vectors.keys.filter { random.nextInt(4) == 0 }.sorted().toLongArray()
@@ -133,12 +133,12 @@ class VectorSegmentsTest {
             }
             return open(path)
         }
-        fun value(norm: Float, vararg values: Float) = ByteArray(VectorSegments.valueBytes(values.size)).also { VectorSegments.encode(values, norm, it) }
+        fun value(squares: Double, vararg values: Float) = ByteArray(VectorSegments.valueBytes(values.size)).also { VectorSegments.encode(values, squares, it) }
         val cases = mapOf(
-            "with the norm 1.0, but its values give 5.0" to raw(1, value(1f, 3f, 4f)),
-            "with a vector whose numbers aren't all finite" to raw(2, value(Float.NaN, Float.NaN, 1f)),
-            "with a zero vector, which has no direction under COSINE" to raw(3, value(0f, 0f, -0f)),
-            "in 8 bytes, not 12" to raw(4, value(1f, 1f)),
+            "with the sum of squares 1.0, but its values give 25.0" to raw(1, value(1.0, 3f, 4f)),
+            "with a vector whose numbers aren't all finite" to raw(2, value(Double.NaN, Float.NaN, 1f)),
+            "with a zero vector, which has no direction under COSINE" to raw(3, value(0.0, 0f, -0f)),
+            "in 12 bytes, not 16" to raw(4, value(1.0, 1f)),
         )
         for ((detail, segment) in cases) {
             val e = assertFailsWith<CorruptionException>(detail) {

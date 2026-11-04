@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /** Distances under each metric (SPEC.md §11.3), at the edges of float32, and the top-k heap that orders them. */
 class VectorDistanceTest {
-    private fun distance(metric: VectorMetric, q: FloatArray, v: FloatArray): Float = VectorDistance(metric, q).to(v)
+    private fun distance(metric: VectorMetric, q: FloatArray, v: FloatArray): Float = VectorDistance(metric, q).to(v, Vectors.squares(v))
 
     @Test
     fun `each metric gives the distance SPEC defines`() {
@@ -45,10 +45,15 @@ class VectorDistanceTest {
         // Opposite signs in different accumulators: a float sum would be inf - inf.
         val mixed = FloatArray(8) { if (it % 4 == 0) Float.MAX_VALUE else if (it % 4 == 1) -Float.MAX_VALUE else 0f }
         assertEquals(0f, distance(VectorMetric.DOT_PRODUCT, mixed, FloatArray(8) { 1f }))
-        // Subnormal vectors: a float32 norm of [MIN_VALUE, MIN_VALUE] rounds to MIN_VALUE, 30% off.
+        // Subnormal vectors: a float32 length of [MIN_VALUE, MIN_VALUE] would round to MIN_VALUE, 30% off.
         val tiny = floatArrayOf(Float.MIN_VALUE, Float.MIN_VALUE)
         assertEquals(0f, distance(VectorMetric.COSINE, tiny, tiny))
         assertEquals(1f, distance(VectorMetric.COSINE, tiny, floatArrayOf(Float.MIN_VALUE, -Float.MIN_VALUE)))
+        // The extremes together: the product of the two sums of squares stays in a double's range.
+        val longest = FloatArray(4096) { Float.MAX_VALUE }
+        val shortest = FloatArray(4096) { if (it == 0) Float.MIN_VALUE else 0f }
+        assertEquals(1 - 1 / sqrt(4096.0).toFloat(), distance(VectorMetric.COSINE, longest, shortest), 1e-6f)
+        assertEquals(1 - 1 / sqrt(4096.0).toFloat(), distance(VectorMetric.COSINE, shortest, longest), 1e-6f)
     }
 
     @Test

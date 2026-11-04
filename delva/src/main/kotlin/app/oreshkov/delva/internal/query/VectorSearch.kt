@@ -12,9 +12,10 @@ import app.oreshkov.delva.internal.visibility.Visibility
 
 /**
  * The vector index of one [Version] in ascending docId order: its memtables and vector segments merged, each docId
- * once, read from the newest source that has it. [docId] is [Long.MAX_VALUE] after the last. Not thread-safe.
+ * once, read from the newest source that has it. [docId] is [Long.MAX_VALUE] after the last. Segment blocks that
+ * aren't cached are added to the cache only with [admit]. Not thread-safe.
  */
-internal class VectorScan(version: Version, dimensions: Int) {
+internal class VectorScan(version: Version, dimensions: Int, admit: Boolean = true) {
     private abstract class Source {
         /** The current entry's docId, [Long.MAX_VALUE] after the last. */
         abstract val docId: Long
@@ -22,8 +23,8 @@ internal class VectorScan(version: Version, dimensions: Int) {
         /** Moves to the first entry at or past [target]; never moves back. */
         abstract fun seek(target: Long)
 
-        /** The current entry's values, valid until the next move. */
-        abstract fun values(): FloatArray
+        /** The distance from [distance]'s query to the current entry's vector. */
+        abstract fun distance(distance: VectorDistance): Float
     }
 
     private class MemtableSource(private val memtable: VectorMemtable) : Source() {
@@ -51,12 +52,12 @@ internal class VectorScan(version: Version, dimensions: Int) {
             }
         }
 
-        override fun values(): FloatArray = entry!!.values
+        override fun distance(distance: VectorDistance): Float = entry!!.let { distance.to(it.values, it.squares) }
     }
 
-    private class SegmentSource(private val segment: SegmentHandle, dimensions: Int) : Source() {
+    private class SegmentSource(private val segment: SegmentHandle, dimensions: Int, admit: Boolean) : Source() {
         private val reader = segment.reader
-        private val cursor: SegmentCursor = reader.cursor()
+        private val cursor: SegmentCursor = reader.cursor(admit)
         private val values = FloatArray(dimensions)
         override var docId: Long = Long.MAX_VALUE
             private set
@@ -80,9 +81,9 @@ internal class VectorScan(version: Version, dimensions: Int) {
             }
         }
 
-        override fun values(): FloatArray {
-            VectorSegments.read(cursor, values, reader.source)
-            return values
+        override fun distance(distance: VectorDistance): Float {
+            val squares = VectorSegments.read(cursor, values, reader.source)
+            return distance.to(values, squares)
         }
 
         override fun toString(): String = segment.reader.source
@@ -91,7 +92,7 @@ internal class VectorScan(version: Version, dimensions: Int) {
     // Newest first, so that a docId in two sources is read from the newer, as lookups do.
     private val sources: Array<Source> = buildList<Source> {
         for (m in version.memtables) if (!m.vectors.isEmpty) add(MemtableSource(m.vectors))
-        for (s in version.vectorSegments.asReversed()) add(SegmentSource(s, dimensions))
+        for (s in version.vectorSegments.asReversed()) add(SegmentSource(s, dimensions, admit))
     }.toTypedArray()
 
     var docId: Long = minDocId()
@@ -110,9 +111,9 @@ internal class VectorScan(version: Version, dimensions: Int) {
         docId = minDocId()
     }
 
-    /** The values of the vector at [docId], valid until the next move. */
-    fun values(): FloatArray {
-        for (s in sources) if (s.docId == docId) return s.values()
+    /** The distance from [distance]'s query to the vector at [docId]. */
+    fun distance(distance: VectorDistance): Float {
+        for (s in sources) if (s.docId == docId) return s.distance(distance)
         throw NoSuchElementException("no vector after the last")
     }
 
@@ -178,7 +179,7 @@ internal class VectorSearch(
             target = v + 1
             if (!visibility.isVisible(v)) continue
             if (++compared % CHECK_EVERY == 0L) checkpoint()
-            val d = distance.to(vectors.values())
+            val d = vectors.distance(distance)
             if (d.isNaN()) throw CorruptionException(vectors.sourceName(), "the vector of document $v has a number that isn't finite")
             if (maxDistance != null && d > maxDistance) continue
             if (!top.admits(d, v)) continue
