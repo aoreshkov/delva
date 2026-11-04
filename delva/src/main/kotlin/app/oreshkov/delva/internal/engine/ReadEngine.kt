@@ -9,6 +9,7 @@ import app.oreshkov.delva.Cursor
 import app.oreshkov.delva.DiffOptions
 import app.oreshkov.delva.Difference
 import app.oreshkov.delva.DocId
+import app.oreshkov.delva.DocumentFilter
 import app.oreshkov.delva.DocumentKeyQuery
 import app.oreshkov.delva.DocumentNotFoundException
 import app.oreshkov.delva.DocumentRejectedException
@@ -28,6 +29,11 @@ import app.oreshkov.delva.SelectResult
 import app.oreshkov.delva.StoreInfo
 import app.oreshkov.delva.TypeInfo
 import app.oreshkov.delva.TypePage
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
+import app.oreshkov.delva.VectorQuery
+import app.oreshkov.delva.VectorQueryPlan
+import app.oreshkov.delva.VectorSearchResult
 import app.oreshkov.delva.VerifyProgress
 import app.oreshkov.delva.VerifyReport
 import app.oreshkov.delva.internal.canon.Nfc
@@ -50,6 +56,7 @@ import app.oreshkov.delva.internal.payload.PayloadTag
 import app.oreshkov.delva.internal.query.Candidates
 import app.oreshkov.delva.internal.query.DocumentBound
 import app.oreshkov.delva.internal.query.DocumentOrderEvaluator
+import app.oreshkov.delva.internal.query.EveryDocument
 import app.oreshkov.delva.internal.query.HitReader
 import app.oreshkov.delva.internal.query.LocatedNode
 import app.oreshkov.delva.internal.query.NodeLocator
@@ -59,11 +66,15 @@ import app.oreshkov.delva.internal.query.PathSearch
 import app.oreshkov.delva.internal.query.QueryExecutor
 import app.oreshkov.delva.internal.query.QueryTerm
 import app.oreshkov.delva.internal.query.StoredDocument
+import app.oreshkov.delva.internal.query.VectorScan
+import app.oreshkov.delva.internal.query.VectorSearch
 import app.oreshkov.delva.internal.split.SpillFiles
 import app.oreshkov.delva.internal.store.FragmentStore
 import app.oreshkov.delva.internal.types.TypeDictionary
 import app.oreshkov.delva.internal.types.TypeIndexView
 import app.oreshkov.delva.internal.types.TypeNames
+import app.oreshkov.delva.internal.vector.VectorDistance
+import app.oreshkov.delva.internal.vector.Vectors
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.nio.CharBuffer
@@ -232,6 +243,83 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
         }
     }
 
+    override fun search(query: VectorQuery): VectorSearchResult = searchVectors(query) {}
+
+    /**
+     * The vector [search], which also runs [checkpoint] every [VectorSearch.CHECK_EVERY] vectors compared: a caller
+     * whose wait was cancelled throws from it to stop a long scan.
+     */
+    fun searchVectors(query: VectorQuery, checkpoint: () -> Unit): VectorSearchResult {
+        checkUsable()
+        val field = vectorFieldFor(query)
+        val filter = query.documentFilter?.let(::normalized)
+        val planner = planner()
+        val requirement = filter?.let { planner.filterRequirement(it) }
+        if (filter != null && requirement == null && query.scan != ScanPolicy.ALLOW_SCAN) {
+            throw QueryRejectedException(
+                QueryRejectedException.Reason.NEEDS_SCAN,
+                "no index term of the document filter ${query.documentFilter} narrows the vector search",
+                query.documentFilter.toString(),
+            )
+        }
+        val rootTerms = filter?.let { planner.rootTerms(it) }.orEmpty()
+        return openResult { snapshot, version ->
+            val fragments = fragmentsOf(version)
+            val candidates = try {
+                if (requirement == null) {
+                    EveryDocument()
+                } else {
+                    Candidates.of(requirement, version, 0, wideRange = { EveryDocument() }.takeIf { query.scan == ScanPolicy.ALLOW_SCAN }, maxRangeDocuments = options.maxRangeDocuments)
+                }
+            } catch (e: Candidates.RangeTooWide) {
+                throw QueryRejectedException(
+                    QueryRejectedException.Reason.RANGE_TOO_WIDE,
+                    "the range ${e.range.text} of the document filter ${query.documentFilter} matches more than ${options.maxRangeDocuments} documents",
+                    query.documentFilter.toString(),
+                )
+            }
+            // Sources of their own: the candidates' are already past the document when it is tested.
+            val rootTermDocs = rootTerms.distinctBy { Candidates.key(it.term.term) }.map { Candidates.TermDocs(version, it.term.term, 0) }
+            val accept = filter?.let { expr ->
+                { docId: Long ->
+                    (rootTermDocs.isEmpty() || rootTermDocs.any { it.openContainers(docId) && it.nextContainer() == 0L }) && run {
+                        val doc = StoredDocument(fragments, docId)
+                        val root = doc.node(0)
+                        PathEvaluator(doc, root, options.compareCacheBytes).test(expr, root)
+                    }
+                }
+            }
+            val search = VectorSearch(
+                VectorScan(version, field.dimensions), candidates, snapshot.visibility, VectorDistance(field.metric, query.queryValues),
+                query.k, query.maxDistance, accept,
+            ) {
+                checkUsable()
+                checkpoint()
+            }
+            val top = search.run()
+            val types = TypeIndexView(version, snapshot.visibility, snapshot.lsn)
+            EngineVectorSearchResult(this, snapshot, version, fragments, types, keysOf(version), dictionaryOf(version), search, top)
+        }
+    }
+
+    override fun explain(query: VectorQuery): VectorQueryPlan {
+        checkUsable()
+        vectorFieldFor(query)
+        val requirement = query.documentFilter?.let { planner().filterRequirement(normalized(it)) }
+        val vectors = withView { _, version ->
+            version.memtables.sumOf { it.vectors.size.toLong() } + version.vectorSegments.sumOf { it.reader.stats.entryCount }
+        }
+        return VectorQueryPlan(vectors, requirement == null, requirement?.describe(), query.documentFilter != null)
+    }
+
+    /** The store's vector field, after checking that [query] can be searched in it. */
+    private fun vectorFieldFor(query: VectorQuery): VectorField {
+        val field = checkNotNull(options.creation.vectorField) { "the store was created without a vector field" }
+        require(query.dimensions == field.dimensions) { "the query vector has ${query.dimensions} numbers, the store's vectors ${field.dimensions}" }
+        require(field.metric != VectorMetric.COSINE || !Vectors.isZero(query.queryValues)) { "the query vector is zero, which has no direction under COSINE" }
+        return field
+    }
+
     override fun get(key: String): DocId? {
         checkKeyed()
         checkUsable()
@@ -262,9 +350,11 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
     }
 
     /** The query's document filter, normalized as the store's strings are. */
-    private fun documentFilter(query: JsonPathQuery): LogicalExpr? = query.documentFilter?.expr?.let {
-        if (options.creation.normalization == Normalization.NFC) it.normalized() else it
-    }
+    private fun documentFilter(query: JsonPathQuery): LogicalExpr? = query.documentFilter?.let(::normalized)
+
+    /** [filter]'s expression, normalized as the store's strings are. */
+    private fun normalized(filter: DocumentFilter): LogicalExpr =
+        if (options.creation.normalization == Normalization.NFC) filter.expr.normalized() else filter.expr
 
     private fun planner() = PathPlanner(options.indexPolicy, options.creation.hashTerms, options.store.maxDepth, options.creation.normalization)
 

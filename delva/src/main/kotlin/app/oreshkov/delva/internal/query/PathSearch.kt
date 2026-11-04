@@ -78,6 +78,9 @@ internal sealed interface Requirement {
 internal class PathPlanner(private val policy: IndexPolicy, private val hashTerms: Boolean, private val maxDepth: Int, private val normalization: Normalization) {
     fun requirement(query: PathQuery, filter: LogicalExpr? = null): Requirement? = all(listOf(filter?.let { expr(it) }) + query.segments.map { segment(it) })
 
+    /** What a document filter alone requires, for a search whose candidates only it narrows (a vector search). */
+    fun filterRequirement(filter: LogicalExpr): Requirement? = expr(filter)
+
     /**
      * Terms one of which every document [filter] accepts has with its root as the containing object: the filter's
      * comparisons of `@.name` or `@.name[i]` with a literal, and of `$.name` or `$.name[i]`, since both `@` and `$` are

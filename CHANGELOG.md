@@ -30,6 +30,9 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   `RejectReason.INVALID_VECTOR` rejects a document whose value at the field's path isn't one.
 - `delva`: `verify` checks the vector index of a store with a vector field, and reports its damage as
   `VerifyIssueKind.VECTOR_INDEX`.
+- `delva`: exact vector search (experimental): `search(VectorQuery)` returns the `k` documents nearest to a query
+  vector, each `VectorHit` with its distance, optionally within `maxDistance` and among the documents a
+  `DocumentFilter` accepts; `explain(VectorQuery)` tells how it finds its candidates.
 - `delva-cli`: `info` shows the store's vector field.
 
 ### Changed

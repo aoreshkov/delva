@@ -36,6 +36,7 @@ public abstract interface class app/oreshkov/delva/BlockingReadableJsonStore {
 	public abstract fun diff (Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;)Ljava/util/List;
 	public static synthetic fun diff$default (Lapp/oreshkov/delva/BlockingReadableJsonStore;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;ILjava/lang/Object;)Ljava/util/List;
 	public abstract fun explain (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/QueryPlan;
+	public abstract fun explain (Lapp/oreshkov/delva/VectorQuery;)Lapp/oreshkov/delva/VectorQueryPlan;
 	public abstract fun get--VXxeG8 (Ljava/lang/String;)Lapp/oreshkov/delva/DocId;
 	public abstract fun getCreationOptions ()Lapp/oreshkov/delva/CreationOptions;
 	public abstract fun info ()Lapp/oreshkov/delva/StoreInfo;
@@ -50,6 +51,7 @@ public abstract interface class app/oreshkov/delva/BlockingReadableJsonStore {
 	public abstract fun search (Lapp/oreshkov/delva/DocumentKeyQuery;)Lapp/oreshkov/delva/SearchResult;
 	public abstract fun search (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/SearchResult;
 	public abstract fun search (Lapp/oreshkov/delva/KeyValueQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun search (Lapp/oreshkov/delva/VectorQuery;)Lapp/oreshkov/delva/VectorSearchResult;
 	public abstract fun select (Lapp/oreshkov/delva/NodeRef;Lapp/oreshkov/delva/JsonPath;)Lapp/oreshkov/delva/SelectResult;
 	public abstract fun typeOf (Lapp/oreshkov/delva/NodeRef;)Ljava/lang/String;
 	public abstract fun verify (Lapp/oreshkov/delva/VerifyProgress;)Lapp/oreshkov/delva/VerifyReport;
@@ -667,6 +669,7 @@ public abstract interface class app/oreshkov/delva/ReadableJsonStore : java/lang
 	public abstract fun diff (Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun diff$default (Lapp/oreshkov/delva/ReadableJsonStore;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/CompareOperand;Lapp/oreshkov/delva/DiffOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
 	public abstract fun explain (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/QueryPlan;
+	public abstract fun explain (Lapp/oreshkov/delva/VectorQuery;)Lapp/oreshkov/delva/VectorQueryPlan;
 	public abstract fun get-y2eXV-M (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun getCreationOptions ()Lapp/oreshkov/delva/CreationOptions;
 	public abstract fun info ()Lapp/oreshkov/delva/StoreInfo;
@@ -683,6 +686,7 @@ public abstract interface class app/oreshkov/delva/ReadableJsonStore : java/lang
 	public abstract fun search (Lapp/oreshkov/delva/DocumentKeyQuery;)Lapp/oreshkov/delva/SearchResult;
 	public abstract fun search (Lapp/oreshkov/delva/JsonPathQuery;)Lapp/oreshkov/delva/SearchResult;
 	public abstract fun search (Lapp/oreshkov/delva/KeyValueQuery;)Lapp/oreshkov/delva/SearchResult;
+	public abstract fun search (Lapp/oreshkov/delva/VectorQuery;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun select (Lapp/oreshkov/delva/NodeRef;Lapp/oreshkov/delva/JsonPath;)Lapp/oreshkov/delva/SelectResult;
 	public abstract fun typeOf (Lapp/oreshkov/delva/NodeRef;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun verify (Lapp/oreshkov/delva/VerifyProgress;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -886,6 +890,21 @@ public final class app/oreshkov/delva/VectorField {
 public final class app/oreshkov/delva/VectorField$Companion {
 }
 
+public abstract interface class app/oreshkov/delva/VectorHit {
+	public abstract fun getDistance ()F
+	public abstract fun getDocId-kfl0ok0 ()J
+	public abstract fun getDocumentKey ()Ljava/lang/String;
+	public abstract fun getEncodedSize ()J
+	public fun getNode ()Lapp/oreshkov/delva/NodeRef;
+	public abstract fun getType ()Ljava/lang/String;
+	public fun readJsonAsString (I)Ljava/lang/String;
+	public abstract fun readJsonAsString (Lapp/oreshkov/delva/JsonFormat;I)Ljava/lang/String;
+	public static synthetic fun readJsonAsString$default (Lapp/oreshkov/delva/VectorHit;IILjava/lang/Object;)Ljava/lang/String;
+	public static synthetic fun readJsonAsString$default (Lapp/oreshkov/delva/VectorHit;Lapp/oreshkov/delva/JsonFormat;IILjava/lang/Object;)Ljava/lang/String;
+	public fun writeJsonTo (Ljava/io/OutputStream;)V
+	public abstract fun writeJsonTo (Ljava/io/OutputStream;Lapp/oreshkov/delva/JsonFormat;)V
+}
+
 public final class app/oreshkov/delva/VectorMetric : java/lang/Enum {
 	public static final field COSINE Lapp/oreshkov/delva/VectorMetric;
 	public static final field DOT_PRODUCT Lapp/oreshkov/delva/VectorMetric;
@@ -893,6 +912,42 @@ public final class app/oreshkov/delva/VectorMetric : java/lang/Enum {
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lapp/oreshkov/delva/VectorMetric;
 	public static fun values ()[Lapp/oreshkov/delva/VectorMetric;
+}
+
+public final class app/oreshkov/delva/VectorQuery {
+	public static final field Companion Lapp/oreshkov/delva/VectorQuery$Companion;
+	public static final field MAX_K I
+	public fun <init> ([FILjava/lang/Float;Lapp/oreshkov/delva/ScanPolicy;)V
+	public synthetic fun <init> ([FILjava/lang/Float;Lapp/oreshkov/delva/ScanPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun copy ([FILjava/lang/Float;Lapp/oreshkov/delva/ScanPolicy;)Lapp/oreshkov/delva/VectorQuery;
+	public static synthetic fun copy$default (Lapp/oreshkov/delva/VectorQuery;[FILjava/lang/Float;Lapp/oreshkov/delva/ScanPolicy;ILjava/lang/Object;)Lapp/oreshkov/delva/VectorQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDimensions ()I
+	public final fun getDocumentFilter ()Lapp/oreshkov/delva/DocumentFilter;
+	public final fun getK ()I
+	public final fun getMaxDistance ()Ljava/lang/Float;
+	public final fun getScan ()Lapp/oreshkov/delva/ScanPolicy;
+	public final fun getVector ()[F
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withDocumentFilter (Lapp/oreshkov/delva/DocumentFilter;)Lapp/oreshkov/delva/VectorQuery;
+}
+
+public final class app/oreshkov/delva/VectorQuery$Companion {
+}
+
+public final class app/oreshkov/delva/VectorQueryPlan {
+	public final fun getFullScan ()Z
+	public final fun getReadsDocuments ()Z
+	public final fun getTerms ()Ljava/lang/String;
+	public final fun getVectors ()J
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class app/oreshkov/delva/VectorSearchResult : java/lang/AutoCloseable {
+	public abstract fun getHits ()Ljava/util/List;
+	public abstract fun getSnapshotLsn ()J
+	public fun iterator ()Ljava/util/Iterator;
 }
 
 public final class app/oreshkov/delva/VerifyIssue {

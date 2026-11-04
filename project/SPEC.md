@@ -885,9 +885,18 @@ A replace ([7.1](#71-replace)) or an upsert gives the new document its own vecto
 ### 11.3 Search
 
 A vector search takes a **query vector**, of `dimensions` numbers that are finite and, under `COSINE`, not all zero
-(`IllegalArgumentException` otherwise), and returns the `k` visible documents whose vectors are nearest to it, with
-`k` from 1 to 10 000. Each hit is a document's root, as in `WHOLE_DOCUMENT` mode, with its **distance**, where smaller
-is closer:
+(`IllegalArgumentException` otherwise), and returns the `k` visible documents whose vectors are nearest to it. A
+store without a vector field refuses it with `IllegalStateException`.
+
+| Field | Meaning | Default |
+|---|---|---|
+| `vector` | the query vector | — |
+| `k` | the most hits, from 1 to 10 000 | 10 |
+| `maxDistance` | when given, leaves out every document farther than it; not NaN | none |
+| `scan` | `REJECT` or `ALLOW_SCAN`, for a document filter whose terms narrow nothing, see below | `REJECT` |
+| `documentFilter` | only documents whose root passes this filter ([10.5](#105-document-filters)) are candidates | none |
+
+Each hit is a document's root, as in `WHOLE_DOCUMENT` mode, with its **distance**, where smaller is closer:
 
 | Metric | Distance |
 |---|---|
@@ -896,18 +905,20 @@ is closer:
 | `EUCLIDEAN` | `‖q − v‖` |
 
 - Hits are ordered by distance ascending, and hits of equal distance by docId ascending. A search returns at most
-  `k` hits in one result, without a cursor.
-- `maxDistance`, when given, leaves out every document farther than it.
-- A document filter ([10.5](#105-document-filters)) restricts the candidates to the documents it accepts, before the
-  `k` nearest are chosen: the result is the `k` nearest of the accepted documents that have a vector, never fewer
-  when there are as many.
-  When the filter's terms narrow nothing, the search fails with `QueryRejectedException` (`NEEDS_SCAN`) unless `scan`
-  is `ALLOW_SCAN`, as a JSONPath search does ([10.4](#104-search)).
+  `k` hits in one result, without a cursor; the hits' documents are read when a hit is read.
+- A document filter restricts the candidates to the documents it accepts, before the `k` nearest are chosen: the
+  result is the `k` nearest of the accepted documents that have a vector, never fewer when there are as many. Its
+  terms ([10.4](#104-search)) narrow the candidates through the index. When they narrow nothing, the search fails with
+  `QueryRejectedException` (`NEEDS_SCAN`) unless `scan` is `ALLOW_SCAN`, and a range that matches too many documents
+  fails it with `RANGE_TOO_WIDE`, or narrows nothing when a scan is allowed, as in a JSONPath search. Without a filter,
+  a search compares every vector, and is never refused.
 - A search sees the store as of its start ([8](#8-consistency)): a document inserted later isn't a hit, and one deleted
   later still can be.
-- Distances are computed in 32-bit floating point. Their last bits MAY differ between versions of Delva, and so MAY
-  the order of documents whose distances differ only there.
-- `explain` tells how many vectors a search would compare, the filter's terms, and whether it would read documents.
+- A distance is a 32-bit float, computed from the 32-bit values of both vectors. It is never NaN, and is infinite
+  when it is too large for a float, as a dot product of huge vectors can be; `-0` is `0`. Its last bits MAY differ
+  between versions of Delva, and so MAY the order of documents whose distances differ only there.
+- `explain` tells how many vectors the index holds, the most a search compares, the filter's terms, and whether the
+  search would read documents to test the filter.
 
 ---
 
