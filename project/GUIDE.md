@@ -176,6 +176,73 @@ blocking.search(orderSkus).use { result ->
 }
 ```
 
+## Storing embeddings
+
+An embedding, the vector of numbers a model computes from a text so that similar texts get nearby vectors, is stored
+as a JSON array. Delva has no vector index yet ([roadmap](ROADMAP.md#engine)), so the nearest ones are found in your
+own code, and four habits keep the store small and ready for one.
+
+**Leave the vector's key out of the index.** Each number of an indexed array is a posting, and nobody searches for one
+of them, so create the store with `CreationOptions(excludedKeys = setOf("embedding"))`. The option is fixed when the
+store is created, so a store that exists has to be copied into a new one. It applies to the key at any depth, and a
+key–value search on that key fails with `NOT_INDEXED` ([SPEC.md](SPEC.md#41-query)).
+
+**Write the numbers short.** Numbers are stored as they are spelled. Nine significant digits keep any float32 exactly,
+and Java's `Float.toString` writes the shortest text that reads back as the same float32, which is all the vectors of
+a float32 model need. A serializer that widens float32 to float64 first writes up to 17 digits. Per document, measured
+on one Windows machine with 10,000 chunks of 768 dimensions:
+
+| Numbers | Vector key | JSON | Stored | Index | Inserts/s | Top 10 of all |
+|---|---|---|---|---|---|---|
+| float32, shortest | excluded | 9.5 KB | 4.0 KB | 58 B | 1,370 | 1.3 s |
+| float64, 17 digits | excluded | 16.2 KB | 8.0 KB | 59 B | 1,520 | 1.9 s |
+| float32, shortest | indexed | 9.5 KB | 4.0 KB | 22.8 KB | 750 | 1.4 s |
+
+**One document per chunk.** Store each chunk of a text as a document of its own, with a reference to its source such
+as `"source": "doc-17"`. A document filter then finds a source's chunks, and `replace` swaps one chunk without
+rewriting the others. One vector per document is also what the roadmap's vector search takes.
+
+**Record the model.** Vectors from two models, or from two versions of one, can't be compared. Keep one model per
+store, or put `"model": "…"` in each chunk and filter on it. A new model means new vectors, and so new documents.
+
+The nearest chunks are a search for the embedding's path, whose hits are the candidates' arrays, and a heap of the
+best k:
+
+```kotlin
+JsonStore.create(dir, CreationOptions(excludedKeys = setOf("embedding"))).use { chunks ->
+    val db = chunks.blocking()
+    db.insert("""{"source":"doc-17","chunk":3,"model":"embed-v1","text":"…","embedding":[0.0123,-0.441,0.2087]}""")
+    @OptIn(ExperimentalDelvaApi::class)
+    val hits = nearest(db, queryVector, k = 10, DocumentFilter.compile("@.model == 'embed-v1'"))
+}
+
+@OptIn(ExperimentalDelvaApi::class)
+fun nearest(db: BlockingReadableJsonStore, query: FloatArray, k: Int, filter: DocumentFilter): List<Pair<Double, DocId>> {
+    val nearestFirst = compareBy<Pair<Double, DocId>>({ it.first }, { it.second.raw })
+    val best = PriorityQueue(k, nearestFirst.reversed())                      // the farthest of the best k on top
+    db.search(JsonPathQuery(JsonPath.compile("$.embedding")).withDocumentFilter(filter)).use { result ->
+        for (hit in result) {
+            val numbers = hit.readJsonAsString().removeSurrounding("[", "]").split(',')
+            val candidate = cosineDistance(query, FloatArray(numbers.size) { numbers[it].toFloat() }) to hit.docId
+            if (best.size < k) {
+                best += candidate
+            } else if (nearestFirst.compare(candidate, best.peek()) < 0) {
+                best.poll()
+                best += candidate
+            }
+        }
+    }
+    return best.sortedWith(nearestFirst)
+}
+```
+
+`cosineDistance` is `1 − cos θ`, summed in double precision. Comparing the distance and then the docId puts ties in
+docId order, so a store and a query always give the same answer. The filter's comparison with a literal is an index
+term, so a more selective filter means fewer chunks read. Every candidate's embedding is still read and parsed from
+JSON, about 0.13 ms each at 768 dimensions: the last column of the table above is this search over all 10,000 chunks.
+It suits filters that leave hundreds of candidates, or a few thousand where a second is acceptable.
+[`EmbeddingSearch`](../delva-examples/README.md) in delva-examples is the whole program.
+
 ## Templates
 
 A **template** (experimental) is a query or a document filter with `${name}` placeholders where literals go. It is

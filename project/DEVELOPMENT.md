@@ -29,7 +29,7 @@ These are left out of `check` because they take long:
 |---|---|
 | `heapCappedTest` | `*HeapCappedTest`: huge documents under a 256 MB heap, proving memory is bounded by the options, not by document size |
 | `crashTest` | `*CrashTest`: child JVMs killed mid-write, proving an insert is whole or absent after a real crash |
-| `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads |
+| `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads, and `-Ddelva.report.embeddings=10000` the number of chunks its embedding sizes are measured on |
 | `:delva-intellij-plugin:verifyPlugin` | the IntelliJ Plugin Verifier, against the lowest IDE the plugin supports and the newest EAP, both downloaded |
 | `:delva-intellij-plugin:integrationTest` | `*IntegrationTest`: the plugin's ZIP installed in the IntelliJ IDEA it builds against and driven through its UI, with JetBrains' Starter and Driver; see [below](#the-intellij-plugin) |
 

@@ -172,7 +172,7 @@ object PerformanceReportChild {
     }
 
     /** Bytes written in [dir]; lane files are preallocated with zeros, so their tail of zeros doesn't count. */
-    private fun sizeOf(dir: Path): Long = Files.list(dir).use { paths ->
+    fun sizeOf(dir: Path): Long = Files.list(dir).use { paths ->
         paths.toList().sumOf { path -> if (path.fileName.toString().endsWith(".frag")) writtenBytes(path) else path.fileSize() }
     }
 
