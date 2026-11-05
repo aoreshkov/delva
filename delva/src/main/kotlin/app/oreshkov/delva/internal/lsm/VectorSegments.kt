@@ -6,48 +6,56 @@ import app.oreshkov.delva.internal.bytes.BigEndian
 import app.oreshkov.delva.internal.bytes.LittleEndian
 import app.oreshkov.delva.internal.io.FileIo
 import app.oreshkov.delva.internal.vector.Vectors
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
+import java.nio.ByteOrder
 import java.util.PriorityQueue
 
 /**
  * Vector segments: one entry per document with a vector, in docId order.
  * ```
  * key   := docId:u64                                  big-endian, so keys sort by docId
- * value := norm:f32 | { value:f32 }× dimensions       little-endian IEEE 754 bits, as the COMMIT logs them
+ * value := squares:f64 | { value:f32 }× dimensions   little-endian IEEE 754 bits, the values as the COMMIT logs them
  * ```
- * Every value has the same length, `4 + 4 × dimensions` bytes, and is always inline. The norm is [Vectors.norm] of the
- * values, stored so that a search under any metric needs one dot product per vector. There is no bloom filter: a lookup
- * by docId is bounded by the segment's docId range and its block index, and a search reads every block anyway. The
- * stats count vectors in both `entryCount` and `itemCount`.
+ * Every value has the same length, `8 + 4 × dimensions` bytes, and is always inline. `squares` is [Vectors.squares] of
+ * the values, stored so that a search under any metric needs one dot product per vector. There is no bloom filter: a
+ * lookup by docId is bounded by the segment's docId range and its block index, and a search reads every block anyway.
+ * The stats count vectors in both `entryCount` and `itemCount`.
  */
 internal object VectorSegments {
     const val KEY_BYTES: Int = 8
 
     /** Bytes of one entry's value for vectors of [dimensions] numbers. */
-    fun valueBytes(dimensions: Int): Int = 4 + 4 * dimensions
+    fun valueBytes(dimensions: Int): Int = SQUARES_BYTES + 4 * dimensions
+
+    private const val SQUARES_BYTES = 8
 
     fun key(docId: Long): ByteArray = ByteArray(KEY_BYTES).also { BigEndian.putLong(it, 0, docId) }
 
     /** The value of a vector, written into [out] (of [valueBytes] bytes). */
-    fun encode(values: FloatArray, norm: Float, out: ByteArray) {
-        LittleEndian.putInt(out, 0, norm.toRawBits())
-        for (i in values.indices) LittleEndian.putInt(out, 4 + 4 * i, values[i].toRawBits())
+    fun encode(values: FloatArray, squares: Double, out: ByteArray) {
+        LittleEndian.putLong(out, 0, squares.toRawBits())
+        for (i in values.indices) LittleEndian.putInt(out, SQUARES_BYTES + 4 * i, values[i].toRawBits())
     }
 
     /**
      * The docId of the cursor's entry, its values read into [values] (of the field's dimensions); returns the stored
-     * norm. Throws [CorruptionException] when the entry isn't shaped as one of a vector segment; [problem] checks what
-     * the numbers mean.
+     * sum of squares. Throws [CorruptionException] when the entry isn't shaped as one of a vector segment; [problem]
+     * checks what the numbers mean.
      */
-    fun read(cursor: SegmentCursor, values: FloatArray, source: String): Float {
+    fun read(cursor: SegmentCursor, values: FloatArray, source: String): Double {
         val docId = docIdOf(cursor, source)
         if (cursor.valueExternal || cursor.valueLength != valueBytes(values.size)) {
             throw CorruptionException(source, "vector of document $docId in ${if (cursor.valueExternal) "an external value" else "${cursor.valueLength} bytes"}, not ${valueBytes(values.size)}")
         }
         val bytes = cursor.valueBytes
         val at = cursor.valueOffset
-        for (i in values.indices) values[i] = Float.fromBits(LittleEndian.getInt(bytes, at + 4 + 4 * i))
-        return Float.fromBits(LittleEndian.getInt(bytes, at))
+        // One bulk copy, a plain memory copy on a little-endian machine; a search decodes every vector it compares.
+        MemorySegment.copy(MemorySegment.ofArray(bytes), LITTLE_ENDIAN_FLOAT, at + SQUARES_BYTES.toLong(), values, 0, values.size)
+        return Double.fromBits(LittleEndian.getLong(bytes, at))
     }
+
+    private val LITTLE_ENDIAN_FLOAT: ValueLayout.OfFloat = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN)
 
     /** The docId of the cursor's entry; throws [CorruptionException] when its key isn't one. */
     fun docIdOf(cursor: SegmentCursor, source: String): Long {
@@ -59,13 +67,13 @@ internal object VectorSegments {
 
     /**
      * What is wrong with a stored vector of [field]: the [problem][Vectors.commitProblem] a COMMIT with it would have,
-     * or a [norm] that isn't the one its values give; null when it's sound.
+     * or a sum of [squares] that isn't the one its values give; null when it's sound.
      */
-    fun problem(values: FloatArray, norm: Float, field: VectorField): String? {
+    fun problem(values: FloatArray, squares: Double, field: VectorField): String? {
         Vectors.commitProblem(values, field)?.let { return it }
-        val expected = Vectors.norm(values)
-        // Compared by bits: the norm is computed one way, so any other bits are damage.
-        if (norm.toRawBits() != expected.toRawBits()) return "with the norm $norm, but its values give $expected"
+        val expected = Vectors.squares(values)
+        // Compared by bits: the sum is computed one way, so any other bits are damage.
+        if (squares.toRawBits() != expected.toRawBits()) return "with the sum of squares $squares, but its values give $expected"
         return null
     }
 
@@ -84,7 +92,7 @@ internal object VectorSegments {
             if (hidden.contains(e.docId)) continue
             check(e.values.size == dimensions) { "a vector of ${e.values.size} numbers in a store of $dimensions" }
             val key = key(e.docId)
-            encode(e.values, e.norm, value)
+            encode(e.values, e.squares, value)
             writer.add(key, 0, KEY_BYTES, value, 0, value.size)
             count++
             minDocId = minOf(minDocId, e.docId)
@@ -133,9 +141,9 @@ internal object VectorSegments {
             val docId = docIds[i]
             if (++read and 0xFF == 0L) control.checkContinue()
             if (docId != maxDocId && !hidden.contains(docId)) {
-                val norm = read(c, values, inputs[i].source)
-                problem(values, norm, field)?.let { throw CorruptionException(inputs[i].source, "vector of document $docId $it") }
-                encode(values, norm, value)
+                val squares = read(c, values, inputs[i].source)
+                problem(values, squares, field)?.let { throw CorruptionException(inputs[i].source, "vector of document $docId $it") }
+                encode(values, squares, value)
                 writer.add(c.key.array, 0, KEY_BYTES, value, 0, value.size)
                 count++
                 minDocId = minOf(minDocId, docId)
@@ -172,8 +180,8 @@ internal class VectorIndexView(
             val cursor = reader.cursor()
             if (cursor.seekCeiling(key) && VectorSegments.docIdOf(cursor, reader.source) == docId) {
                 val values = FloatArray(dimensions)
-                val norm = VectorSegments.read(cursor, values, reader.source)
-                return VectorEntry(docId, values, norm)
+                val squares = VectorSegments.read(cursor, values, reader.source)
+                return VectorEntry(docId, values, squares)
             }
         }
         return null

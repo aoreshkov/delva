@@ -2,15 +2,20 @@ package app.oreshkov.delva.internal.engine
 
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocId
+import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.StoreLockedException
 import app.oreshkov.delva.StoreOptions
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
+import app.oreshkov.delva.VectorQuery
 import app.oreshkov.delva.internal.io.JdkFileSystemIo
 import app.oreshkov.delva.internal.log.LogOptions
 import java.io.BufferedReader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import kotlin.math.sqrt
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,6 +32,8 @@ import kotlin.test.assertTrue
  *   acknowledged one or the one that was being written: a replace never takes effect in part.
  * - Upserts: documents of five keys in turn; after every kill each key has exactly one visible document, the last
  *   acknowledged one or the one that was being written.
+ * - Vectors: inserts into a store with a vector field; after every kill a vector search finds exactly the visible
+ *   documents that hold a vector, each at the distance its document gives.
  */
 class ChildJvmCrashTest {
     @Test
@@ -141,6 +148,38 @@ class ChildJvmCrashTest {
         }
     }
 
+    @Test
+    fun `a killed process leaves each vector visible exactly when its document is`() {
+        val dir = Files.createTempDirectory("delva-crash-vector")
+        val random = Random(System.getProperty("delva.seed")?.toLong() ?: System.nanoTime())
+        try {
+            var next = 0
+            repeat(ROUNDS) { round ->
+                runChild(dir, random, next.toString(), "vector") { _, i -> next = maxOf(next, i + 1) }
+                Engine.open(dir, crashChildOptions(vector = true), JdkFileSystemIo()).use { store ->
+                    val visible = store.documents()
+                    // The visible documents with a vector, nearest to the origin first, as the documents themselves give
+                    // them: the oracle for the index, which must hold no more and no fewer.
+                    val expected = visible.mapNotNull { (docId, json) ->
+                        val i = Regex(""""i":(\d+)""").find(json)!!.groupValues[1].toInt()
+                        if (json != CrashChild.vectorDoc(i)) return@mapNotNull null
+                        val v = CrashChild.vector(i)
+                        Triple(sqrt(v.sumOf { it.toDouble() * it }).toFloat(), docId, json)
+                    }.sortedWith(compareBy({ it.first }, { it.second })).take(VectorQuery.MAX_K)
+                    val hits = store.search(VectorQuery(FloatArray(CrashChild.VECTOR_DIMENSIONS), k = VectorQuery.MAX_K)).use { result ->
+                        result.hits.map { Triple(it.distance, it.docId.raw, it.readJsonAsString()) }
+                    }
+                    assertEquals(expected, hits, "round $round")
+                    assertEquals(0, store.damagedDocIds.size)
+                    assertEquals(emptyList(), store.verify().issues.map { it.toString() }, "round $round: verify")
+                }
+                println("round $round: $next documents written")
+            }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
     /**
      * Runs [CrashChild] with [args] after the directory, calls [whileRunning] once it acknowledged a write, kills it at a
      * random time, and reports every acknowledgement.
@@ -187,8 +226,11 @@ class ChildJvmCrashTest {
     }
 }
 
-internal fun crashChildOptions(keyed: Boolean = false) = EngineOptions(
-    CreationOptions(fragmentBytes = 256).withDocumentKey(if (keyed) "$.id" else null), StoreOptions(encoderBudgetBytes = 1024),
+@OptIn(ExperimentalDelvaApi::class)
+internal fun crashChildOptions(keyed: Boolean = false, vector: Boolean = false) = EngineOptions(
+    CreationOptions(fragmentBytes = 256).withDocumentKey(if (keyed) "$.id" else null)
+        .withVectorField(if (vector) VectorField("$.v", CrashChild.VECTOR_DIMENSIONS, VectorMetric.EUCLIDEAN) else null),
+    StoreOptions(encoderBudgetBytes = 1024),
     smallInsertThreshold = 4096,
     log = LogOptions(laneFileBytes = 64 * 1024, controlFileBytes = 16 * 1024, preallocateBytes = 8192),
     // Flushes on the flush thread every few dozen documents, so kills also hit segment and MANIFEST writes.
@@ -214,25 +256,37 @@ internal fun churnChildOptions() = EngineOptions(
  * wrote with the next, and `CrashChild <dir> <first index> upsert` upserts documents of five keys in turn in a store
  * with document keys. `CrashChild <dir> <first index> churn` ([churnChildOptions]) inserts documents and, after every
  * other one, deletes the oldest live document, reporting `DEL <docId>` once a delete is acknowledged.
+ * `CrashChild <dir> <first index> vector` inserts documents with a [vector] each, in a store with a vector field, one
+ * document in five without one.
  */
 object CrashChild {
+    const val VECTOR_DIMENSIONS = 3
+
     fun doc(i: Int): String = """{"all":true,"i":$i,"items":[${(0 until i % 40).joinToString(",") { """{"k":$it,"s":"${"z".repeat(it * 3)}"}""" }}]}"""
 
     fun key(i: Int): String = "k${i % 5}"
 
     fun keyedDoc(i: Int): String = """{"all":true,"id":"${key(i)}",""" + doc(i).removePrefix("""{"all":true,""")
 
+    /** The vector of document [i], whose distance from the origin grows with [i]. */
+    fun vector(i: Int): FloatArray = floatArrayOf(i.toFloat(), (i % 7).toFloat(), 1f)
+
+    /** Document [i] with its [vector] after the items, so that it lands in a later fragment than the document's start. */
+    fun vectorDoc(i: Int): String = doc(i).removeSuffix("}") + ""","v":${vector(i).joinToString(",", "[", "]")}}"""
+
     @JvmStatic
     fun main(args: Array<String>) {
         if (args.getOrNull(2) == "churn") return churn(Path.of(args[0]), args[1].toInt())
         val replacing = args.getOrNull(2) == "replace"
         val upserting = args.getOrNull(2) == "upsert"
+        val vectors = args.getOrNull(2) == "vector"
         var previous = if (replacing) args[3].toLong() else 0L
-        Engine.open(Path.of(args[0]), crashChildOptions(keyed = upserting), JdkFileSystemIo()).use { store ->
+        Engine.open(Path.of(args[0]), crashChildOptions(keyed = upserting, vector = vectors), JdkFileSystemIo()).use { store ->
             var i = args[1].toInt()
             while (true) {
                 val docId = when {
                     upserting -> store.upsert(keyedDoc(i))
+                    vectors -> store.insert(if (i % 5 == 4) doc(i) else vectorDoc(i))
                     previous > 0 -> store.replace(listOf(DocId(previous)), doc(i))
                     else -> store.insert(doc(i))
                 }.raw

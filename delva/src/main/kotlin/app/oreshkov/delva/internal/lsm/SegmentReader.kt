@@ -65,7 +65,11 @@ internal class SegmentReader private constructor(
         return bytes
     }
 
-    fun cursor(): SegmentCursor = SegmentCursor(this)
+    /**
+     * A cursor over the segment. With [admit] false, a block it reads that isn't cached already isn't added to the
+     * cache either: a scan of a large segment then leaves the cache as it found it.
+     */
+    fun cursor(admit: Boolean = true): SegmentCursor = SegmentCursor(this, admit)
 
     /**
      * Reads every bloom page through its CRC check; a filter kept on the heap was checked when the segment
@@ -88,8 +92,8 @@ internal class SegmentReader private constructor(
         return lo
     }
 
-    /** The verified bytes of block [i], trailer included. */
-    internal fun block(i: Int): ByteArray {
+    /** The verified bytes of block [i], trailer included, added to the cache when read from the file if [admit]. */
+    internal fun block(i: Int, admit: Boolean = true): ByteArray {
         val offset = blockOffsets[i]
         val key = cacheKey(offset)
         cache.get(key)?.let { return it }
@@ -105,7 +109,7 @@ internal class SegmentReader private constructor(
             if (at <= previous || at >= entriesEnd || (r == 0 && at != 0)) throw CorruptionException("$source@$offset", "restart point $at")
             previous = at
         }
-        cache.put(key, bytes)
+        if (admit) cache.put(key, bytes)
         return bytes
     }
 
@@ -243,9 +247,11 @@ internal class SegmentReader private constructor(
 
 /**
  * Walks the entries of one segment in key order: [seekCeiling], [seekFloor], [first] and [next] position it on an
- * entry, whose [key] and value ([valueLength], inline or external) are then available. Reusable; not thread-safe.
+ * entry, whose [key] and value ([valueLength], inline or external) are then available. A seek that lands in the block
+ * it holds keeps it rather than fetching it again. Blocks it reads go into the cache only with [admit]. Reusable; not
+ * thread-safe.
  */
-internal class SegmentCursor(private val segment: SegmentReader) {
+internal class SegmentCursor(private val segment: SegmentReader, private val admit: Boolean = true) {
     /** Key of the current entry: `key.array[0, key.size)`. */
     val key = GrowableBytes(64)
 
@@ -265,6 +271,9 @@ internal class SegmentCursor(private val segment: SegmentReader) {
         private set
 
     private var blockIndex = -1
+
+    /** Where errors in the current block point; built once per block, not once per entry. */
+    private var blockSource = segment.source
     private var bytes = EMPTY
     private var position = 0
     private var entriesEnd = 0
@@ -419,7 +428,10 @@ internal class SegmentCursor(private val segment: SegmentReader) {
     private fun restartOffset(r: Int): Int = LittleEndian.getInt(bytes, entriesEnd + 4 * r)
 
     private fun loadBlock(b: Int) {
-        bytes = segment.block(b)
+        // Blocks never change, so the one held is still the block; a block read past the cache isn't fetched twice.
+        if (b == blockIndex && bytes !== EMPTY) return
+        bytes = segment.block(b, admit)
+        blockSource = "${segment.source} block $b"
         blockIndex = b
         entriesEnd = bytes.size - 8 - 4 * LittleEndian.getInt(bytes, bytes.size - 8)
     }
@@ -430,7 +442,7 @@ internal class SegmentCursor(private val segment: SegmentReader) {
             return false
         }
         val at = position
-        reader.reset(bytes, position, entriesEnd - position, "${segment.source} block $blockIndex")
+        reader.reset(bytes, position, entriesEnd - position, blockSource)
         val shared = reader.readVarInt(key.size)
         if (entryIndex % SegmentFormat.RESTART_INTERVAL == 0) {
             val r = entryIndex / SegmentFormat.RESTART_INTERVAL

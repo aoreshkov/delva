@@ -486,20 +486,20 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
 
     /**
      * The vector index against the vector field, still in the INDEX phase: in every memtable and segment, each vector,
-     * hidden or not, fits the field and has the norm its numbers give, and the docIds ascend. Damage that stops the walk
-     * of a segment is reported once, and the walk goes on with the next one.
+     * hidden or not, fits the field and has the sum of squares its numbers give, and the docIds ascend. Damage that
+     * stops the walk of a segment is reported once, and the walk goes on with the next one.
      */
     private fun checkVectorIndex(version: Version) {
         val field = options.creation.vectorField ?: return
         val values = FloatArray(field.dimensions)
-        val check = { source: String, docId: Long, previous: Long, vector: FloatArray, norm: Float ->
+        val check = { source: String, docId: Long, previous: Long, vector: FloatArray, squares: Double ->
             if (docId <= previous) issue(VerifyIssueKind.VECTOR_INDEX, source, "the vector of document $docId follows that of document $previous", document = DocId(docId))
-            VectorSegments.problem(vector, norm, field)?.let { issue(VerifyIssueKind.VECTOR_INDEX, source, "document $docId is indexed $it", document = DocId(docId)) }
+            VectorSegments.problem(vector, squares, field)?.let { issue(VerifyIssueKind.VECTOR_INDEX, source, "document $docId is indexed $it", document = DocId(docId)) }
         }
         for (m in version.memtables) {
             var previous = -1L
             for (e in m.vectors.entries()) {
-                check("vector index", e.docId, previous, e.values, e.norm)
+                check("vector index", e.docId, previous, e.values, e.squares)
                 previous = e.docId
             }
         }
@@ -511,8 +511,8 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
                 var previous = -1L
                 while (ok) {
                     val docId = VectorSegments.docIdOf(cursor, segment.source)
-                    val norm = VectorSegments.read(cursor, values, segment.source)
-                    check("${segment.source} block ${cursor.block}", docId, previous, values, norm)
+                    val squares = VectorSegments.read(cursor, values, segment.source)
+                    check("${segment.source} block ${cursor.block}", docId, previous, values, squares)
                     previous = docId
                     ok = cursor.next()
                 }

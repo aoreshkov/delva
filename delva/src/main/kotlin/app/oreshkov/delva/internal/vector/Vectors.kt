@@ -2,18 +2,18 @@ package app.oreshkov.delva.internal.vector
 
 import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.VectorMetric
-import kotlin.math.sqrt
 
 /** Rules about stored vectors (SPEC.md §11.2) that inserts, replay and verify share. */
 internal object Vectors {
     /**
-     * The Euclidean length of [values] as a float32: the sum of squares is taken in double precision, so it neither
-     * overflows nor underflows for any float32 input, and is rounded once.
+     * The sum of the squares of [values], the square of their Euclidean length, in double precision and in index
+     * order. A square of a float32 is exact in a double, and no sum of up to 4,096 of them overflows or underflows
+     * there, so it is positive for every vector that isn't zero, subnormal ones included, and close to exact.
      */
-    fun norm(values: FloatArray): Float {
+    fun squares(values: FloatArray): Double {
         var sum = 0.0
         for (v in values) sum += v.toDouble() * v
-        return sqrt(sum).toFloat()
+        return sum
     }
 
     /** Whether every element of [values] is zero, either sign. */

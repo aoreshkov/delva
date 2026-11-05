@@ -11,13 +11,15 @@ import kotlin.test.assertTrue
 
 class VectorsTest {
     @Test
-    fun `the norm is taken in double precision and rounded once`() {
-        assertEquals(5f, Vectors.norm(floatArrayOf(3f, -4f)))
-        assertEquals(0f, Vectors.norm(floatArrayOf(0f, -0f)))
+    fun `the sum of squares is taken in double precision, where it neither overflows nor underflows`() {
+        assertEquals(25.0, Vectors.squares(floatArrayOf(3f, -4f)))
+        assertEquals(0.0, Vectors.squares(floatArrayOf(0f, -0f)))
         // Squares of these overflow float32, and those of the subnormals underflow it.
-        assertEquals(Float.MAX_VALUE, Vectors.norm(floatArrayOf(Float.MAX_VALUE, 0f)))
-        assertEquals(Float.MIN_VALUE, Vectors.norm(floatArrayOf(-Float.MIN_VALUE)))
-        assertEquals(Float.POSITIVE_INFINITY, Vectors.norm(floatArrayOf(Float.MAX_VALUE, Float.MAX_VALUE)))
+        val max = Float.MAX_VALUE.toDouble()
+        assertEquals(2 * max * max, Vectors.squares(floatArrayOf(Float.MAX_VALUE, -Float.MAX_VALUE)))
+        val min = Float.MIN_VALUE.toDouble()
+        assertEquals(min * min, Vectors.squares(floatArrayOf(-Float.MIN_VALUE, 0f)))
+        assertTrue(min * min > 0)
     }
 
     @Test
