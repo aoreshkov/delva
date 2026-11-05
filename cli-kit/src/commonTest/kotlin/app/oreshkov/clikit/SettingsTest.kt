@@ -97,11 +97,33 @@ class SettingsTest {
         val missing = parse(Held(Setting("user", "\${user}", "u:4")), "login")
         assertEquals(
             ParseResult.UsageError(
-                "missing required option --user (given '\${user}' from u:4, which counts as not set)",
+                "missing required option --user (or the setting 'user'; given '\${user}' from u:4, which counts as not set)",
                 root.pathTo("login"),
             ),
             missing,
         )
+        // A program that reads no settings has no setting to name.
+        val none = Parser(root).parse(listOf("login"))
+        assertIs<ParseResult.UsageError>(none)
+        assertEquals("missing required option --user", none.message)
+    }
+
+    @Test
+    fun `an option's positional spelling wins over the variable and the settings, and an unset one gives way`() {
+        val path = Option.Single("--path", unfilled, env = "DEMO_PATH", config = "path")
+        val pathArgument = Argument.Single.spelling(path)
+        val show = CommandSpec("show", options = listOf(path), arguments = listOf(pathArgument))
+        val settings = Held(Setting("path", "/set", "u:1"))
+        fun value(vararg args: String, env: Map<String, String> = emptyMap()): String? {
+            val parsed = Parser(show, env::get, settings).parse(args.toList())
+            assertIs<ParseResult.Invocation>(parsed, args.joinToString(" "))
+            return parsed.values[path]
+        }
+        assertEquals("/typed", value("/typed", env = mapOf("DEMO_PATH" to "/env")))
+        assertEquals("/env", value(env = mapOf("DEMO_PATH" to "/env")))
+        assertEquals("/set", value())
+        assertEquals("/set", value("\${p}"))
+        assertEquals("/set", value("\${p}", env = mapOf("DEMO_PATH" to "\${e}")))
     }
 
     // ------------------------------------------------------------------------------------ errors and warnings

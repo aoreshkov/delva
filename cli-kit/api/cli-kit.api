@@ -16,9 +16,16 @@ public abstract class app/oreshkov/clikit/Argument : app/oreshkov/clikit/Operand
 }
 
 public final class app/oreshkov/clikit/Argument$Single : app/oreshkov/clikit/Argument {
+	public static final field Companion Lapp/oreshkov/clikit/Argument$Single$Companion;
 	public fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;Z)V
 	public synthetic fun <init> (Ljava/lang/String;Lapp/oreshkov/clikit/ValueConverter;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getConverter ()Lapp/oreshkov/clikit/ValueConverter;
+	public final fun getSpellingOf ()Lapp/oreshkov/clikit/Option$Single;
+}
+
+public final class app/oreshkov/clikit/Argument$Single$Companion {
+	public final fun spelling (Lapp/oreshkov/clikit/Option$Single;Ljava/lang/String;)Lapp/oreshkov/clikit/Argument$Single;
+	public static synthetic fun spelling$default (Lapp/oreshkov/clikit/Argument$Single$Companion;Lapp/oreshkov/clikit/Option$Single;Ljava/lang/String;ILjava/lang/Object;)Lapp/oreshkov/clikit/Argument$Single;
 }
 
 public final class app/oreshkov/clikit/Argument$Variadic : app/oreshkov/clikit/Argument {

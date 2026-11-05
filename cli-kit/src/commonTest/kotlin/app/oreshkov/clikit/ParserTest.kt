@@ -536,17 +536,20 @@ class ParserTest {
             assertIs<ParseResult.UsageError>(result, args.joinToString(" "))
             return result.message
         }
-        assertEquals("missing required option --dir (given '\${d}', which counts as not set)", refused("--dir", "\${d}", "n"))
         assertEquals(
-            "missing required option --dir (given '\${e}' from DEMO_DIR, which counts as not set)",
+            "missing required option --dir (or DEMO_DIR; given '\${d}', which counts as not set)",
+            refused("--dir", "\${d}", "n"),
+        )
+        assertEquals(
+            "missing required option --dir (or DEMO_DIR; given '\${e}' from DEMO_DIR, which counts as not set)",
             refused("n", environment = mapOf("DEMO_DIR" to "\${e}")),
         )
         // What was typed is named rather than the variable read after it.
         assertEquals(
-            "missing required option --dir (given '', which counts as not set)",
+            "missing required option --dir (or DEMO_DIR; given '', which counts as not set)",
             refused("--dir=", "n", environment = mapOf("DEMO_DIR" to "\${e}")),
         )
-        assertEquals("missing required option --dir", refused("n"))
+        assertEquals("missing required option --dir (or DEMO_DIR)", refused("n"))
         assertEquals(
             "missing argument; expected <name> (<name> given '\${n}', which counts as not set)",
             refused("--dir", "/d", "\${n}"),

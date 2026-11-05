@@ -7,8 +7,9 @@ even Delva, and knows no command of any program's: a program declares its own tr
 - A command-tree parser whose options and arguments are typed handles (`values[limit]` is an `Int?`), declared once
   for parsing, help and completion, with environment-variable fallbacks, values from
   [configuration files](#configuration-files) where XDG and Windows put them, command aliases,
-  [former names and deprecations](#renaming-and-deprecating) that keep old command lines working, and values that
-  converters can call "not given", such as an unfilled template.
+  [former names and deprecations](#renaming-and-deprecating) that keep old command lines working,
+  [options that can also be given positionally](#an-option-given-positionally), and values that converters can call
+  "not given", such as an unfilled template.
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
   (`Constraint.Requires`), needs a value (`Constraint.RequiresValue`, [experimental](#experimental-api)) — and a single
   reader of standard input, checked while parsing.
@@ -116,6 +117,33 @@ The program's stdout can carry a protocol, as an MCP server's does on stdio. The
 `completion`; usage errors, failures and notices go to stderr. A terminal that wrote nothing to stdout isn't blamed for
 another writer's failed write, so a client hanging up doesn't turn exit status 0 into 74.
 
+## An option given positionally
+
+A setting can have two spellings, a flag and a position: `serve --forms-dir /srv/forms` or `serve /srv/forms`.
+`Argument.Single.spelling` ([experimental](#experimental-api)) declares the positional as another spelling of the
+option, not as a second operand. The setting has one value, which the option owns, and either handle reads it:
+
+```kotlin
+val formsDir = Option.Single(
+    "--forms-dir", Converters.path,
+    help = "Directory of the forms", valueName = "path", required = true, env = "FORMS_DIR",
+)
+@OptIn(ExperimentalCliKitApi::class)
+val formsDirArgument = Argument.Single.spelling(formsDir)   // [forms-dir], "Same as --forms-dir"
+val serve = CommandSpec("serve", options = listOf(formsDir), arguments = listOf(formsDirArgument))
+```
+
+`serve /srv/forms`, `serve --forms-dir /srv/forms` and `FORMS_DIR=/srv/forms serve` each give `values[formsDir]` the
+value `/srv/forms`. Either spelling is the command line, so it wins over the option's variable and its configuration
+key, and a variable that a launcher sets for every run gives way to a directory typed on one. Both spellings on one
+command line is a usage error (`--forms-dir is given twice: as an option and as <forms-dir>`), and so is neither,
+when the option is required: `missing required option --forms-dir (or <forms-dir>, or FORMS_DIR)`. A constraint
+names the option, never its spelling, and sees a value given either way. Help shows `[forms-dir]` in the usage line,
+and the positional slot completes as the option's value does.
+
+Declared as two operands under `Constraint.ExactlyOne(formsDir, formsDirArgument)`, the variable would count as one of
+them, and `FORMS_DIR=/a serve /b` would be refused for giving both.
+
 ## Values that mean "not given"
 
 A launcher may pass a value through even when nobody filled it in: an empty string, or a template such as
@@ -130,22 +158,18 @@ fun <T> ValueConverter<T>.configured() = unsetWhen(
     notice = { if (it.isBlank()) null else "ignoring '$it': an unfilled template" },
 )
 
-val formsDir = Option.Single("--forms-dir", Converters.path.configured(), valueName = "path", env = "FORMS_DIR")
-val formsDirArgument = Argument.Single("forms-dir", Converters.path.configured(), required = false)
-val serve = CommandSpec(
-    "serve",
-    options = listOf(formsDir),
-    arguments = listOf(formsDirArgument),
-    constraints = listOf(Constraint.ExactlyOne(formsDir, formsDirArgument)),
-)
+val formsDir = Option.Single("--forms-dir", Converters.path.configured(), valueName = "path", required = true, env = "FORMS_DIR")
+@OptIn(ExperimentalCliKitApi::class)
+val serve = CommandSpec("serve", options = listOf(formsDir), arguments = listOf(Argument.Single.spelling(formsDir)))
 ```
 
-`serve --forms-dir '${user_config.forms_dir}' /srv/forms` then runs with the argument, after printing
+`serve --forms-dir '${user_config.forms_dir}' /srv/forms` then runs with `/srv/forms`, after printing
 `warning: --forms-dir: ignoring '${user_config.forms_dir}': an unfilled template` on stderr (`--quiet` silences it).
-An unset value on the command line overrides an earlier one and lets the option's variable apply. A repeated option or
-a variadic argument drops just that value, and an argument keeps its place, so the ones after it don't shift. When a
-required option is left unset, the error says what was given: `missing required option --forms-dir (given
-'${user_config.forms_dir}', which counts as not set)`.
+An unset value on the command line overrides an earlier one and lets the next source apply: the
+[positional spelling](#an-option-given-positionally), then the option's variable. A repeated option or a variadic
+argument drops just that value, and an argument keeps its place, so the ones after it don't shift. When a required
+option is left unset, the error says what was given: `missing required option --forms-dir (or <forms-dir>, or
+FORMS_DIR; given '${user_config.forms_dir}', which counts as not set)`.
 
 ## A help command
 
@@ -308,7 +332,8 @@ read without an `@` the user typed, and a secret is still never taken from a val
 it needs `@OptIn(ExperimentalCliKitApi::class)`, and the [changelog](CHANGELOG.md) says when a mark is lifted. It marks
 the types of [configuration files](#configuration-files), `Settings`, `Setting`, `SettingsException` and
 `ConfigurationFiles`, and the constructors of `Program`, `Parser` and `HelpRenderer` that take settings, while an
-option's `config` key is stable. It marks `Program.withArgumentFiles` for [argument files](#argument-files), and
+option's `config` key is stable. It marks `Program.withArgumentFiles` for [argument files](#argument-files),
+`Argument.Single.spelling` and `spellingOf` for [an option given positionally](#an-option-given-positionally), and
 `Constraint.RequiresValue`, a rule that one operand needs an option to
 have one of some values:
 

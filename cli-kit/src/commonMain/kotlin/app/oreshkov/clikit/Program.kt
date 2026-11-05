@@ -340,6 +340,22 @@ public class Program @ExperimentalCliKitApi constructor(
         root.runnablePaths().forEach(::checkConstraints)
         root.paths().forEach(::checkEnvironment)
         root.paths().forEach(::checkKeys)
+        root.paths().forEach(::checkSpellings)
+    }
+
+    /**
+     * Every argument of the command at the end of [path] that spells an option positionally spells one the command reads:
+     * one it declares or inherits, and not one a command further down redeclared. Any other option is never read there,
+     * and the value given for it would vanish.
+     */
+    private fun checkSpellings(path: List<CommandSpec>) {
+        val options = optionsFor(path)
+        for (argument in path.last().arguments) {
+            val option = argument.spelled ?: continue
+            require(options.any { it === option }) {
+                "'${commandLine(path)}' has no $option, which its argument $argument is another spelling of"
+            }
+        }
     }
 
     /**
