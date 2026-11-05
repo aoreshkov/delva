@@ -132,9 +132,7 @@ class ReadCommandsTest {
 
         // Each shape of key that reads as a path, with --count and with --json too; stdout keeps its shape.
         for (key in listOf("@.name", "customer.name", "items[0]")) {
-            // An operand that starts with @ names an argument file; @@ gives the @ itself.
-            val given = if (key.startsWith("@")) "@$key" else key
-            assertContains(run("search", "kv", given, "ada", "-S").stderr, "'$key' is taken as one member's name")
+            assertContains(run("search", "kv", key, "ada", "-S").stderr, "'$key' is taken as one member's name")
         }
         val count = run("search", "kv", "$.customer.name", "ada", "-S", "--count", "--json")
         assertEquals("""{"count":0}""" + "\n", count.stdout)
@@ -313,25 +311,6 @@ class ReadCommandsTest {
         val bad = program.record("search", "path", "$..sku", "--where", "@.status ==")
         assertEquals(ExitStatus.USAGE, bad.status)
         assertContains(bad.stderr, "at 11")
-    }
-
-    @Test
-    fun `an argument file stands for its lines, and a filter given to --where is never read as one`() {
-        val direct = run("search", "path", "$..sku", "--where", "@.status == 'lost'", "--mode", "element", "--json")
-        assertEquals(ExitStatus.OK, direct.status, direct.stderr)
-        assertContains(direct.stdout, """"doc":2""")
-        val whole = root.resolve("whole.txt")
-        Files.writeString(whole, "search\npath\n$..sku\n--where\n@.status == 'lost'\n--mode\nelement\n--json\n")
-        assertEquals(direct.stdout, run("@$whole").stdout)
-        val tail = root.resolve("tail.txt")
-        Files.writeString(tail, "--where\r\n@.status == 'lost'\r\n--mode\r\nelement\r\n")
-        assertEquals(direct.stdout, run("search", "path", "$..sku", "@$tail", "--json").stdout)
-
-        // An operand that starts with @ names a file now; @@ gives the @ itself.
-        val missing = program.record("search", "kv", "status", "@open", "-S")
-        assertEquals(ExitStatus.NO_INPUT, missing.status)
-        assertContains(missing.stderr, "can't read argument file 'open'")
-        assertEquals(ExitStatus.FAILURE, run("search", "kv", "status", "@@open", "-S", "-e").status)
     }
 
     @Test

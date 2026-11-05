@@ -143,23 +143,6 @@ class StartScriptProcessTest {
     }
 
     @Test
-    fun `a filter holding a pipe gets past the script in an argument file`() {
-        val store = work.resolve("store")
-        assertEquals(0, delva("init", store.toString()).status)
-        val env = mapOf("DELVA_STORE" to store.toString())
-        for (kind in listOf("a|b", "order", "a|b")) {
-            val document = """{"kind":"$kind","sku":"x"}""".toByteArray()
-            assertEquals(0, delva("insert", "-", stdin = document, env = env).status)
-        }
-
-        // On the command line, the .bat hands `|` to cmd, which reads it as a pipe however it is quoted.
-        val args = work.resolve("args.txt").also { it.writeText("--where\n@.kind == 'a|b'\n") }
-        val run = delva("search", "path", "$.sku", "--scan", "-c", "@$args", env = env)
-        assertEquals(0, run.status, run.stderr)
-        assertEquals("2", run.text.trim())
-    }
-
-    @Test
     fun `DELVA_OPTS reaches the JVM`() {
         val run = delva("--version", env = mapOf("DELVA_OPTS" to "-Xmx1k"))
         assertNotEquals(0, run.status)
