@@ -411,10 +411,10 @@ public class Program @ExperimentalCliKitApi constructor(
     internal fun withArgumentFiles(read: (String) -> String): Program =
         Program(root, version, handlers, translate, environment, settings).also { it.argumentFiles = read }
 
-    /** [args] with every argument file in place, as [Parser.expand] describes; [args] as they are with argument files off. */
+    /** [args] with an argument file in place, as [expandArgumentFile] describes; [args] as they are with argument files off. */
     internal fun expand(args: Array<String>): Expansion {
         val read = argumentFiles ?: return Expansion.Expanded(args.asList())
-        return Parser(root, environment, settings).expand(args.asList(), read)
+        return expandArgumentFile(args.asList(), read)
     }
 
     /**
@@ -422,7 +422,7 @@ public class Program @ExperimentalCliKitApi constructor(
      * command that succeeded but whose output stdout didn't take exits with [ExitStatus.IO_ERR] (see
      * [TerminalIo.stdoutState]); one that failed keeps its own status.
      *
-     * With argument files on, each `@path` in [args] is replaced by the file's lines first; a file that can't be read
+     * With argument files on, a first argument `@path` is replaced by the file's lines first; a file that can't be read
      * is an error, with [ExitStatus.NO_INPUT] and no usage line.
      */
     public fun run(args: Array<String>, io: TerminalIo): Int = run(expand(args), io)

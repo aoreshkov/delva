@@ -297,7 +297,7 @@ private const val HANGING = "    "
 private const val COMMENT = "# "
 
 /** The footer of a program with argument files on, the one thing about them a reader can't guess. */
-private const val ARGUMENT_FILES = "@file reads arguments from a file, one per line; @@ for a literal @."
+private const val ARGUMENT_FILES = "Start with @file to read arguments from it, one per line; @@ for a literal @."
 
 /** The tag of a deprecated option or command. */
 private const val DEPRECATED = "(deprecated)"
