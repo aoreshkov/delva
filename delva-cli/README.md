@@ -45,6 +45,9 @@ by `--store` or `DELVA_STORE`, so a mistyped path is an error rather than a new 
 - **Document keys**: `init --document-key '$.id'` creates a keyed store; then `get --key`, `search key [prefix]` and
   `insert --upsert` work by key, and search hits carry their key.
 - **Document filters**: `search path` and `explain` take one as `--where "@.kind == 'order'"`.
+- **Argument files**: `@args.txt` stands for the arguments in the file, one per line, unquoted. On Windows it is the
+  way to give a filter holding `|`, `&` or `^`, which the start script would hand to `cmd` as operators; an operand
+  that starts with `@` is written `@@`.
 - **Safety**: `delete` and `reset` ask for confirmation at a terminal, and need `--force` without one.
 
 ## Exit statuses
