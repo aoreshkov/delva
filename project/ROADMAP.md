@@ -22,9 +22,14 @@ The on-disk format is versioned, and everything below is designed to be addable 
 
 ## Engine
 
-- **Vector search.** Exact nearest-neighbor search over one float32 vector per document, declared when the store is
-  created and narrowed by document filters; approximate indexes only after it. Until then, embeddings are stored and
-  searched as the [guide](GUIDE.md#storing-embeddings) shows.
+- **Faster vector search.** Vector search is exact: it compares every candidate's float32 vector, so its time grows
+  with the store, past a tenth of a second at 100,000 vectors of 768 dimensions without a filter
+  ([guide](GUIDE.md#vector-search)). Scans of vectors quantized to 8-bit integers, with the nearest rescored in float32,
+  would read a quarter of the bytes; an approximate index, with vectors partitioned around centroids trained on what is
+  inserted and stored in segments like the other indexes, only after that, and held to a recall threshold against
+  exact search. SIMD distances wait for the JDK's Vector API to leave incubation.
+- **More than one vector per document.** A store has one vector field, and a document at most one vector, so a text
+  split into chunks is stored as a document per chunk.
 - **Retiring deleted documents from the index.** Postings of deleted documents are skipped at read time and dropped
   when segments are compacted; the set of document ids a store tracks only grows. Long-lived stores with heavy delete
   traffic pay for that in memory.

@@ -3,9 +3,7 @@ package app.oreshkov.delva
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.PriorityQueue
 import kotlin.io.path.deleteRecursively
-import kotlin.math.sqrt
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -247,21 +245,40 @@ class GuideExampleTest {
     }
 
     @Test
-    fun `the nearest embeddings are found in application code, as the guide shows`() {
-        JsonStore.create(dir.resolve("chunks"), CreationOptions(excludedKeys = setOf("embedding"))).use { chunks ->
+    fun `a store with a vector field finds the nearest documents, as the guide shows`() {
+        @OptIn(ExperimentalDelvaApi::class)
+        val chunkOptions = CreationOptions(excludedKeys = setOf("embedding"))
+            .withVectorField(VectorField("$.embedding", dimensions = 3, metric = VectorMetric.COSINE))
+        JsonStore.create(dir.resolve("chunks"), chunkOptions).use { chunks ->
             val db = chunks.blocking()
-            val near = db.insert("""{"source":"doc-17","chunk":3,"model":"embed-v1","text":"…","embedding":[0.0123,-0.441,0.2087]}""")
-            val far = db.insert("""{"source":"doc-17","chunk":4,"model":"embed-v1","text":"…","embedding":[-0.0123,0.441,-0.2087]}""")
-            val twin = db.insert("""{"source":"doc-18","chunk":0,"model":"embed-v1","text":"…","embedding":[0.0123,-0.441,0.2087]}""")
-            db.insert("""{"source":"doc-18","chunk":1,"model":"embed-v2","text":"…","embedding":[0.0123,-0.441,0.2087,0.5]}""")
-            val queryVector = floatArrayOf(0.01f, -0.4f, 0.2f)
+            val near = db.insert("""{"source":"doc-17","chunk":3,"text":"…","embedding":[0.0123,-0.441,0.2087]}""")
+            val far = db.insert("""{"source":"doc-18","chunk":0,"text":"…","embedding":[-0.0123,0.441,-0.2087]}""")
 
             @OptIn(ExperimentalDelvaApi::class)
-            val hits = nearest(db, queryVector, k = 10, DocumentFilter.compile("@.model == 'embed-v1'"))
+            val nearest = VectorQuery(floatArrayOf(0.01f, -0.4f, 0.2f), k = 10)
+            val printed = db.search(nearest).use { result ->
+                // Locale.ROOT, so that the test doesn't depend on the machine's decimal separator.
+                result.iterator().asSequence().map { hit -> "%.4f %s".format(java.util.Locale.ROOT, hit.distance, hit.readJsonAsString()) }.toList()
+            }
+            assertEquals(
+                listOf(
+                    """0.0002 {"source":"doc-17","chunk":3,"text":"…","embedding":[0.0123,-0.441,0.2087]}""",
+                    """1.9998 {"source":"doc-18","chunk":0,"text":"…","embedding":[-0.0123,0.441,-0.2087]}""",
+                ),
+                printed,
+            )
+            @OptIn(ExperimentalDelvaApi::class)
+            val ofSource = nearest.withDocumentFilter(DocumentFilter.compile("@.source == 'doc-18'"))
+            assertEquals("VectorQueryPlan(2 vectors, 'source' == 'doc-18', reads documents)", db.explain(ofSource).toString())
+            assertEquals(listOf(far), db.search(ofSource).use { result -> result.hits.map { it.docId } })
 
-            assertEquals(listOf(near, twin, far), hits.map { it.second }, "ties in docId order, the other model left out")
-            assertTrue(hits[0].first < 1e-3 && hits[2].first > 1.999, "$hits")
-            assertEquals(listOf(near), nearest(db, queryVector, k = 1, DocumentFilter.compile("@.model == 'embed-v1'")).map { it.second })
+            // The guide's claims beside the snippet: a document without a vector is never a hit, the wrong shape is
+            // rejected, and the excluded key can't be searched.
+            db.insert("""{"source":"doc-19","chunk":0,"text":"…"}""")
+            val wrongLength = assertFailsWith<DocumentRejectedException> { db.insert("""{"embedding":[0.5,0.5]}""") }
+            assertEquals(RejectReason.INVALID_VECTOR, wrongLength.reason)
+            assertEquals(listOf(near), db.search(nearest.copy(k = 1)).use { result -> result.hits.map { it.docId } })
+            assertEquals(2, db.search(nearest).use { it.hits.size })
             assertFailsWith<QueryRejectedException> { db.count(KeyValueQuery("embedding", JsonQueryValue.Num(java.math.BigDecimal("0.0123")))) }
         }
     }
@@ -274,37 +291,4 @@ class GuideExampleTest {
             assertTrue(store.delete(id))
         }
     }
-}
-
-/** The guide's top k in application code: the [k] candidates of [filter] nearest to [query], nearest first. */
-@OptIn(ExperimentalDelvaApi::class)
-private fun nearest(db: BlockingReadableJsonStore, query: FloatArray, k: Int, filter: DocumentFilter): List<Pair<Double, DocId>> {
-    val nearestFirst = compareBy<Pair<Double, DocId>>({ it.first }, { it.second.raw })
-    val best = PriorityQueue(k, nearestFirst.reversed())                      // the farthest of the best k on top
-    db.search(JsonPathQuery(JsonPath.compile("$.embedding")).withDocumentFilter(filter)).use { result ->
-        for (hit in result) {
-            val numbers = hit.readJsonAsString().removeSurrounding("[", "]").split(',')
-            val candidate = cosineDistance(query, FloatArray(numbers.size) { numbers[it].toFloat() }) to hit.docId
-            if (best.size < k) {
-                best += candidate
-            } else if (nearestFirst.compare(candidate, best.peek()) < 0) {
-                best.poll()
-                best += candidate
-            }
-        }
-    }
-    return best.sortedWith(nearestFirst)
-}
-
-private fun cosineDistance(a: FloatArray, b: FloatArray): Double {
-    require(a.size == b.size) { "vectors of ${a.size} and ${b.size} dimensions can't be compared" }
-    var dot = 0.0
-    var aa = 0.0
-    var bb = 0.0
-    for (i in a.indices) {
-        dot += a[i].toDouble() * b[i]
-        aa += a[i].toDouble() * a[i]
-        bb += b[i].toDouble() * b[i]
-    }
-    return 1 - dot / sqrt(aa * bb)
 }
