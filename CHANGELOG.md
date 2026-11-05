@@ -42,6 +42,9 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva-cli`: a refused search names `delva`'s own remedy, such as `--scan`, `delva get --path` or `delva info`,
   instead of the library's API; a range too wide and a query of more than 31 segments exit with status 2 instead of
   65, as a search that needs `--scan` does.
+- `delva-cli`: built on cli-kit 0.4.0, so notices, warnings and errors keep their place among the output's lines when
+  stdout and stderr are merged, a line break in one starts an indented continuation line, and an option given twice
+  with different values is a warning.
 
 ## [0.3.0] - 2026-10-31
 
