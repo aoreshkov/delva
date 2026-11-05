@@ -176,72 +176,99 @@ blocking.search(orderSkus).use { result ->
 }
 ```
 
-## Storing embeddings
+## Vector search
 
-An embedding, the vector of numbers a model computes from a text so that similar texts get nearby vectors, is stored
-as a JSON array. Delva has no vector index yet ([roadmap](ROADMAP.md#engine)), so the nearest ones are found in your
-own code, and four habits keep the store small and ready for one.
-
-**Leave the vector's key out of the index.** Each number of an indexed array is a posting, and nobody searches for one
-of them, so create the store with `CreationOptions(excludedKeys = setOf("embedding"))`. The option is fixed when the
-store is created, so a store that exists has to be copied into a new one. It applies to the key at any depth, and a
-key–value search on that key fails with `NOT_INDEXED` ([SPEC.md](SPEC.md#41-query)).
-
-**Write the numbers short.** Numbers are stored as they are spelled. Nine significant digits keep any float32 exactly,
-and Java's `Float.toString` writes the shortest text that reads back as the same float32, which is all the vectors of
-a float32 model need. A serializer that widens float32 to float64 first writes up to 17 digits. Per document, measured
-on one Windows machine with 10,000 chunks of 768 dimensions:
-
-| Numbers | Vector key | JSON | Stored | Index | Inserts/s | Top 10 of all |
-|---|---|---|---|---|---|---|
-| float32, shortest | excluded | 9.5 KB | 4.0 KB | 58 B | 1,370 | 1.3 s |
-| float64, 17 digits | excluded | 16.2 KB | 8.0 KB | 59 B | 1,520 | 1.9 s |
-| float32, shortest | indexed | 9.5 KB | 4.0 KB | 22.8 KB | 750 | 1.4 s |
-
-**One document per chunk.** Store each chunk of a text as a document of its own, with a reference to its source such
-as `"source": "doc-17"`. A document filter then finds a source's chunks, and `replace` swaps one chunk without
-rewriting the others. One vector per document is also what the roadmap's vector search takes.
-
-**Record the model.** Vectors from two models, or from two versions of one, can't be compared. Keep one model per
-store, or put `"model": "…"` in each chunk and filter on it. A new model means new vectors, and so new documents.
-
-The nearest chunks are a search for the embedding's path, whose hits are the candidates' arrays, and a heap of the
-best k:
+An embedding is the vector of numbers a model computes from a text, so that similar texts get nearby vectors. A store
+created with a **vector field** (experimental) keeps one vector per document, and a `VectorQuery` finds the documents
+whose vectors are nearest to a query vector:
 
 ```kotlin
-JsonStore.create(dir, CreationOptions(excludedKeys = setOf("embedding"))).use { chunks ->
-    val db = chunks.blocking()
-    db.insert("""{"source":"doc-17","chunk":3,"model":"embed-v1","text":"…","embedding":[0.0123,-0.441,0.2087]}""")
-    @OptIn(ExperimentalDelvaApi::class)
-    val hits = nearest(db, queryVector, k = 10, DocumentFilter.compile("@.model == 'embed-v1'"))
-}
-
 @OptIn(ExperimentalDelvaApi::class)
-fun nearest(db: BlockingReadableJsonStore, query: FloatArray, k: Int, filter: DocumentFilter): List<Pair<Double, DocId>> {
-    val nearestFirst = compareBy<Pair<Double, DocId>>({ it.first }, { it.second.raw })
-    val best = PriorityQueue(k, nearestFirst.reversed())                      // the farthest of the best k on top
-    db.search(JsonPathQuery(JsonPath.compile("$.embedding")).withDocumentFilter(filter)).use { result ->
-        for (hit in result) {
-            val numbers = hit.readJsonAsString().removeSurrounding("[", "]").split(',')
-            val candidate = cosineDistance(query, FloatArray(numbers.size) { numbers[it].toFloat() }) to hit.docId
-            if (best.size < k) {
-                best += candidate
-            } else if (nearestFirst.compare(candidate, best.peek()) < 0) {
-                best.poll()
-                best += candidate
-            }
-        }
+val chunkOptions = CreationOptions(excludedKeys = setOf("embedding"))
+    .withVectorField(VectorField("$.embedding", dimensions = 3, metric = VectorMetric.COSINE))
+JsonStore.create(dir, chunkOptions).use { chunks ->
+    val db = chunks.blocking()
+    db.insert("""{"source":"doc-17","chunk":3,"text":"…","embedding":[0.0123,-0.441,0.2087]}""")
+    db.insert("""{"source":"doc-18","chunk":0,"text":"…","embedding":[-0.0123,0.441,-0.2087]}""")
+
+    @OptIn(ExperimentalDelvaApi::class)
+    val nearest = VectorQuery(floatArrayOf(0.01f, -0.4f, 0.2f), k = 10)
+    db.search(nearest).use { result ->
+        for (hit in result) println("%.4f %s".format(hit.distance, hit.readJsonAsString()))   // 0.0002 {"source":"doc-17",…
     }
-    return best.sortedWith(nearestFirst)
+    @OptIn(ExperimentalDelvaApi::class)
+    val ofSource = nearest.withDocumentFilter(DocumentFilter.compile("@.source == 'doc-18'"))
+    println(db.explain(ofSource))                                             // VectorQueryPlan(2 vectors, 'source' == 'doc-18', reads documents)
 }
 ```
 
-`cosineDistance` is `1 − cos θ`, summed in double precision. Comparing the distance and then the docId puts ties in
-docId order, so a store and a query always give the same answer. The filter's comparison with a literal is an index
-term, so a more selective filter means fewer chunks read. Every candidate's embedding is still read and parsed from
-JSON, about 0.13 ms each at 768 dimensions: the last column of the table above is this search over all 10,000 chunks.
-It suits filters that leave hundreds of candidates, or a few thousand where a second is acceptable.
-[`EmbeddingSearch`](../delva-examples/README.md) in delva-examples is the whole program.
+**The field.** `VectorField` names the path of the array, how many numbers it has, up to 4,096, and the metric. Like the
+document key, it is fixed when the store is created. A document with nothing at the path, or `null`, has no vector and
+is never a hit; a value that isn't an array of exactly that many numbers is rejected with `RejectReason.INVALID_VECTOR`,
+and so is a missing one under `required = true`. Each number is read as the nearest 32-bit float, and the document
+reads back as it was inserted. A store with a vector field is in a format version that earlier versions of Delva
+refuse ([SPEC §11](SPEC.md#11-vector-search)).
+
+**Distances.** A hit's `distance` is smaller the nearer it is: `1 − cos θ` under `COSINE`, the dot product negated
+under `DOT_PRODUCT`, and the straight-line distance under `EUCLIDEAN`. Use the metric the model was made for; vectors
+of length 1, which many models produce, rank alike under all three. Hits come nearest first, and equally near ones in
+docId order, so a store and a query always give the same answer. A search returns at most `k` hits, up to 10,000, in
+one result without a cursor, and reads a hit's document only when the hit is read. `maxDistance` leaves out documents
+farther than it.
+
+**Filters.** `withDocumentFilter` makes only the documents a [document filter](#document-filters) accepts candidates,
+before the nearest are chosen, so the hits are the true `k` nearest of those documents, never fewer when there are that
+many. The filter's comparisons of root members with literals are index terms that pick the candidates, so the more
+selective the filter, the faster the search. A filter without one needs `ScanPolicy.ALLOW_SCAN`, as in a JSONPath
+search, and without a filter every vector is compared. `explain` tells which: above, the index holds two vectors and
+only doc-18's chunk is a candidate.
+
+Four habits keep a store of embeddings small:
+
+**Leave the vector's key out of the index.** The vector field doesn't change what is indexed, and each number of an
+indexed array is a posting that nobody searches for, so name the key in `excludedKeys`, as above. Like the vector
+field, the option is fixed when the store is created. It applies to the key at any depth, and a key–value search on
+that key fails with `NOT_INDEXED` ([SPEC.md](SPEC.md#41-query)).
+
+**Write the numbers short.** The document keeps each number as it is spelled. Nine significant digits keep any float32
+exactly, and Java's `Float.toString` writes the shortest text that reads back as the same float32, which is all the
+vectors of a float32 model need. A serializer that widens float32 to float64 first writes up to 17 digits. Per
+document, measured on one Windows machine with 10,000 chunks of 768 dimensions, without a vector field:
+
+| Numbers | Vector key | JSON | Stored | Index | Inserts/s |
+|---|---|---|---|---|---|
+| float32, shortest | excluded | 9.5 KB | 4.0 KB | 58 B | 1,370 |
+| float64, 17 digits | excluded | 16.2 KB | 8.0 KB | 59 B | 1,520 |
+| float32, shortest | indexed | 9.5 KB | 4.0 KB | 22.8 KB | 750 |
+
+The vector field adds about 4 bytes per number to that, since the store keeps each vector as 32-bit floats too, and
+inserts run as fast with it as without, within the noise of the measurement.
+
+**One document per chunk.** A document has at most one vector, so store each chunk of a text as a document of its own,
+with a reference to its source such as `"source": "doc-17"`. A document filter then finds a source's chunks, and
+`replace` swaps one chunk without rewriting the others.
+
+**One model per store.** Vectors from two models, or from two versions of one, can't be compared, and when their sizes
+match nothing stops a search from comparing them. A new model means a new store, since the vector field is fixed.
+
+Exact search compares every candidate's vector, so its time grows with the number of vectors and their dimensions. A
+top 10, measured on the same machine, with each vector index read from the operating system's page cache rather than
+the store's own:
+
+| Vectors | Dimensions | Vector index | All | 1% filter | 10% filter | All, `mmapReads` |
+|---|---|---|---|---|---|---|
+| 10,000 | 384 | 15 MiB | 7.1 ms | 4.7 ms | 7.4 ms | 4.0 ms |
+| 100,000 | 384 | 148 MiB | 61 ms | 23 ms | 53 ms | 35 ms |
+| 10,000 | 768 | 29 MiB | 12 ms | 2.3 ms | 10 ms | 7.1 ms |
+| 100,000 | 768 | 294 MiB | 115 ms | 22 ms | 96 ms | 69 ms |
+| 10,000 | 1,536 | 59 MiB | 26 ms | 2.1 ms | 21 ms | 14 ms |
+| 100,000 | 1,536 | 588 MiB | 270 ms | 26 ms | 239 ms | 154 ms |
+
+A store keeps an index of up to 1/64 of the heap, and 32 MiB at most, in its own cache, and searches it faster still.
+[`mmapReads`](#limits-and-sizing) cuts the time of a larger one by about 40 %. So exact search suits stores of up to
+about 100,000 vectors where a tenth of a second per search is fine, and larger ones whose searches are filtered. Past
+that, it is too slow: faster scans and an approximate index are on the [roadmap](ROADMAP.md#engine).
+[`EmbeddingSearch`](../delva-examples/README.md) in delva-examples is a whole program.
 
 ## Templates
 

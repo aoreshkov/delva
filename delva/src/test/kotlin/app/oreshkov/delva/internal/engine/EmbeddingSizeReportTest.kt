@@ -1,17 +1,11 @@
 package app.oreshkov.delva.internal.engine
 
 import app.oreshkov.delva.CreationOptions
-import app.oreshkov.delva.DocId
-import app.oreshkov.delva.DocumentFilter
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InsertSource
-import app.oreshkov.delva.JsonPath
-import app.oreshkov.delva.JsonPathQuery
 import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.internal.io.JdkFileSystemIo
 import java.nio.file.Files
-import java.util.PriorityQueue
 import java.util.Random
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -19,11 +13,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * What an embedding costs a document store: chunk documents that each carry one unit-length vector of 768 float32
- * values, written as the shortest text that reads back as the same float32 or as the up to 17 digits of a serializer
- * that widens it to float64 first, in a store that indexes the vector's key and in one created with it in
- * `excludedKeys`. Prints raw, stored and index bytes per document, insert throughput, and how long the guide's
- * brute-force top 10 in application code takes over every chunk, for the guide's advice on storing embeddings.
+ * What an embedding's text costs a document store: chunk documents that each carry one unit-length vector of 768
+ * float32 values, written as the shortest text that reads back as the same float32 or as the up to 17 digits of a
+ * serializer that widens it to float64 first, in a store that indexes the vector's key and in one created with it in
+ * `excludedKeys`, neither with a vector field. Prints raw, stored and index bytes per document and insert throughput,
+ * for the guide's advice on storing embeddings; [VectorSearchReportTest] measures the vector field.
  *
  * Runs under `reportTest`, not `check`. `-Ddelva.report.embeddings=<n>` sets the number of documents (10 000 by
  * default); every variant gets the same vectors.
@@ -38,19 +32,17 @@ class EmbeddingSizeReportTest {
             for (excluded in listOf(false, true)) {
                 val measured = measure(documents, spelling, excluded)
                 sizes[spelling to excluded] = measured
-                rows += "| %s | %s | %,d | %,d | %,d | %.0f | %.1f | %.0f |".format(
+                rows += "| %s | %s | %,d | %,d | %,d | %.0f | %.1f |".format(
                     spelling.label, if (excluded) "excluded" else "indexed",
                     measured.raw / documents, measured.lane / documents, measured.index / documents,
                     documents / (measured.insertNanos / 1e9), measured.raw / (1 shl 20).toDouble() / (measured.insertNanos / 1e9),
-                    measured.searchNanos / 1e6,
                 )
             }
         }
         println(
-            "\nEmbeddings: $documents chunk documents, $DIMENSIONS dimensions, deflate with dictionaries; " +
-                "top $TOP_K is the median of $SEARCHES brute-force searches over every chunk, in application code\n\n" +
-                "| Numbers | Vector key | Raw bytes/doc | Stored bytes/doc | Index bytes/doc | Inserts/s | Insert MiB/s | Top $TOP_K ms |\n" +
-                "|---|---|---|---|---|---|---|---|\n" + rows.joinToString("\n"),
+            "\nEmbeddings: $documents chunk documents, $DIMENSIONS dimensions, deflate with dictionaries\n\n" +
+                "| Numbers | Vector key | Raw bytes/doc | Stored bytes/doc | Index bytes/doc | Inserts/s | Insert MiB/s |\n" +
+                "|---|---|---|---|---|---|---|\n" + rows.joinToString("\n"),
         )
         for (spelling in Spelling.entries) {
             assertTrue(sizes.getValue(spelling to true).index < sizes.getValue(spelling to false).index, "excluding the key shrinks the index")
@@ -81,48 +73,11 @@ class EmbeddingSizeReportTest {
                     // Settle the LSM: the index size to report is the compacted one.
                 }
                 assertEquals(CHUNKS_PER_SOURCE.toLong(), store.count(KeyValueQuery("source", JsonQueryValue.Str("doc-0"))))
-                val query = FloatArray(DIMENSIONS) { if (it == 0) 1f else 0f }
-                val searchNanos = LongArray(SEARCHES) {
-                    val start = System.nanoTime()
-                    assertEquals(TOP_K, bruteForceTopK(store, query).size)
-                    System.nanoTime() - start
-                }.sorted()[SEARCHES / 2]
-                return Sizes(raw, PerformanceReportChild.sizeOf(dir.resolve("data")), PerformanceReportChild.sizeOf(dir.resolve("index")), insertNanos, searchNanos)
+                return Sizes(raw, PerformanceReportChild.sizeOf(dir.resolve("data")), PerformanceReportChild.sizeOf(dir.resolve("index")), insertNanos)
             }
         } finally {
             dir.toFile().deleteRecursively()
         }
-    }
-
-    /**
-     * The guide's search in application code: every chunk's embedding read through a document filter on the model,
-     * parsed, and kept in a heap of the best [TOP_K] by cosine distance.
-     */
-    @OptIn(ExperimentalDelvaApi::class)
-    private fun bruteForceTopK(store: Engine, query: FloatArray): List<Pair<Double, DocId>> {
-        val nearestFirst = compareBy<Pair<Double, DocId>>({ it.first }, { it.second.raw })
-        val best = PriorityQueue(TOP_K, nearestFirst.reversed())
-        val search = JsonPathQuery(JsonPath.compile("$.embedding")).withDocumentFilter(DocumentFilter.compile("@.model == 'm-$DIMENSIONS'"))
-        store.search(search).use { result ->
-            for (hit in result.iterator()) {
-                val numbers = hit.readJsonAsString().removeSurrounding("[", "]").split(',')
-                val vector = FloatArray(numbers.size) { numbers[it].toFloat() }
-                var dot = 0.0
-                var squares = 0.0
-                for (i in vector.indices) {
-                    dot += query[i].toDouble() * vector[i]
-                    squares += vector[i].toDouble() * vector[i]
-                }
-                val candidate = 1 - dot / sqrt(squares) to hit.docId
-                if (best.size < TOP_K) {
-                    best += candidate
-                } else if (nearestFirst.compare(candidate, best.peek()) < 0) {
-                    best.poll()
-                    best += candidate
-                }
-            }
-        }
-        return best.sortedWith(nearestFirst)
     }
 
     /** Chunk [n] of its source, with the next unit-length Gaussian vector of [random]. */
@@ -152,14 +107,12 @@ class EmbeddingSizeReportTest {
         FLOAT64("float64, up to 17 digits"),
     }
 
-    private class Sizes(val raw: Long, val lane: Long, val index: Long, val insertNanos: Long, val searchNanos: Long)
+    private class Sizes(val raw: Long, val lane: Long, val index: Long, val insertNanos: Long)
 
     private companion object {
         const val DIMENSIONS = 768
         const val CHUNKS_PER_SOURCE = 8
         const val BATCH = 100
         const val SEED = 42L
-        const val TOP_K = 10
-        const val SEARCHES = 5
     }
 }

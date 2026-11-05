@@ -64,6 +64,8 @@ The [guide](project/GUIDE.md) covers the suspending functions that `blocking()` 
 - **Versions and keys**: documents are immutable; `replace` swaps in a new version atomically, and an optional
   document key adds `get`, `upsert` and listing in key order.
 - **Types**: name objects by JSON path as they are inserted or later, and filter searches on them.
+- **Vector search** (experimental): an embedding per document, declared when the store is created, and exact
+  nearest-neighbor searches that document filters narrow down.
 - **Readers beside the writer**: other processes open a secondary that never locks or writes.
 - **Compare and diff** two stored values, or one against JSON text, streamed with bounded memory.
 - **Crash consistency**: an insert is completely visible after a crash or completely absent; `verify` scrubs the whole

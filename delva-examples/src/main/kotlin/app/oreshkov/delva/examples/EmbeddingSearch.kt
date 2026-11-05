@@ -1,15 +1,15 @@
 /*
- * The chunks nearest to a query embedding, searched in the program's own code.
+ * The chunks nearest to a query embedding, found by the store's vector search.
  *
- * Retrieval data is made of chunks: each is a document of its own, with a reference to its source, the name of the
- * model that embedded it, and its embedding, an array of float32 values. The store leaves the embedding's key out of
- * its index, which would otherwise hold a posting for every one of its numbers, and the numbers are written as the
- * shortest text that reads back as the same float32.
+ * Retrieval data is made of chunks: each is a document of its own, with a reference to its source and its embedding,
+ * an array of float32 values. The store is created with a vector field at the embedding's path, so it keeps each
+ * chunk's vector as 32-bit floats beside the document, and with the embedding's key left out of its index, which would
+ * otherwise hold a posting for every one of its numbers. The numbers are written as the shortest text that reads back
+ * as the same float32.
  *
- * A search for the embedding's path returns the embedding of every candidate chunk, and the program keeps the k
- * nearest by cosine distance. A document filter picks the candidates through the index, here the chunks of one model
- * or of one source of that model, so the more selective it is, the fewer chunks are read. Each candidate's embedding
- * is read and parsed from JSON, which is fine for a few thousand chunks and slow well beyond that.
+ * A vector search compares the query with the vector of every candidate and returns the k nearest by cosine distance.
+ * A document filter picks the candidates through the index, here the chunks of one source, so the more selective it
+ * is, the fewer vectors are compared; the hits are still the exact k nearest of those chunks.
  *
  *     ./gradlew :delva-examples:runEmbeddingSearch
  *
@@ -27,13 +27,14 @@ import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InsertOutcome
 import app.oreshkov.delva.InsertSource
 import app.oreshkov.delva.JsonPath
-import app.oreshkov.delva.JsonPathQuery
 import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.NodeRef
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
+import app.oreshkov.delva.VectorQuery
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.PriorityQueue
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.deleteRecursively
 import kotlin.math.PI
@@ -46,20 +47,20 @@ import kotlin.random.Random
 const val EMBEDDING_KEY: String = "embedding"
 
 /** A chunk near a query: its document and its cosine distance, from 0 for the same direction to 2 for the opposite. */
-data class Neighbor(val docId: DocId, val distance: Double)
+data class Neighbor(val docId: DocId, val distance: Float)
 
-/** One chunk of a source text, with the embedding [model] made of it. */
-class Chunk(val source: String, val index: Int, val model: String, val text: String, val embedding: FloatArray)
+/** One chunk of a source text, with its embedding. */
+class Chunk(val source: String, val index: Int, val text: String, val embedding: FloatArray)
 
 @OptIn(ExperimentalPathApi::class)
 fun main() {
     val dir = Files.createTempDirectory("delva-embedding-search")
     try {
-        createChunkStore(dir.resolve("chunks")).use { store ->
+        createChunkStore(dir.resolve("chunks"), DIMENSIONS).use { store ->
             val db = store.blocking()
             val random = Random(SEED)
             val chunks = (0 until SOURCES).flatMap { s ->
-                (0 until CHUNKS_PER_SOURCE).map { c -> Chunk("doc-$s", c, MODEL, "chunk $c of doc-$s", randomUnitVector(random, DIMENSIONS)) }
+                (0 until CHUNKS_PER_SOURCE).map { c -> Chunk("doc-$s", c, "chunk $c of doc-$s", randomUnitVector(random, DIMENSIONS)) }
             }
             insertChunks(db, chunks)
             println("${chunks.size} chunks of $SOURCES sources, $DIMENSIONS dimensions")
@@ -67,10 +68,10 @@ fun main() {
             // A query close to one stored chunk, as a question about that chunk's text would be.
             val target = chunks[123]
             val query = nudge(target.embedding, random)
-            println("\nNearest $K to a query near '${target.text}', among every chunk of model $MODEL:")
-            printNeighbors(db, nearestChunks(db, query, K, model = MODEL))
+            println("\nNearest $K to a query near '${target.text}', among every chunk:")
+            printNeighbors(db, nearestChunks(db, query, K))
             println("\nThe same among the chunks of ${target.source}:")
-            printNeighbors(db, nearestChunks(db, query, K, model = MODEL, source = target.source))
+            printNeighbors(db, nearestChunks(db, query, K, source = target.source))
         }
     } finally {
         dir.deleteRecursively()
@@ -78,11 +79,17 @@ fun main() {
 }
 
 /**
- * Creates a store for chunk documents in [dir]. [EMBEDDING_KEY] is left out of the index: an indexed array holds a
- * posting per element, and nobody searches for one number of an embedding. The option is fixed when the store is
- * created and applies to that key at any depth.
+ * Creates a store in [dir] for chunks whose embeddings have [dimensions] numbers, all from one model: vectors of two
+ * models can't be compared, and a store's vector field is fixed when it is created. Every chunk must have an embedding.
+ * [EMBEDDING_KEY] is left out of the index: an indexed array holds a posting per element, and nobody searches for one
+ * number of an embedding.
  */
-fun createChunkStore(dir: Path): JsonStore = JsonStore.create(dir, CreationOptions(excludedKeys = setOf(EMBEDDING_KEY)))
+@OptIn(ExperimentalDelvaApi::class)
+fun createChunkStore(dir: Path, dimensions: Int): JsonStore = JsonStore.create(
+    dir,
+    CreationOptions(excludedKeys = setOf(EMBEDDING_KEY))
+        .withVectorField(VectorField("$.$EMBEDDING_KEY", dimensions, VectorMetric.COSINE, required = true)),
+)
 
 /** Inserts [chunks] in one call, and returns their docIds in the same order. */
 fun insertChunks(db: BlockingJsonStore, chunks: List<Chunk>): List<DocId> =
@@ -99,7 +106,6 @@ fun insertChunks(db: BlockingJsonStore, chunks: List<Chunk>): List<DocId> =
 fun chunkJson(chunk: Chunk): String = buildString {
     append("""{"source":""").append(jsonString(chunk.source))
     append(""","chunk":""").append(chunk.index)
-    append(""","model":""").append(jsonString(chunk.model))
     append(""","text":""").append(jsonString(chunk.text))
     append(""","$EMBEDDING_KEY":[""")
     chunk.embedding.forEachIndexed { i, value ->
@@ -111,61 +117,17 @@ fun chunkJson(chunk: Chunk): String = buildString {
 }
 
 /**
- * The [k] chunks of [model] nearest to [query] by cosine distance, nearest first, and among equally near ones the
- * oldest first, so the same store and query always give the same answer. With a [source], only that source's chunks
- * are candidates.
+ * The [k] chunks nearest to [query] by cosine distance, nearest first, and among equally near ones the oldest first,
+ * so the same store and query always give the same answer. With a [source], only that source's chunks are candidates.
  *
- * Vectors from different models, or from different versions of one model, can't be compared, so the model is always
- * part of the filter. Its comparison with a literal is an index term, which the search looks up rather than reading
- * every chunk; so is the source's. Only the candidates' embeddings are read. The values are bound to the filter's
- * placeholders as literals, so no model or source name can change what the filter tests.
+ * The source's comparison with a literal is an index term, which the search looks up rather than comparing every
+ * vector. The name is bound to the filter's placeholder as a literal, so no source name can change what the filter
+ * tests.
  */
 @OptIn(ExperimentalDelvaApi::class)
-fun nearestChunks(db: BlockingReadableJsonStore, query: FloatArray, k: Int, model: String, source: String? = null): List<Neighbor> {
-    require(k > 0) { "k must be positive, was $k" }
-    val filter = if (source == null) {
-        OF_MODEL.bind("model" to JsonQueryValue.Str(model))
-    } else {
-        OF_MODEL_AND_SOURCE.bind("model" to JsonQueryValue.Str(model), "source" to JsonQueryValue.Str(source))
-    }
-    val search = JsonPathQuery(EMBEDDING_PATH).withDocumentFilter(filter)
-    // The worst of the best k so far is at the head, so a nearer candidate replaces it in O(log k).
-    val best = PriorityQueue(k, NEAREST_FIRST.reversed())
-    db.search(search).use { result ->
-        for (hit in result) {
-            val candidate = Neighbor(hit.docId, cosineDistance(query, parseVector(hit.readJsonAsString())))
-            if (best.size < k) {
-                best += candidate
-            } else if (NEAREST_FIRST.compare(candidate, best.peek()) < 0) {
-                best.poll()
-                best += candidate
-            }
-        }
-    }
-    return best.sortedWith(NEAREST_FIRST)
-}
-
-/**
- * The cosine distance of [a] and [b], `1 − cos θ`, summed in double precision. Distances of a zero vector are NaN,
- * which [nearestChunks] ranks after every number.
- */
-fun cosineDistance(a: FloatArray, b: FloatArray): Double {
-    require(a.size == b.size) { "vectors of ${a.size} and ${b.size} dimensions can't be compared" }
-    var dot = 0.0
-    var aa = 0.0
-    var bb = 0.0
-    for (i in a.indices) {
-        dot += a[i].toDouble() * b[i]
-        aa += a[i].toDouble() * a[i]
-        bb += b[i].toDouble() * b[i]
-    }
-    return 1 - dot / sqrt(aa * bb)
-}
-
-/** A compact JSON array of numbers, as a hit reads it, as float32 values: each is rounded once, from its decimal text. */
-fun parseVector(json: String): FloatArray {
-    val numbers = json.removeSurrounding("[", "]").split(',')
-    return FloatArray(numbers.size) { numbers[it].toFloat() }
+fun nearestChunks(db: BlockingReadableJsonStore, query: FloatArray, k: Int, source: String? = null): List<Neighbor> {
+    val search = VectorQuery(query, k).withDocumentFilter(source?.let { OF_SOURCE.bind("source" to JsonQueryValue.Str(it)) })
+    return db.search(search).use { result -> result.hits.map { Neighbor(it.docId, it.distance) } }
 }
 
 /** A random vector of [dimensions] float32 values with length 1, Gaussian in each dimension and so uniform in direction. */
@@ -177,7 +139,7 @@ fun randomUnitVector(random: Random, dimensions: Int): FloatArray {
 
 private fun printNeighbors(db: BlockingReadableJsonStore, neighbors: List<Neighbor>) {
     for (neighbor in neighbors) {
-        // The search read only the embeddings; the text is selected from the chunk now.
+        // The search read only the vector index; the text is selected from the chunk now.
         val text = db.select(NodeRef(neighbor.docId, 0), TEXT_PATH).use { result -> result.iterator().next().readJsonAsString() }
         println("  %.4f  %s".format(neighbor.distance, text))
     }
@@ -211,20 +173,14 @@ private fun jsonString(text: String): String = buildString {
     append('"')
 }
 
-/** The filters of [nearestChunks], compiled once. */
+/** The filter of [nearestChunks], compiled once. */
 @OptIn(ExperimentalDelvaApi::class)
-private val OF_MODEL = DocumentFilterTemplate.compile("@.model == \${model}")
+private val OF_SOURCE = DocumentFilterTemplate.compile("@.source == \${source}")
 
-@OptIn(ExperimentalDelvaApi::class)
-private val OF_MODEL_AND_SOURCE = DocumentFilterTemplate.compile("@.model == \${model} && @.source == \${source}")
-
-private val NEAREST_FIRST = compareBy<Neighbor>({ it.distance }, { it.docId.raw })
-private val EMBEDDING_PATH = JsonPath.compile("$.$EMBEDDING_KEY")
 private val TEXT_PATH = JsonPath.compile("$.text")
 
 private const val SEED = 42
 private const val SOURCES = 60
 private const val CHUNKS_PER_SOURCE = 5
 private const val DIMENSIONS = 64
-private const val MODEL = "pseudo-64"
 private const val K = 5
