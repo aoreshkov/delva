@@ -13,7 +13,8 @@ public sealed interface Operand
  *
  * An operand is *given* when:
  * - a flag is present;
- * - a single-valued option has a value, from the command line or from its [Option.Single.env] variable;
+ * - a single-valued option has a value, from the command line, positionally through its [Argument.Single.spelling],
+ *   from its [Option.Single.env] variable or from its [Option.Single.config] key;
  * - a repeated option, or a variadic argument, has at least one value;
  * - an argument has a value.
  *
@@ -35,6 +36,10 @@ public sealed class Constraint(public val operands: List<Operand>) {
         require(operands.size >= 2) { "a constraint names at least two operands, not $operands" }
         val twice = operands.groupBy { it }.filterValues { it.size > 1 }.keys
         require(twice.isEmpty()) { "a constraint names $twice twice" }
+        // Its value is the option's, so a rule about it is a rule about the option, and one place to state it is enough.
+        operands.filterIsInstance<Argument>().firstOrNull { it.spelled != null }?.let { spelling ->
+            throw IllegalArgumentException("$spelling is another spelling of ${spelling.spelled}; name ${spelling.spelled} in the constraint")
+        }
         // A required option is always given, so a rule about its presence is a mistake; one about its value isn't.
         val required = operands.filter { it.isRequired && !(this is RequiresValue && it === operands[1]) }
         require(required.isEmpty()) {

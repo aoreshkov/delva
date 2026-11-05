@@ -320,15 +320,52 @@ public sealed class Argument(
 
     internal val choices: List<String> get() = converter.choices
 
+    /** The option this argument is a positional spelling of (see [Single.spelling]), or `null`. */
+    internal val spelled: Option.Single<*>? get() = (this as? Single<*>)?.spellingOf
+
     override fun toString(): String = "<$name>"
 
-    /** An argument that takes one value. */
-    public class Single<out T>(
+    /** An argument that takes one value; or, made by [spelling], an option's value given positionally. */
+    public class Single<out T> private constructor(
         name: String,
         public override val converter: ValueConverter<T>,
-        help: String = "",
-        required: Boolean = true,
-    ) : Argument(name, help, required)
+        help: String,
+        required: Boolean,
+        /**
+         * The option this argument is another spelling of, as [spelling] makes it, or `null` for an argument of its
+         * own. Its value is that option's: [OptionValues] answers the same for both handles.
+         */
+        @property:ExperimentalCliKitApi
+        public val spellingOf: Option.Single<T>?,
+    ) : Argument(name, help, required) {
+        /** An argument of its own, with a value of its own. */
+        public constructor(
+            name: String,
+            converter: ValueConverter<T>,
+            help: String = "",
+            required: Boolean = true,
+        ) : this(name, converter, help, required, null)
+
+        public companion object {
+            /**
+             * [option] given positionally, as `[forms-dir]` for `--forms-dir`: one setting with two spellings, which
+             * the option owns. The argument converts with the option's converter, is never required itself, and help
+             * describes it as `Same as --forms-dir`.
+             *
+             * The positional comes after the option itself in the order of precedence, and before its
+             * [Option.Single.env] variable and [Option.Single.config] key, so a variable fills in only when neither
+             * spelling is on the command line. Both spellings with a value is a usage error; a value the converter
+             * calls [ConversionResult.Unset] gives way to the next source, as it does for the option. The option's
+             * `required` is met by any of them, and a [Constraint] names the option, never this argument.
+             *
+             * [Program] checks, when it is built, that the command declaring the argument reads [option], and a
+             * command may have one argument per option spelled this way.
+             */
+            @ExperimentalCliKitApi
+            public fun <T> spelling(option: Option.Single<T>, name: String = option.long.removePrefix("--")): Single<T> =
+                Single(name, option.converter, "Same as ${option.long}", required = false, spellingOf = option)
+        }
+    }
 
     /** The last argument may absorb the rest — `store query <path>...` and friends. At least one when [required]. */
     public class Variadic<out T>(
@@ -504,6 +541,9 @@ public class CommandSpec(
         require(arguments.dropLast(1).none { it is Argument.Variadic<*> }) {
             "command '$name': only the last argument may be variadic"
         }
+        // Two positionals for one option would give it two values from one command line.
+        val spelledTwice = arguments.mapNotNull { it.spelled }.groupBy { it }.filterValues { it.size > 1 }.keys
+        require(spelledTwice.isEmpty()) { "command '$name' has more than one argument spelling $spelledTwice" }
         require(arguments.zipWithNext().none { (first, second) -> !first.required && second.required }) {
             "command '$name': a required argument cannot follow an optional one"
         }

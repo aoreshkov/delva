@@ -112,9 +112,15 @@ public class OptionValues internal constructor(
     @Suppress("UNCHECKED_CAST")
     public operator fun <T> get(option: Option.Repeated<T>): List<T> = repeated[option].orEmpty() as List<T>
 
-    /** The value of [argument], or `null` when it was not given. */
+    /**
+     * The value of [argument], or `null` when it was not given. For an argument that spells an option positionally
+     * (see [Argument.Single.spelling]), the option's value, however it was given: the two handles read one setting.
+     */
     @Suppress("UNCHECKED_CAST")
-    public operator fun <T> get(argument: Argument.Single<T>): T? = positionals[argument]?.firstOrNull() as T?
+    public operator fun <T> get(argument: Argument.Single<T>): T? {
+        val option = argument.spellingOf ?: return positionals[argument]?.firstOrNull() as T?
+        return get(option)
+    }
 
     /** Every value of [argument], in the order given; empty when there are none. */
     @Suppress("UNCHECKED_CAST")
@@ -147,6 +153,8 @@ public class OptionValues internal constructor(
  * Not supported, deliberately: abbreviated long options (`--acc` for `--account`), which turn a
  * new option into a breaking change for anyone who was abbreviating; and interspersed options
  * after a subcommand name is expected, which is ambiguity dressed as convenience.
+ *
+ * An argument made by [Argument.Single.spelling] gives its option's value positionally, and counts as the command line.
  *
  * An option that is not on the command line takes its [Option.Single.env] variable from [environment], and failing
  * that its [Option.Single.config] key from [settings], converted and checked like a value typed on the command line.
@@ -363,8 +371,8 @@ public class Parser @ExperimentalCliKitApi constructor(
         val positionals = mutableListOf<IndexedValue<String>>()
 
         /**
-         * Where each value that didn't come from the command line came from, for messages to name: the environment
-         * variable, or the setting's origin.
+         * Where each value that the option wasn't typed with came from, for messages to name: the argument that spells
+         * it positionally, the environment variable, or the setting's origin.
          */
         val origins = mutableMapOf<Option.Single<*>, String>()
 
@@ -505,7 +513,14 @@ public class Parser @ExperimentalCliKitApi constructor(
         if (command === StandardOptions.help) return helpFor(path, collected.positionals.map { it.value })
         if (!command.runnable) return ParseResult.Help(path)
 
-        // The command line wins; a variable fills in only what it left out, or gave only an unset value for.
+        // The whole command line first, an option's positional spelling included, so that what it gave is known before
+        // any variable or setting is read: then "the command line wins" needs no exception for a positional.
+        val bound = when (val binding = bindPositionals(command, collected)) {
+            is Binding.Bound -> binding.values
+            is Binding.Failed -> return ParseResult.UsageError(binding.message, path)
+        }
+
+        // A variable fills in only what the command line left out, or gave only an unset value for.
         for (option in known) {
             if (option !is Option.Single<*> || option.env == null || collected.given(option)) continue
             val value = environment(option.env)?.takeIf { it.isNotEmpty() } ?: continue
@@ -531,13 +546,7 @@ public class Parser @ExperimentalCliKitApi constructor(
         }
 
         known.firstOrNull { it.required && !collected.given(it) }?.let { option ->
-            val why = collected.whyAbsent(option)?.let { " ($it)" }.orEmpty()
-            return ParseResult.UsageError("missing required option ${option.long}$why", path)
-        }
-
-        val bound = when (val binding = bindPositionals(command, collected)) {
-            is Binding.Bound -> binding.values
-            is Binding.Failed -> return ParseResult.UsageError(binding.message, path)
+            return ParseResult.UsageError(missingOption(option, command, collected), path)
         }
 
         violation(path, collected, bound)?.let { return ParseResult.UsageError(it, path) }
@@ -719,17 +728,27 @@ public class Parser @ExperimentalCliKitApi constructor(
             }
             // An unset value still takes its place, so the arguments after it don't shift.
             index += raw.size
+            // An option's positional spelling is the option, for what was given as for the value.
+            val option = spec.spelled
             val converted = ArrayList<Any?>(raw.size)
             for ((at, value) in raw) {
                 when (val conversion = spec.converter.convert(value)) {
                     is ConversionResult.Ok -> converted += conversion.value
                     is ConversionResult.Invalid ->
                         return Binding.Failed("invalid value for $spec: ${conversion.reason}")
-                    is ConversionResult.Unset -> collected.unset(spec, "given '$value'", "$spec", conversion.notice, at)
+                    is ConversionResult.Unset -> if (option != null) {
+                        collected.unset(option, "given '$value' as $spec", "$spec", conversion.notice, at)
+                    } else {
+                        collected.unset(spec, "given '$value'", "$spec", conversion.notice, at)
+                    }
                 }
             }
             if (converted.isEmpty()) {
                 if (spec.required) return Binding.Failed("${missingArguments(command)} ($spec ${collected.whyAbsent(spec)})")
+                continue
+            }
+            if (option != null) {
+                bindSpelling(option, spec, raw.single(), converted.single(), collected)?.let { return it }
                 continue
             }
             bound[spec] = converted
@@ -745,7 +764,44 @@ public class Parser @ExperimentalCliKitApi constructor(
         return Binding.Bound(bound)
     }
 
-    private fun missingArguments(command: CommandSpec): String = "missing argument; expected ${expectedArguments(command)}"
+    /**
+     * Stores [value], converted from [given], the token of [argument], as the value of [option], which [argument] spells
+     * positionally; or answers why it can't.
+     */
+    private fun bindSpelling(
+        option: Option.Single<*>,
+        argument: Argument,
+        given: IndexedValue<String>,
+        value: Any?,
+        collected: Collected,
+    ): Binding.Failed? {
+        // Not "the last one wins", as for an option typed twice: one spelling might be a script's default that a user
+        // overrides, but two different spellings on one command line is a mistake, and either answer would hide it.
+        if (collected.given(option)) return Binding.Failed("$option is given twice: as an option and as $argument")
+        // As for a variable set for an option that's going away: the positional stops working with it.
+        option.deprecated?.let { collected.warn("$argument", "$argument: ${option.warning(option.long)}", given.index) }
+        collected.singles[option] = value
+        collected.singleTexts[option] = given.value
+        collected.origins[option] = "$argument"
+        return null
+    }
+
+    /**
+     * `missing required option --forms-dir (or <forms-dir>, or FORMS_DIR)`: [option], every other way [command] reads
+     * it, and what was given for it that counts as not set.
+     */
+    private fun missingOption(option: Option, command: CommandSpec, collected: Collected): String {
+        val single = option as? Option.Single<*>
+        val alternatives = command.arguments.filter { it.spelled === option }.map { "$it" } +
+            listOfNotNull(single?.env, single?.config?.takeIf { settings.locations.isNotEmpty() }?.let { "the setting '$it'" })
+        val details = listOfNotNull(
+            alternatives.takeIf { it.isNotEmpty() }?.joinToString(", ") { "or $it" },
+            collected.whyAbsent(option),
+        )
+        return "missing required option ${option.long}" + if (details.isEmpty()) "" else details.joinToString("; ", " (", ")")
+    }
+
+    private fun missingArguments(command: CommandSpec): String ="missing argument; expected ${expectedArguments(command)}"
 
     private fun expectedArguments(command: CommandSpec): String =
         command.arguments.joinToString(" ") { if (it.required) "<${it.name}>" else "[${it.name}]" }

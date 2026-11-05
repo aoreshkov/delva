@@ -15,6 +15,9 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 - Argument files, opt-in and experimental: with `Program.withArgumentFiles()`, `@args.txt` where an option or operand
   is read stands for the file's lines, one argument each, so an argument holding `|`, `&` or `^` gets past a Windows
   `.bat` start script; an option's value is never read as a file, and `@@` starts a literal `@`.
+- An option given positionally, experimental: `Argument.Single.spelling(option)` declares `[forms-dir]` as another
+  spelling of `--forms-dir`, one value that either handle reads, so the option's variable and configuration key fill
+  in only when neither spelling is on the command line; both spellings at once is a usage error.
 
 ### Changed
 
@@ -23,6 +26,10 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 - A line break in a notice, a warning, an error or a log line starts a continuation line, indented under the message
   and marked `│` (or `|`), instead of showing as `\u000A`. Each such entry is one write to stderr, so entries from
   several threads don't interleave, and `TerminalIo.errLine` now writes its text and line break in one `err` call.
+- A missing required option's error names the other ways to give it, its positional spelling, its variable and its
+  configuration key: `missing required option --forms-dir (or <forms-dir>, or FORMS_DIR)`.
+- Positional arguments are read before any option's variable or setting, so an extra argument is reported before an
+  invalid variable.
 
 ### Security
 
