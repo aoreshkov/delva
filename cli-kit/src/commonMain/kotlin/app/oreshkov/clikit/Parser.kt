@@ -158,9 +158,9 @@ public class OptionValues internal constructor(
  *
  * An option that is not on the command line takes its [Option.Single.env] variable from [environment], and failing
  * that its [Option.Single.config] key from [settings], converted and checked like a value typed on the command line.
- * The settings are read only then, so a broken file fails only a command that needs a value from it, and never
- * `completion`; it fails as a [ParseResult.ConfigurationError], as does a setting the option's converter refuses. A
- * setting whose key no option of the tree declares is warned about in [ParseResult.Invocation.notices].
+ * The settings are read only then, so a broken file fails only a command that needs a value from it; it fails as a
+ * [ParseResult.ConfigurationError], as does a setting the option's converter refuses. A setting whose key no option of
+ * the tree declares is warned about in [ParseResult.Invocation.notices].
  *
  * A value its converter calls [ConversionResult.Unset] counts as not given, as that type describes.
  *
@@ -170,6 +170,9 @@ public class OptionValues internal constructor(
  *
  * Once every value is converted, the command line must keep each [Constraint] on its path, and may read standard
  * input through at most one value (see [ReadsStandardInput]); either failure is a usage error like any other.
+ *
+ * [StandardOptions.completion] is held only to its command line: it reads no variable or setting, and no required option
+ * or [Constraint] of the commands above it applies.
  */
 public class Parser @ExperimentalCliKitApi constructor(
     private val root: CommandSpec,
@@ -438,6 +441,15 @@ public class Parser @ExperimentalCliKitApi constructor(
             is Binding.Failed -> return ParseResult.UsageError(binding.message, path)
         }
 
+        fun invocation() = ParseResult.Invocation(
+            path,
+            OptionValues(collected.flags, collected.singles, collected.repeated, bound),
+            warnings + collected.notices.sortedBy { it.index }.map { it.value },
+        )
+
+        // It uses no option's value, so what the commands above it ask for can't be a reason not to print the script.
+        if (command === StandardOptions.completion) return invocation()
+
         // A variable fills in only what the command line left out, or gave only an unset value for.
         for (option in known) {
             if (option !is Option.Single<*> || option.env == null || collected.given(option)) continue
@@ -457,9 +469,9 @@ public class Parser @ExperimentalCliKitApi constructor(
             }
         }
 
-        // Then the settings, for what both left out. `completion` reads none, so it works whatever a file says.
+        // Then the settings, for what both left out.
         val unsettled = known.filterIsInstance<Option.Single<*>>().filter { it.config != null && !collected.given(it) }
-        if (unsettled.isNotEmpty() && command !== StandardOptions.completion) {
+        if (unsettled.isNotEmpty()) {
             fromSettings(unsettled, collected)?.let { return it }
         }
 
@@ -473,11 +485,7 @@ public class Parser @ExperimentalCliKitApi constructor(
             .count { (it as? ReadsStandardInput)?.readsStandardInput == true }
         if (stdinReaders > 1) return ParseResult.UsageError("standard input (-) can be read only once", path)
 
-        return ParseResult.Invocation(
-            path,
-            OptionValues(collected.flags, collected.singles, collected.repeated, bound),
-            warnings + collected.notices.sortedBy { it.index }.map { it.value },
-        )
+        return invocation()
     }
 
     /**
