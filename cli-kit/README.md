@@ -267,7 +267,7 @@ an error that names the file and line, and so is a value the converter refuses: 
 read only when a value is wanted from them, so `--help`, `help`, `--version`, `completion` and a command with no
 configurable option work whatever they say. A key that no option of the tree declares is warned about, with the
 nearest key, and `--quiet` silences the warning. Help tags the option `[config: store]` and lists the command's keys,
-and where they're read, in a Configuration section; `GoldenFiles.assertSurface(root, settings = …)` pins those pages.
+and where they're read, in a Configuration section; `GoldenFiles.assertSurface(program)` pins those pages.
 
 Anyone who can write a file can set every key, so give no key to an option that takes a secret, a command to run or
 code to load, and `readSecret` never reads one. The project file is off unless the program asks for it, since a
@@ -358,13 +358,15 @@ command line. An absent option never matches, because the parser can't see the h
 
 The companion `cli-kit-testing` (`app.oreshkov.clikit:cli-kit-testing`, a test dependency) runs a program in-process
 against a recording terminal — with typed answers to prompts, standard input and interrupts — and pins every help
-page and completion script of a command tree with golden files in one call (its KDoc is on
-[javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit-testing)):
+page and completion script of a program with golden files in one call (its KDoc is on
+[javadoc.io](https://javadoc.io/doc/app.oreshkov.clikit/cli-kit-testing)). It runs the program, so the files hold what
+the program prints, its configuration and argument files included; `assertSurface(root)` renders a command tree alone,
+for a test with no program to run:
 
 ```kotlin
 @Test
 fun `every help page and completion script`() {
-    GoldenFiles(Path.of("src", "test", "resources", "golden"), "golden.update").assertSurface(root)
+    GoldenFiles(Path.of("src", "test", "resources", "golden"), "golden.update").assertSurface(program)
 }
 
 @Test

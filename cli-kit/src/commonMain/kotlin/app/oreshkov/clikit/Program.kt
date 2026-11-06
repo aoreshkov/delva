@@ -293,7 +293,8 @@ public class CommandFailure(
  * `withArgumentFiles()`.
  */
 public class Program @ExperimentalCliKitApi constructor(
-    private val root: CommandSpec,
+    /** The command tree this program runs. */
+    public val root: CommandSpec,
     /** What `--version` prints: `demo 0.1.0`. */
     private val version: String,
     private val handlers: Map<CommandSpec, CommandHandler>,
