@@ -18,6 +18,11 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 - Argument files (experimental): only the first argument can name one. Every later word is taken as typed, so an
   operand such as `@id` needs no `@@` and never reads a file, and `tool query @args.txt` no longer expands.
 
+### Fixed
+
+- `completion <shell>` prints its script whatever the commands above it ask for: a required option, an invalid value in
+  a variable or a broken constraint no longer stops it, so it works where nothing has been configured.
+
 ## [0.4.0] - 2026-11-05
 
 ### Added

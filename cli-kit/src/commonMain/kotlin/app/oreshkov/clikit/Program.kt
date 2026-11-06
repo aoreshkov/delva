@@ -92,8 +92,8 @@ public object StandardOptions {
         Argument.Single("shell", Converters.enum(Shell.entries) { it.id }, "The shell to write the script for")
 
     /**
-     * `completion <shell>`. [Program] answers it without a handler, so it keeps working on a machine
-     * where nothing has been configured.
+     * `completion <shell>`. [Program] answers it without a handler, and what the commands above it ask for doesn't
+     * apply to it (see [Parser]), so it keeps working on a machine where nothing has been configured.
      *
      * The help text deliberately does not spell the `eval "$(prog completion zsh)"` line, tempting
      * as that is: the first line of a help string is embedded into the fish and zsh scripts as a description,

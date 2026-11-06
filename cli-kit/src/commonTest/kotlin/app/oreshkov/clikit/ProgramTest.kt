@@ -82,6 +82,51 @@ class ProgramTest {
         result.assertPipeSafe()
     }
 
+    /** A program whose root asks [go] for things, and that `completion` must not need. */
+    private fun demanding(
+        vararg options: Option,
+        constraints: List<Constraint> = emptyList(),
+        environment: (String) -> String? = { null },
+    ): Program {
+        val tree = CommandSpec(
+            "demo",
+            options = options.toList(),
+            constraints = constraints,
+            subcommands = listOf(go, StandardOptions.completion),
+        )
+        return Program(tree, "demo 1.0", mapOf(go to CommandHandler { ExitStatus.OK }), environment = environment)
+    }
+
+    @Test
+    fun `completion prints its script whatever the commands above it ask for, and other commands still answer to it`() {
+        val one = Option.Flag("--one")
+        val other = Option.Flag("--other")
+        val programs = listOf(
+            demanding(Option.Single("--store", Converters.string, required = true)),
+            demanding(Option.Single("--limit", Converters.int, env = "LIMIT"), environment = { "many" }),
+            demanding(one, other, constraints = listOf(Constraint.ExactlyOne(one, other))),
+        )
+        for (program in programs) {
+            val script = program.record("completion", "bash")
+            assertEquals(ExitStatus.OK, script.status, script.stderr)
+            assertEquals("", script.stderr)
+            assertContains(script.stdout, "demo")
+
+            assertEquals(ExitStatus.USAGE, program.record("go").status)
+        }
+    }
+
+    @Test
+    fun `completion still reads its own command line`() {
+        val program = demanding(
+            Option.Single("--store", Converters.string, required = true),
+            Option.Single("--limit", Converters.int),
+        )
+        assertEquals(ExitStatus.USAGE, program.record("completion").status)
+        assertEquals(ExitStatus.USAGE, program.record("completion", "elvish").status)
+        assertEquals(ExitStatus.USAGE, program.record("--limit", "many", "completion", "bash").status)
+    }
+
     @Test
     fun `the help command is answered without a handler, with the page --help shows`() {
         val result = run("help", "go") { error("dispatched") }
