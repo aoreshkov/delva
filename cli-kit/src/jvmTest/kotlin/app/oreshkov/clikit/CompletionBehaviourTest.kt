@@ -88,7 +88,6 @@ class CompletionBehaviourTest {
      */
     private val fileCases = listOf(
         "demo @args.txt ses" to listOf("session"),
-        "demo store @args.txt q" to listOf("query"),
         // An option's value is skipped as ever.
         "demo --data-dir @dir.txt se" to listOf("session"),
     )

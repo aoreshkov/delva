@@ -42,19 +42,19 @@ public fun Program.runAndExit(args: Array<String>): Nothing {
 }
 
 /**
- * A copy of this program with argument files on: on the command line, `@path` stands for the arguments in the file at
- * `path`, one per line, which reach the program without passing through a shell or a launcher script. That is the way
- * to give an argument that holds `|`, `&` or `^` through a Windows `.bat` start script, which hands it to `cmd`.
+ * A copy of this program with argument files on: as the first argument, `@path` stands for the arguments in the file
+ * at `path`, one per line, which reach the program without passing through a shell or a launcher script. That is the
+ * way to give an argument that holds `|`, `&` or `^` through a Windows `.bat` start script, which hands it to `cmd`.
  *
- * - **Where:** only where the parser reads a new option or operand. A value an option takes, such as `--where @.a`,
- *   `--where=@.a` or `-w @.a`, is left as it is, and so is everything after `--`, so a JSONPath filter, or a value
- *   [Converters.inlineOrFile] reads as a file, keeps working. An operand that starts with `@` is written `@@`, and
- *   `@` alone is left as it is.
+ * - **Where:** only the first argument. Every later word is taken as typed, so a key such as `@id`, a JSONPath filter
+ *   such as `--where @.a`, or a value [Converters.inlineOrFile] reads as a file, means what it does with argument files
+ *   off. A first argument that starts with `@` is written `@@`, and `@` alone is left as it is.
  * - **The file:** UTF-8, at most 1 MiB, with LF or CRLF line ends and an optional byte-order mark. Each line is one
  *   argument, verbatim: no quotes, escapes or comments. The final line break adds no argument; an empty line anywhere
  *   else is an empty argument. A relative path is relative to the working directory.
- * - **As if typed:** the lines are read where `@path` was, options, values and `--` included; a line that starts with
- *   `@` is literal, since files don't nest. `--no-color` and `--width` work from a file too.
+ * - **As if typed:** the lines are read in place of `@path`, commands, options, values and `--` included, and the words
+ *   after `@path` follow them; a line that starts with `@` is literal, since files don't nest. `--no-color` and
+ *   `--width` work from a file too.
  * - **Errors:** a file that can't be read is `error: can't read argument file 'x': <reason>`, exit
  *   [ExitStatus.NO_INPUT], with no usage line.
  *

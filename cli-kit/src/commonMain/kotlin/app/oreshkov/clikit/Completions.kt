@@ -65,7 +65,8 @@ public class CompletionGenerator(private val programName: String? = null) {
 
     /**
      * [generate]'s script, which, for a program with [argumentFiles] on, steps over a word that starts with `@` as it
-     * steps over an option: an argument file can hold anything, so the walk doesn't guess what it names.
+     * steps over an option: an argument file can hold anything, so the walk doesn't guess what it names. Such a word
+     * anywhere but first is an operand, which names no command either.
      */
     internal fun generate(shell: Shell, root: CommandSpec, argumentFiles: Boolean): String {
         val tree = Tree(root)

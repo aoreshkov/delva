@@ -83,19 +83,23 @@ class ArgumentFilesJvmTest {
         assertEquals(ExitStatus.OK, program.record("@$file").status)
         assertEquals("@.kind == 'a|b'" to "\$.orders", seen)
 
-        file.writeText("--where\n@.kind == 'a|b'\n\$.orders\n")
+        // The words after the file follow its lines.
+        file.writeText("query\n--where\n@.kind == 'a|b'\n")
         seen = null
-        assertEquals(ExitStatus.OK, program.record("query", "@$file").status)
+        assertEquals(ExitStatus.OK, program.record("@$file", "\$.orders").status)
         assertEquals("@.kind == 'a|b'" to "\$.orders", seen)
 
-        // A value is never a file, and an operand starting with @ is written @@.
-        assertEquals(ExitStatus.OK, program.record("query", "--where", "@.kind", "@@x").status)
+        // Only the first argument is a file: later words are as typed, a real file's name among them.
+        assertEquals(ExitStatus.OK, program.record("query", "--where", "@.kind", "@x").status)
         assertEquals("@.kind" to "@x", seen)
+        assertEquals(ExitStatus.OK, program.record("query", "@$file").status)
+        assertEquals(null to "@$file", seen)
+        assertEquals(ExitStatus.USAGE, program.record("@@query").status)
 
         val missing = program.record("@args.txt")
         assertEquals(ExitStatus.NO_INPUT, missing.status)
         assertEquals("error: can't read argument file 'args.txt': no such file\n", missing.stderr)
-        assertContains(program.record("--help").stdout, "@file reads arguments from a file, one per line; @@ for a literal @.")
+        assertContains(program.record("--help").stdout, "Start with @file to read arguments from it, one per line; @@ for a literal @.")
     }
 
     @Test
@@ -105,21 +109,18 @@ class ArgumentFilesJvmTest {
         assertEquals(args, argumentLines(content), "the file was ${content.escaped()}")
 
         val read = { name: String -> if (name == "f") content else throw ArgumentFileException("no such file") }
-        val parser = Parser(TestCommands.root)
         // A whole command line from a file: its lines are literal, `@` ones too.
-        assertEquals(args, assertIs<Expansion.Expanded>(parser.expand(listOf("@f"), read)).args)
+        assertEquals(args, assertIs<Expansion.Expanded>(expandArgumentFile(listOf("@f"), read)).args)
         val program = Program(TestCommands.root, "demo 1.0", TestCommands.handlers())
         // The handlers write nothing, so stdout is help or a completion script, which say argument files are on.
         val typed = program.record(*args.toTypedArray())
         val fromFile = program.withArgumentFiles(read).record("@f")
         assertEquals(typed.status to typed.stderr, fromFile.status to fromFile.stderr, args.toString())
 
-        // Part of one, after arguments typed: either in place of `@f`, or `@f` left as a value or an operand after `--`.
-        val split = random.nextInt(0, args.size + 1)
-        val typedPart = args.subList(0, split).map { if (it.startsWith("@")) "@$it" else it }
-        val before = assertIs<Expansion.Expanded>(parser.expand(typedPart, read)).args
-        val expanded = assertIs<Expansion.Expanded>(parser.expand(typedPart + "@f", read)).args
-        assertTrue(expanded == before + args || expanded == before + "@f", "$typedPart @f gave $expanded")
+        // The words typed after the file follow its lines, and with another first word, `@f` is one of them.
+        val typedAfter = List(random.nextInt(0, 4)) { WORDS.random(random) } + "@f"
+        assertEquals(args + typedAfter, assertIs<Expansion.Expanded>(expandArgumentFile(listOf("@f") + typedAfter, read)).args)
+        assertEquals(listOf("x") + typedAfter, assertIs<Expansion.Expanded>(expandArgumentFile(listOf("x") + typedAfter, read)).args)
     }
 
     /** [args] as an argument file, with LF or CRLF, a byte-order mark or not, and a final line break or not. */

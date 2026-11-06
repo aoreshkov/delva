@@ -280,8 +280,8 @@ To read another format, or from somewhere else, implement `Settings`.
 
 A Windows `.bat` start script, such as the one Gradle's `application` plugin writes, hands its arguments to `cmd`, which
 reads `|`, `&` and `^` in them as its own however they were quoted: a filter such as `@.kind == 'a|b'` never reaches
-the program. A program can turn on argument files ([experimental](#experimental-api)), so that `@path` stands for the
-arguments in a file, one per line, which no shell or script reads on the way:
+the program. A program can turn on argument files ([experimental](#experimental-api)), so that `@path` as the first
+argument stands for the arguments in a file, one per line, which no shell or script reads on the way:
 
 ```kotlin
 val where = Option.Single("--where", Converters.string, valueName = "filter")
@@ -297,8 +297,7 @@ val program = Program(
 ).withArgumentFiles()
 ```
 
-With this `args.txt`, `tool @args.txt` runs `tool query --where "@.kind == 'a|b'" $.orders`, and
-`tool query @args.txt` would too if the file left out `query`:
+With this `args.txt`, `tool @args.txt` runs `tool query --where "@.kind == 'a|b'" $.orders`:
 
 ```text
 query
@@ -310,15 +309,16 @@ $.orders
 - **The file:** UTF-8, at most 1 MiB, with LF or CRLF line ends and a leading byte-order mark ignored. Each line is
   one argument, taken as written: no quotes, escapes or comments. The final line break adds no argument, and any other
   empty line is an empty argument. A relative path is relative to the working directory.
-- **Where `@` counts:** only where the parser reads a new option or operand. A value an option takes is never a file,
-  so `--where @.kind`, `--where=@.kind` and `--body @request.json`, which `Converters.inlineOrFile` reads, mean what
-  they did; neither is anything after `--`. An operand that starts with `@` is written `@@`: `@@request.json` passes
-  `@request.json` on. `@` alone is left as it is.
-- **As if typed:** the lines are read where `@path` was, commands, options, values and `--` included, and `--no-color`
-  and `--width` work from a file too. A line that starts with `@` is literal, since files don't nest.
+- **Where `@` counts:** only in the first argument. Every later word is taken as typed, so a key such as `@id`,
+  `--where @.kind` and `--body @request.json`, which `Converters.inlineOrFile` reads, mean what they do with argument
+  files off, and so does `@args.txt` after an option or a command. A first argument that starts with `@` is written
+  `@@`: `@@request.json` passes `@request.json` on. `@` alone is left as it is.
+- **As if typed:** the lines are read in place of `@path`, commands, options, values and `--` included, and the words
+  after it follow them, so a file without the last line above reads `tool @args.txt $.orders` the same. `--no-color` and `--width` work from a file too. A line
+  that starts with `@` is literal, since files don't nest.
 - **Errors:** a file that can't be read is `error: can't read argument file 'args.txt': no such file`, exit status 66
   (`ExitStatus.NO_INPUT`), with no usage line.
-- **Help and completion:** every help page ends with `@file reads arguments from a file, one per line; @@ for a
+- **Help and completion:** every help page ends with `Start with @file to read arguments from it, one per line; @@ for a
   literal @.`, and the completion scripts step over a word that starts with `@`.
 - **PowerShell** reads an unquoted `@name` as splatting a variable, so write `tool '@args.txt'` there.
 

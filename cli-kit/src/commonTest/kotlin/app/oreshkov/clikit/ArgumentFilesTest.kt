@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Argument files: the format of one, where `@path` is expanded and where not, and what [Program] makes of them. */
+/** Argument files: the format of one, that only the first argument is expanded, and what [Program] makes of them. */
 class ArgumentFilesTest {
 
     private val parser = Parser(TestCommands.root)
@@ -19,7 +19,7 @@ class ArgumentFilesTest {
     private fun read(name: String): String = files[name] ?: throw ArgumentFileException("no such file")
 
     private fun expand(vararg args: String): List<String> =
-        assertIs<Expansion.Expanded>(parser.expand(args.toList(), ::read)).args
+        assertIs<Expansion.Expanded>(expandArgumentFile(args.toList(), ::read)).args
 
     @Test
     fun `a file holds one argument per line, verbatim`() {
@@ -47,59 +47,47 @@ class ArgumentFilesTest {
     }
 
     @Test
-    fun `a file is expanded where an operand or an option is read`() {
-        files["key"] = "k1\n"
+    fun `a first argument is replaced by the file's lines, and the words after it follow them`() {
         files["command"] = "store\nget\nk1\n"
         files["options"] = "--data-dir\nd\n"
-        assertEquals(listOf("store", "get", "k1"), expand("store", "get", "@key"))
         assertEquals(listOf("store", "get", "k1"), expand("@command"))
-        assertEquals(listOf("--data-dir", "d", "store", "get", "k1"), expand("@options", "store", "get", "@key"))
-        assertEquals(listOf("store", "get", "--data-dir", "d", "k1"), expand("store", "get", "@options", "k1"))
+        assertEquals(listOf("store", "get", "k1", "--json"), expand("@command", "--json"))
+        assertEquals(listOf("--data-dir", "d", "store", "get", "k1"), expand("@options", "store", "get", "k1"))
     }
 
     @Test
-    fun `an option's value is never expanded`() {
-        val values = listOf(
+    fun `no word but the first is expanded, even with a file of that name there`() {
+        files["x"] = "from the file\n"
+        val lines = listOf(
+            listOf("store", "get", "@x"),
+            listOf("store", "get", "@@x"),
             listOf("--data-dir", "@x", "store", "get", "k"),
             listOf("--data-dir=@x", "store", "get", "k"),
             listOf("store", "get", "--data-dir", "@x", "k"),
-            listOf("request", "get", "-a", "@x", "e"),
+            listOf("store", "@x", "k"),
+            listOf("-v", "@x"),
             listOf("request", "get", "-a@x", "e"),
-            listOf("request", "get", "--param", "@x", "-a", "b", "e"),
-            listOf("request", "get", "-p", "@x", "-a", "b", "e"),
-            // A cluster whose last short option takes a value takes the next argument as it.
-            listOf("request", "get", "-va", "@x", "e"),
-            // A former name takes a value as the option does.
-            listOf("session", "list", "--max", "@x"),
+            listOf("store", "query", "--", "@x"),
         )
-        values.forEach { assertEquals(it, expand(*it.toTypedArray()), it.joinToString(" ")) }
+        lines.forEach { assertEquals(it, expand(*it.toTypedArray()), it.joinToString(" ")) }
     }
 
     @Test
-    fun `after a value in a cluster, the next argument is a new one`() {
-        files["endpoint"] = "e\n"
-        assertEquals(listOf("request", "get", "-vab", "e"), expand("request", "get", "-vab", "@endpoint"))
-        assertEquals(listOf("request", "get", "-v", "e"), expand("request", "get", "-v", "@endpoint"))
-    }
-
-    @Test
-    fun `nothing after -- is expanded, whether -- was typed or read from a file`() {
-        files["end"] = "--\n"
-        assertEquals(listOf("store", "query", "--", "@x"), expand("store", "query", "--", "@x"))
-        assertEquals(listOf("store", "query", "--", "@x"), expand("store", "query", "@end", "@x"))
-    }
-
-    @Test
-    fun `a file's last option takes its value from the next argument, which is then not expanded`() {
+    fun `the words after a file are left as typed, whatever its lines end with`() {
         files["dir"] = "--data-dir\n"
+        files["end"] = "--\n"
+        files["x"] = "from the file\n"
         assertEquals(listOf("--data-dir", "@x", "store", "get", "k"), expand("@dir", "@x", "store", "get", "k"))
+        assertEquals(listOf("--", "@x"), expand("@end", "@x"))
+        assertEquals(listOf("--data-dir", "store", "@x"), expand("@dir", "store", "@x"))
     }
 
     @Test
-    fun `@@ is a literal @, and @ alone names no file`() {
-        assertEquals(listOf("store", "get", "@k"), expand("store", "get", "@@k"))
-        assertEquals(listOf("store", "get", "@@k"), expand("store", "get", "@@@k"))
-        assertEquals(listOf("store", "get", "@"), expand("store", "get", "@"))
+    fun `a first @@ is a literal @, and @ alone names no file`() {
+        assertEquals(listOf("@k", "store"), expand("@@k", "store"))
+        assertEquals(listOf("@@k"), expand("@@@k"))
+        assertEquals(listOf("@", "store"), expand("@", "store"))
+        assertEquals(emptyList(), expand())
     }
 
     @Test
@@ -112,18 +100,18 @@ class ArgumentFilesTest {
 
     @Test
     fun `an expanded command line parses as the same arguments typed`() {
-        files["filter"] = "--param\nwhere=@.kind == 'a|b'\n-a\nalice\n"
+        files["filter"] = "request\nget\n--param\nwhere=@.kind == 'a|b'\n-a\nalice\n"
         val typed = assertIs<ParseResult.Invocation>(
             parser.parse(listOf("request", "get", "--param", "where=@.kind == 'a|b'", "-a", "alice", "e")),
         )
-        val expanded = assertIs<ParseResult.Invocation>(parser.parse(expand("request", "get", "@filter", "e")))
+        val expanded = assertIs<ParseResult.Invocation>(parser.parse(expand("@filter", "e")))
         assertEquals(typed.commandLine(), expanded.commandLine())
         assertEquals(typed.values.toString(), expanded.values.toString())
     }
 
     @Test
     fun `a file that can't be read names itself and why`() {
-        val expansion = assertIs<Expansion.Unreadable>(parser.expand(listOf("store", "get", "@missing.txt"), ::read))
+        val expansion = assertIs<Expansion.Unreadable>(expandArgumentFile(listOf("@missing.txt", "store"), ::read))
         assertEquals("can't read argument file 'missing.txt': no such file", expansion.message)
     }
 
@@ -132,20 +120,24 @@ class ArgumentFilesTest {
     private fun withFiles(): Program = program.withArgumentFiles(::read)
 
     @Test
-    fun `a program reads argument files only once they are turned on`() {
-        files["key"] = "k1\n"
+    fun `a program reads argument files only once they are turned on, and only from the first argument`() {
+        files["command"] = "store\nget\nk1\n"
+        files["key"] = "k2\n"
         var key: String? = null
         val handlers = TestCommands.handlers() + (TestCommands.storeGet to CommandHandler { context -> key = context.values[TestCommands.key]; 0 })
         val program = Program(TestCommands.root, "demo 1.0", handlers)
-        program.record("store", "get", "@key")
-        assertEquals("@key", key)
-        program.withArgumentFiles(::read).record("store", "get", "@key")
+        assertEquals(ExitStatus.USAGE, program.record("@command").status)
+        assertEquals(null, key)
+        val withFiles = program.withArgumentFiles(::read)
+        withFiles.record("@command")
         assertEquals("k1", key)
+        withFiles.record("store", "get", "@key")
+        assertEquals("@key", key)
     }
 
     @Test
     fun `a file that can't be read exits NO_INPUT with no usage line`() {
-        val result = withFiles().record("store", "get", "@missing.txt")
+        val result = withFiles().record("@missing.txt", "store", "get")
         assertEquals(ExitStatus.NO_INPUT, result.status)
         assertEquals("error: can't read argument file 'missing.txt': no such file\n", result.stderr)
         assertEquals("", result.stdout)
@@ -159,7 +151,7 @@ class ArgumentFilesTest {
 
     @Test
     fun `help ends with a line on argument files only when they are on`() {
-        val footer = "@file reads arguments from a file, one per line; @@ for a literal @."
+        val footer = "Start with @file to read arguments from it, one per line; @@ for a literal @."
         assertFalse(footer in program.record("--help").stdout)
         val help = withFiles().record("store", "get", "--help").stdout
         assertTrue(help.endsWith("$footer\n"), help)
