@@ -146,15 +146,16 @@ class GoldenFilesTest {
     }
 
     @Test
-    fun `a script the program won't print fails, naming its command line, and the others are reported with it`() {
-        val required = Option.Single("--store", Converters.string, required = true)
-        val tree = CommandSpec("demo", options = listOf(required), subcommands = listOf(get, StandardOptions.completion))
-        val refusing = Program(tree, "demo 1.0", mapOf(get to CommandHandler { ExitStatus.OK }))
+    fun `a page the program won't print fails, naming its command line, and the others are reported with it`() {
+        // A name that reads as an option: the tree can hold the command, but no command line can select it.
+        val untypable = listOf(CommandSpec("-x"), CommandSpec("-y"))
+        val tree = CommandSpec("demo", subcommands = untypable)
+        val refusing = Program(tree, "demo 1.0", untypable.associateWith { CommandHandler { ExitStatus.OK } })
 
         val failure = assertFailsWith<AssertionError> { write { golden.assertSurface(refusing) } }
-        assertContains(failure.message.orEmpty(), "'demo completion bash' exited ${ExitStatus.USAGE}")
-        assertContains(failure.message.orEmpty(), "--store")
-        assertEquals(Shell.entries.size - 1, failure.suppressed.size)
+        assertContains(failure.message.orEmpty(), "'demo -x --help' exited ${ExitStatus.USAGE}")
+        assertEquals(1, failure.suppressed.size)
+        assertContains(failure.suppressed.single().message.orEmpty(), "'demo -y --help'")
     }
 
     @Test
