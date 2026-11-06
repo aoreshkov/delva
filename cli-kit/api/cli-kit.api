@@ -537,6 +537,7 @@ public final class app/oreshkov/clikit/Program {
 	public synthetic fun <init> (Lapp/oreshkov/clikit/CommandSpec;Ljava/lang/String;Ljava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lapp/oreshkov/clikit/CommandSpec;Ljava/lang/String;Ljava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lapp/oreshkov/clikit/Settings;)V
 	public synthetic fun <init> (Lapp/oreshkov/clikit/CommandSpec;Ljava/lang/String;Ljava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lapp/oreshkov/clikit/Settings;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getRoot ()Lapp/oreshkov/clikit/CommandSpec;
 	public final fun run ([Ljava/lang/String;Lapp/oreshkov/clikit/TerminalIo;)I
 }
 

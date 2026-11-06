@@ -8,6 +8,11 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+### Added
+
+- `GoldenFiles.assertSurface(program)` pins what a program prints by running it, so the files show its configuration
+  and its argument files, which a command tree can't say; `Program.root` is the tree it runs.
+
 ### Changed
 
 - Argument files (experimental): only the first argument can name one. Every later word is taken as typed, so an

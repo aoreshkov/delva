@@ -1,13 +1,17 @@
 package app.oreshkov.clikit.testing
 
+import app.oreshkov.clikit.CommandHandler
 import app.oreshkov.clikit.CommandSpec
 import app.oreshkov.clikit.Converters
+import app.oreshkov.clikit.ExitStatus
 import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.Option
+import app.oreshkov.clikit.Program
 import app.oreshkov.clikit.Setting
 import app.oreshkov.clikit.Settings
 import app.oreshkov.clikit.Shell
 import app.oreshkov.clikit.StandardOptions
+import app.oreshkov.clikit.withArgumentFiles
 import java.nio.file.Path
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createTempDirectory
@@ -85,6 +89,73 @@ class GoldenFilesTest {
 
         golden.assertSurface(tree, settings = settings)
         assertFailsWith<AssertionError> { golden.assertSurface(tree) }
+    }
+
+    private val program = Program(root, "demo 1.0", mapOf(get to CommandHandler { ExitStatus.OK }))
+
+    @Test
+    fun `a program prints the pages its tree renders, so both forms read the same files`() {
+        write { golden.assertSurface(program) }
+        assertEquals(surface, files())
+
+        golden.assertSurface(root)
+        golden.assertSurface(program)
+    }
+
+    @Test
+    @OptIn(ExperimentalCliKitApi::class)
+    fun `a program's files show that it has argument files on, which its tree can't say`() {
+        val withFiles = program.withArgumentFiles()
+        write { golden.assertSurface(withFiles) }
+        val footer = "Start with @file to read arguments from it, one per line; @@ for a literal @."
+        assertContains(directory.resolve("help-store-get.txt").readText(), footer)
+        assertContains(directory.resolve("completion-bash.sh").readText(), "-*|@*)")
+
+        golden.assertSurface(withFiles)
+        assertFailsWith<AssertionError> { golden.assertSurface(program) }
+        assertFailsWith<AssertionError> { golden.assertSurface(root) }
+    }
+
+    @Test
+    @OptIn(ExperimentalCliKitApi::class)
+    fun `a program's files show the configuration it reads, with nothing more to pass`() {
+        val settings = object : Settings {
+            override val locations: List<String> = listOf("the user file")
+
+            override fun read(): List<Setting> = emptyList()
+        }
+        val key = Option.Single("--store", Converters.string, config = "store")
+        val tree = CommandSpec("demo", options = listOf(key), subcommands = listOf(get, StandardOptions.completion))
+        val reading = Program(tree, "demo 1.0", mapOf(get to CommandHandler { ExitStatus.OK }), settings = settings)
+        write { golden.assertSurface(reading) }
+        assertContains(directory.resolve("help-root.txt").readText(), "Configuration:\n  store  Same as --store\n")
+
+        golden.assertSurface(tree, settings = settings, extra = emptySet())
+    }
+
+    @Test
+    fun `a program without the completion command has no script to pin, and one left on disk is an orphan`() {
+        val tree = CommandSpec("demo", subcommands = listOf(get))
+        val plain = Program(tree, "demo 1.0", mapOf(get to CommandHandler { ExitStatus.OK }))
+        write { golden.assertSurface(plain) }
+        assertEquals(setOf("help-root.txt", "help-get.txt"), files())
+
+        directory.resolve("completion-bash.sh").writeText("gone\n")
+        val failure = assertFailsWith<AssertionError> { golden.assertSurface(plain) }
+        assertContains(failure.message.orEmpty(), "completion-bash.sh")
+    }
+
+    @Test
+    fun `a page the program won't print fails, naming its command line, and the others are reported with it`() {
+        // A name that reads as an option: the tree can hold the command, but no command line can select it.
+        val untypable = listOf(CommandSpec("-x"), CommandSpec("-y"))
+        val tree = CommandSpec("demo", subcommands = untypable)
+        val refusing = Program(tree, "demo 1.0", untypable.associateWith { CommandHandler { ExitStatus.OK } })
+
+        val failure = assertFailsWith<AssertionError> { write { golden.assertSurface(refusing) } }
+        assertContains(failure.message.orEmpty(), "'demo -x --help' exited ${ExitStatus.USAGE}")
+        assertEquals(1, failure.suppressed.size)
+        assertContains(failure.suppressed.single().message.orEmpty(), "'demo -y --help'")
     }
 
     @Test

@@ -2,10 +2,13 @@ package app.oreshkov.clikit.testing
 
 import app.oreshkov.clikit.CommandSpec
 import app.oreshkov.clikit.CompletionGenerator
+import app.oreshkov.clikit.ExitStatus
 import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.HelpRenderer
+import app.oreshkov.clikit.Program
 import app.oreshkov.clikit.Settings
 import app.oreshkov.clikit.Shell
+import app.oreshkov.clikit.StandardOptions
 import app.oreshkov.clikit.Styler
 import app.oreshkov.clikit.TableRenderer
 import app.oreshkov.clikit.paths
@@ -111,7 +114,40 @@ public class GoldenFiles(
         val completions = CompletionGenerator()
         val expected = root.paths().associate { helpFileName(it) to { help.render(it) } } +
             Shell.entries.associate { completionFileName(it) to { completions.generate(it, root) } }
+        assertAll(expected, extra)
+    }
 
+    /**
+     * Pins what [program] prints, by running it: one golden file per help page, its `--help` at each command, and, if
+     * its tree has [StandardOptions.completion], one per completion script, its `completion <shell>`. So the files show
+     * what a command tree alone can't say: the configuration it reads, and that it has argument files on. A page it
+     * doesn't print, because the run exits with another status than [ExitStatus.OK], fails and names its command line.
+     *
+     * The other files and failures work as in the [assertSurface] that takes a command tree.
+     */
+    public fun assertSurface(program: Program, styler: Styler = Styler.Plain, extra: Set<String> = emptySet()) {
+        fun printed(words: List<String>): String {
+            val result = program.record(*words.toTypedArray(), io = RecordingTerminalIo(styler = styler))
+            if (result.status != ExitStatus.OK) {
+                fail("'${(listOf(program.root.name) + words).joinToString(" ")}' exited ${result.status}: ${result.stderr}")
+            }
+            return result.stdout
+        }
+
+        val paths = program.root.paths().toList()
+        val pages = paths.associate { path -> helpFileName(path) to { printed(path.words() + "--help") } }
+        val completion = paths.firstOrNull { it.last() === StandardOptions.completion }
+        val scripts = completion?.let { path ->
+            Shell.entries.associate { shell -> completionFileName(shell) to { printed(path.words() + shell.id) } }
+        }
+        assertAll(pages + scripts.orEmpty(), extra)
+    }
+
+    /** The words that name the command at the end of this path, below the root. */
+    private fun List<CommandSpec>.words(): List<String> = drop(1).map { it.name }
+
+    /** Compares every file in [expected] before failing, then fails for one on disk in neither it nor [extra]. */
+    private fun assertAll(expected: Map<String, () -> String>, extra: Set<String>) {
         val failures = expected.mapNotNull { (name, render) ->
             try {
                 assertMatches(name, render())
