@@ -45,6 +45,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 dependencies {
+    "testImplementation"(platform(libs.findLibrary("junit-bom").get()))
     "testImplementation"(libs.findLibrary("kotlin-test-junit5").get())
     "testRuntimeOnly"(libs.findLibrary("junit-platform-launcher").get())
 }
