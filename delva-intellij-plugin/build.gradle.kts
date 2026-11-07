@@ -81,6 +81,10 @@ val bundledDelvaVersion = if (delvaFromSource) providers.gradleProperty("delva.v
 fun minorOf(version: String): String = version.split('.', '-').take(2).joinToString(".")
 
 intellijPlatform {
+    // Instrumentation adds null checks for nullability annotations and processes GUI Designer forms. This module's sources
+    // are Kotlin, which makes its own null checks, with no forms, and the task goes through Gradle's Ant integration, which
+    // Gradle 10 removes.
+    instrumentCode = false
     pluginConfiguration {
         // The Marketplace description is the README's, between its plugin description markers.
         description = providers.fileContents(layout.projectDirectory.file("README.md")).asText.map { readme ->
