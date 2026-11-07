@@ -40,6 +40,7 @@ extensions.configure<KotlinMultiplatformExtension> {
     }
     sourceSets.named("jvmTest") {
         dependencies {
+            implementation(project.dependencies.platform(libs.findLibrary("junit-bom").get()))
             runtimeOnly(libs.findLibrary("junit-platform-launcher").get())
         }
     }
