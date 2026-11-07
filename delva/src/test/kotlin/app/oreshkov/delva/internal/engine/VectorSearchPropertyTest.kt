@@ -279,9 +279,11 @@ class VectorSearchPropertyTest {
 
     /**
      * How far the engine's distance may be from the oracle's: a few float steps, and for a dot product what summing
-     * products of [q] and [v] in another order can cancel differently.
+     * products of [q] and [v] in another order can cancel differently. An infinite distance has none, as [close] asks
+     * of it, and an infinite tolerance would turn the bounds at an infinite `maxDistance` into NaN.
      */
     private fun tolerance(metric: VectorMetric, q: FloatArray, v: FloatArray, d: Float): Double {
+        if (d.isInfinite()) return 0.0
         val steps = 1e-6 * (1 + abs(d.toDouble()))
         if (metric != VectorMetric.DOT_PRODUCT) return steps
         var magnitude = 0.0
