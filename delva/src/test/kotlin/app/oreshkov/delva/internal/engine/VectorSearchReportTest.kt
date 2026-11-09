@@ -27,7 +27,8 @@ import kotlin.test.assertEquals
  * a larger one, as every index of the default grid is, it reads from the operating system's page cache each time. Runs
  * under `reportTest`, not `check`.
  * `-Ddelva.report.vectors=<n,…>` sets the numbers of documents (10000,100000 by default) and
- * `-Ddelva.report.dimensions=<d,…>` the dimensions (384,768,1536).
+ * `-Ddelva.report.dimensions=<d,…>` the dimensions (384,768,1536), and `-Ddelva.report.vectorBlockBytes=<b,…>` the
+ * target sizes of vector segment blocks to compare (the engine's default alone by default).
  */
 @OptIn(ExperimentalDelvaApi::class)
 class VectorSearchReportTest {
@@ -35,36 +36,40 @@ class VectorSearchReportTest {
     fun `vector search report`() {
         val counts = (System.getProperty("delva.report.vectors") ?: "10000,100000").split(',').map { it.trim().toInt() }
         val dimensionsList = (System.getProperty("delva.report.dimensions") ?: "384,768,1536").split(',').map { it.trim().toInt() }
+        val blockSizes = System.getProperty("delva.report.vectorBlockBytes")?.split(',')?.map { it.trim().toInt() }
+            ?: listOf(EngineOptions().vectorSegmentBlockBytes)
         val rows = ArrayList<String>()
         for (dimensions in dimensionsList) {
             for ((c, count) in counts.withIndex()) {
-                val withVectors = measure(count, dimensions, vectorField = true)
-                val without = if (c == 0) measure(count, dimensions, vectorField = false) else null
-                rows += "| %,d | %d | %,.0f | %,.0f | %s | %.1f | %.2f | %.2f | %.1f | %.2f | %.2f |".format(
-                    count, dimensions, withVectors.indexBytes / (1 shl 20).toDouble(),
-                    count / (withVectors.insertNanos / 1e9), without?.let { "%,.0f".format(count / (it.insertNanos / 1e9)) } ?: "",
-                    withVectors.millis[0], withVectors.millis[1], withVectors.millis[2],
-                    withVectors.millis[3], withVectors.millis[4], withVectors.millis[5],
-                )
+                for ((b, blockBytes) in blockSizes.withIndex()) {
+                    val withVectors = measure(count, dimensions, blockBytes, vectorField = true)
+                    val without = if (c == 0 && b == 0) measure(count, dimensions, blockBytes, vectorField = false) else null
+                    rows += "| %,d | %d | %d | %,.0f | %,.0f | %s | %.1f | %.2f | %.2f | %.1f | %.2f | %.2f |".format(
+                        count, dimensions, blockBytes shr 10, withVectors.indexBytes / (1 shl 20).toDouble(),
+                        count / (withVectors.insertNanos / 1e9), without?.let { "%,.0f".format(count / (it.insertNanos / 1e9)) } ?: "",
+                        withVectors.millis[0], withVectors.millis[1], withVectors.millis[2],
+                        withVectors.millis[3], withVectors.millis[4], withVectors.millis[5],
+                    )
+                }
             }
         }
         println(
             "\nVector search: unit-length Gaussian vectors under COSINE, top $TOP_K, median of $SEARCHES searches; " +
                 "block cache ${EngineOptions().blockCacheBytes shr 20} MiB of a ${Runtime.getRuntime().maxMemory() shr 20} MiB heap\n\n" +
-                "| Documents | Dimensions | Vector index MiB | Inserts/s | Inserts/s without a vector field | " +
+                "| Documents | Dimensions | Vector block KiB | Vector index MiB | Inserts/s | Inserts/s without a vector field | " +
                 "Top $TOP_K ms | 1% filter ms | 10% filter ms | Top $TOP_K ms, mmap | 1% filter ms, mmap | 10% filter ms, mmap |\n" +
-                "|---|---|---|---|---|---|---|---|---|---|---|\n" + rows.joinToString("\n"),
+                "|---|---|---|---|---|---|---|---|---|---|---|---|\n" + rows.joinToString("\n"),
         )
     }
 
-    private fun measure(count: Int, dimensions: Int, vectorField: Boolean): Measured {
+    private fun measure(count: Int, dimensions: Int, blockBytes: Int, vectorField: Boolean): Measured {
         val dir = Files.createTempDirectory("delva-vector-report")
         try {
             val field = VectorField("$.embedding", dimensions, VectorMetric.COSINE)
             val creation = CreationOptions(excludedKeys = setOf("embedding")).withVectorField(if (vectorField) field else null)
             val random = Random(SEED)
             var insertNanos = 0L
-            Engine.open(dir, EngineOptions(creation), JdkFileSystemIo()).use { store ->
+            Engine.open(dir, EngineOptions(creation, vectorSegmentBlockBytes = blockBytes), JdkFileSystemIo()).use { store ->
                 var next = 0
                 while (next < count) {
                     val batch = List(minOf(BATCH, count - next)) { i -> chunk(next + i, unitGaussian(random, dimensions)) }

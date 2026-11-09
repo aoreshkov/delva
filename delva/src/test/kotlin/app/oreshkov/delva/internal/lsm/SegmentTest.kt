@@ -5,6 +5,7 @@ import app.oreshkov.delva.internal.bits.DocIdSet
 import app.oreshkov.delva.internal.bytes.Crc32c
 import app.oreshkov.delva.internal.bytes.GrowableBytes
 import app.oreshkov.delva.internal.bytes.LittleEndian
+import app.oreshkov.delva.internal.io.FileIo
 import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.term.PostingCodec
@@ -124,6 +125,104 @@ class SegmentTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `a cursor that reads ahead moves and seeks like one that doesn't`() {
+        forAll("read-ahead cursor", segmentCases, iterations = 100, maxSize = 200) { (entries, blockBytes) ->
+            val path = writeSegment(entries, blockBytes)
+            val random = Random(entries.size.toLong() * 31 + blockBytes)
+            for (cache in listOf(ByteCache(0), ByteCache(1L shl 20))) {
+                open(path, cache).use { reader ->
+                    val cursor = reader.cursor(admit = random.nextBoolean(), readAheadBytes = listOf(512, 4096, 64 * 1024)[random.nextInt(3)])
+                    var current: ByteArray? = null
+                    repeat(200) {
+                        val expected: Map.Entry<ByteArray, ByteArray>?
+                        val found: Boolean
+                        when (if (current == null) 1 + random.nextInt(2) else random.nextInt(4)) {
+                            0, 3 -> {
+                                expected = entries.higherEntry(current)
+                                found = cursor.next()
+                            }
+                            else -> {
+                                val target = if (entries.isNotEmpty() && random.nextBoolean()) {
+                                    entries.keys.elementAt(random.nextInt(entries.size))
+                                } else {
+                                    ByteArray(random.nextInt(0, 10)) { random.nextInt(256).toByte() }
+                                }
+                                if (random.nextBoolean()) {
+                                    expected = entries.ceilingEntry(target)
+                                    found = cursor.seekCeiling(target)
+                                } else {
+                                    expected = entries.floorEntry(target)
+                                    found = cursor.seekFloor(target)
+                                }
+                            }
+                        }
+                        assertEquals(expected != null, found)
+                        if (expected != null) {
+                            assertContentEquals(expected.key, key(cursor))
+                            assertContentEquals(expected.value, value(cursor))
+                        }
+                        current = expected?.key
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `reading ahead makes fewer reads, and checks only the blocks the cursor takes`() {
+        val entries = TreeMap<ByteArray, ByteArray>(unsigned)
+        for (i in 0 until 2000) entries[ByteArray(8) { (i shr (8 * (7 - it))).toByte() }] = ByteArray(20) { (i + it).toByte() }
+        val path = writeSegment(entries, 256)
+        fun reads(readAheadBytes: Int, mapped: Boolean = false): Int {
+            val counting = CountingFileIo(fs.open(path, OpenMode.READ), mapped)
+            SegmentReader.open(fileNo++, counting, ByteCache(0), SegmentFormat.INDEX_POSTING).use { reader ->
+                counting.reads = 0
+                val cursor = reader.cursor(admit = false, readAheadBytes = readAheadBytes)
+                var ok = cursor.first()
+                for ((k, _) in entries) {
+                    assertTrue(ok)
+                    assertContentEquals(k, key(cursor))
+                    ok = cursor.next()
+                }
+                assertFalse(ok)
+                return counting.reads
+            }
+        }
+        val plain = reads(0)
+        val ahead = reads(4096)
+        assertTrue(ahead * 8 < plain, "$ahead reads reading ahead, $plain without")
+        assertEquals(plain, reads(4096, mapped = true), "a mapped file doesn't read ahead")
+
+        // A damaged byte in block 1, which a seek from block 0 to a later block reads ahead but never takes.
+        val later = entries.keys.elementAt(40)
+        val block1 = open(path, ByteCache(0)).use { reader ->
+            val c = reader.cursor()
+            assertTrue(c.seekCeiling(later))
+            assertTrue(c.block in 2 until 4096 / 256, "the key is past block 1, within the first run")
+            reader.block(0, admit = false).size
+        }
+        fs.flipBit(path, block1 + 5L, 0)
+        open(path, ByteCache(0)).use { reader ->
+            val c = reader.cursor(admit = false, readAheadBytes = 4096)
+            assertTrue(c.first())
+            assertTrue(c.seekCeiling(later))
+            assertContentEquals(later, key(c))
+            assertContentEquals(entries[later], value(c))
+            val scan = reader.cursor(admit = false, readAheadBytes = 4096)
+            assertFailsWith<CorruptionException> {
+                var ok = scan.first()
+                while (ok) ok = scan.next()
+            }
+        }
+    }
+
+    private class CountingFileIo(private val delegate: FileIo, override val mapped: Boolean) : FileIo by delegate {
+        var reads = 0
+
+        override fun read(position: Long, destination: ByteArray, offset: Int, length: Int): Int = delegate.read(position, destination, offset, length).also { reads++ }
     }
 
     @Test

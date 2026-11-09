@@ -30,7 +30,7 @@ import kotlin.math.sqrt
  * Exact top-10 vector search over [vectors] chunk documents with unit-length Gaussian vectors of [dimensions] numbers
  * under cosine, on a real disk with the LSM settled. [filter] is none, or a document filter on a root member that one
  * document in 100 (`1%`) or in 10 (`10%`) matches, which the index narrows before any vector is read. [cache] is a
- * block cache that holds the vector index or one that doesn't.
+ * block cache that holds the vector index or one that doesn't; [vectorBlockBytes] the size of vector segment blocks.
  */
 @OptIn(ExperimentalDelvaApi::class)
 @State(Scope.Benchmark)
@@ -56,6 +56,10 @@ class VectorSearchBenchmark {
     @Param("false", "true")
     var mmap: Boolean = false
 
+    /** Target size of vector segment blocks in bytes, or `default`: the engine's. */
+    @Param("default")
+    var vectorBlockBytes: String = "default"
+
     private lateinit var dir: Path
     private lateinit var store: Engine
     private lateinit var query: VectorQuery
@@ -65,7 +69,12 @@ class VectorSearchBenchmark {
         dir = Files.createTempDirectory("delva-vector-bench")
         val field = VectorField("$.embedding", dimensions, VectorMetric.COSINE)
         val creation = CreationOptions(excludedKeys = setOf("embedding")).withVectorField(field)
-        store = Engine.open(dir, EngineOptions(creation, blockCacheBytes = if (cache == "large") 1L shl 30 else null), JdkFileSystemIo(mmapReads = mmap))
+        val options = EngineOptions(
+            creation,
+            blockCacheBytes = if (cache == "large") 1L shl 30 else null,
+            vectorSegmentBlockBytes = vectorBlockBytes.takeIf { it != "default" }?.toInt(),
+        )
+        store = Engine.open(dir, options, JdkFileSystemIo(mmapReads = mmap))
         val random = Random(42)
         var next = 0
         while (next < vectors) {

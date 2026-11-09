@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.query
 
 import app.oreshkov.delva.CorruptionException
+import app.oreshkov.delva.internal.bytes.BigEndian
 import app.oreshkov.delva.internal.lsm.SegmentCursor
 import app.oreshkov.delva.internal.lsm.SegmentHandle
 import app.oreshkov.delva.internal.lsm.VectorEntry
@@ -57,8 +58,9 @@ internal class VectorScan(version: Version, dimensions: Int, admit: Boolean = tr
 
     private class SegmentSource(private val segment: SegmentHandle, dimensions: Int, admit: Boolean) : Source() {
         private val reader = segment.reader
-        private val cursor: SegmentCursor = reader.cursor(admit)
+        private val cursor: SegmentCursor = reader.cursor(admit, READ_AHEAD_BYTES)
         private val values = FloatArray(dimensions)
+        private val key = ByteArray(VectorSegments.KEY_BYTES)
         override var docId: Long = Long.MAX_VALUE
             private set
 
@@ -72,13 +74,16 @@ internal class VectorScan(version: Version, dimensions: Int, admit: Boolean = tr
                 docId = Long.MAX_VALUE
                 return
             }
-            val previous = docId
-            // Step once, which a scan always needs; seek through the block index only to skip further.
-            docId = if (cursor.next()) VectorSegments.docIdOf(cursor, reader.source) else Long.MAX_VALUE
-            if (docId <= previous) throw CorruptionException(reader.source, "vector of document $docId after document $previous")
-            if (docId < target) {
-                docId = if (cursor.seekCeiling(VectorSegments.key(target))) VectorSegments.docIdOf(cursor, reader.source) else Long.MAX_VALUE
+            BigEndian.putLong(key, 0, target)
+            // A target in a later block is sought there directly: stepping first would read the next block for nothing.
+            if (!reader.blockEndsBefore(cursor.block, key, 0, key.size)) {
+                val previous = docId
+                // Step once, which a scan nearly always needs; seek within the block only to skip further.
+                docId = if (cursor.next()) VectorSegments.docIdOf(cursor, reader.source) else Long.MAX_VALUE
+                if (docId <= previous) throw CorruptionException(reader.source, "vector of document $docId after document $previous")
+                if (docId >= target) return
             }
+            docId = if (cursor.seekCeiling(key)) VectorSegments.docIdOf(cursor, reader.source) else Long.MAX_VALUE
         }
 
         override fun distance(distance: VectorDistance): Float {
@@ -119,6 +124,14 @@ internal class VectorScan(version: Version, dimensions: Int, admit: Boolean = tr
 
     /** Where the vector at [docId] is read from, for messages. */
     fun sourceName(): String = sources.firstOrNull { it.docId == docId }?.let { if (it is SegmentSource) it.toString() else "vector memtable" } ?: "vector index"
+
+    companion object {
+        /**
+         * Bytes a scan reads at once when it moves on to the next block: vector blocks are small so that a selective
+         * filter reads little per vector, and reading ahead keeps a full scan to as few reads as large blocks would.
+         */
+        const val READ_AHEAD_BYTES: Int = 64 * 1024
+    }
 }
 
 /** Every docId, for a vector search that no index term narrows: seeking to a docId always lands on it. */

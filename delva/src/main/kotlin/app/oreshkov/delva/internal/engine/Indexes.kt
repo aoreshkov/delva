@@ -320,7 +320,7 @@ internal class Indexes(
             }
             if (!memtable.vectors.isEmpty) {
                 val field = checkNotNull(options.creation.vectorField) { "vectors in a store without a vector field" }
-                vector = writeSegment(SegmentFormat.INDEX_VECTOR) { file -> VectorSegments.write(memtable.vectors, field.dimensions, file, blockBytes, hidden) }
+                vector = writeSegment(SegmentFormat.INDEX_VECTOR) { file -> VectorSegments.write(memtable.vectors, field.dimensions, file, options.vectorSegmentBlockBytes, hidden) }
             }
             // Names are only ever added, so a different count is a change.
             val dictionaryChanged = frozen.typeNames != persistedTypeNames

@@ -382,7 +382,7 @@ internal class Compactor(private val indexes: Indexes, private val options: Comp
                     SegmentFormat.INDEX_KEY -> KeySegments.merge(readers, job.hidden, control, file, blockBytes)
                     SegmentFormat.INDEX_VECTOR -> {
                         val field = checkNotNull(indexes.options.creation.vectorField) { "vector segments in a store without a vector field" }
-                        VectorSegments.merge(readers, field, job.hidden, control, file, blockBytes)
+                        VectorSegments.merge(readers, field, job.hidden, control, file, indexes.options.vectorSegmentBlockBytes)
                     }
                     else -> TypeSegments.merge(readers, olderMayHold(job.older), job.hidden, control, file, blockBytes)
                 }

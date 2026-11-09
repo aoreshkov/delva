@@ -104,6 +104,7 @@ class VectorSearchPropertyTest {
             segmentBlockBytes = listOf(256, 4096)[random.nextInt(2)],
             compaction = CompactionOptions(enabled = false, bytesPerSecond = 0, minMergeSegments = 2, deletedRatio = 0.01),
             maxRangeDocuments = listOf(4, Int.MAX_VALUE)[random.nextInt(2)],
+            vectorSegmentBlockBytes = listOf(null, 256, 1024)[random.nextInt(3)],
         )
         val vectors = Vectors(random, shape, dimensions, metric)
         val visible = LinkedHashMap<Long, Doc>()

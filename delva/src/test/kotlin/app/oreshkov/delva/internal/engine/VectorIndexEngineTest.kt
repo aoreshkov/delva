@@ -24,10 +24,10 @@ import kotlin.test.assertTrue
 class VectorIndexEngineTest {
     private val field = VectorField("$.v", 3, VectorMetric.EUCLIDEAN)
 
-    private fun options(memtableBytes: Long? = null) = EngineOptions(
+    private fun options(memtableBytes: Long? = null, vectorSegmentBlockBytes: Int? = null) = EngineOptions(
         CreationOptions(fragmentBytes = 64).withVectorField(field), StoreOptions(encoderBudgetBytes = 1024),
         sorterBytes = 4096, keyArenaBytes = 1024, keySeed = 13, log = TestEngines.LOG,
-        backgroundFlush = false, memtableBytes = memtableBytes, segmentBlockBytes = 256,
+        backgroundFlush = false, memtableBytes = memtableBytes, segmentBlockBytes = 256, vectorSegmentBlockBytes = vectorSegmentBlockBytes,
         // Only when asked, so the tests see each flush's segment.
         compaction = CompactionOptions(enabled = false, bytesPerSecond = 0, minMergeSegments = 2, deletedRatio = 0.01),
     )
@@ -86,6 +86,35 @@ class VectorIndexEngineTest {
         }
         fs.restart()
         TestEngines.open(options, fs).use { store -> assertVectors(store, expected, "after compaction and a restart") }
+    }
+
+    @Test
+    fun `vector segments have blocks of their own size, and segments of different block sizes are read and merged together`() {
+        assertEquals(EngineOptions.DEFAULT_VECTOR_SEGMENT_BLOCK_BYTES, EngineOptions().vectorSegmentBlockBytes)
+        assertEquals(512, EngineOptions(segmentBlockBytes = 512).vectorSegmentBlockBytes, "never larger than the other blocks")
+        val fs = SimulatedFileSystemIo()
+        val expected = LinkedHashMap<Long, Int>()
+        fun blockCounts(store: Engine) = store.indexes.versions.current().vectorSegments.map { it.reader.blockCount }
+        // The block size is the writer's alone: a store reopened with another keeps reading the segments it has.
+        TestEngines.open(options(vectorSegmentBlockBytes = 4096), fs).use { store ->
+            for (i in 0 until 60) expected[store.insert(doc(i)).raw] = i
+            store.flush()
+            assertEquals(listOf(1), blockCounts(store), "40 vectors of 3 numbers in one 4 KiB block")
+        }
+        fs.restart()
+        TestEngines.open(options(), fs).use { store ->
+            for (i in 60 until 120) expected[store.insert(doc(i)).raw] = i
+            store.flush()
+            val counts = blockCounts(store)
+            assertEquals(1, counts[0])
+            assertTrue(counts[1] > 4, "the same number of vectors in 256-byte blocks: $counts")
+            assertVectors(store, expected, "segments of both block sizes")
+            assertTrue(store.compact() > 0)
+            assertTrue(blockCounts(store).single() > 8, "merged into 256-byte blocks: ${blockCounts(store)}")
+            assertVectors(store, expected, "after merging them")
+        }
+        fs.restart()
+        TestEngines.open(options(), fs).use { store -> assertVectors(store, expected, "after a restart") }
     }
 
     @Test

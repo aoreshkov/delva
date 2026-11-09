@@ -16,8 +16,9 @@ import java.util.Arrays
  * An open segment file ([SegmentFormat]): the index and stats are validated and kept on the heap when it opens; data
  * blocks and external value chunks are read on demand, checked against their CRC and kept in the shared [ByteCache].
  * A small bloom filter is kept on the heap too; a larger one is read in pages through the cache, each page checked
- * against a CRC computed when the segment opened, so an open segment holds a few KiB of heap however large it is
- * (segments accumulate with every flush until compaction). Every inconsistency throws [CorruptionException].
+ * against a CRC computed when the segment opened, so an open segment holds a few KiB of heap plus its block index,
+ * about 40 bytes per data block (segments accumulate with every flush until compaction). Every inconsistency throws
+ * [CorruptionException].
  * Thread-safe; cursors are not.
  */
 internal class SegmentReader private constructor(
@@ -67,9 +68,11 @@ internal class SegmentReader private constructor(
 
     /**
      * A cursor over the segment. With [admit] false, a block it reads that isn't cached already isn't added to the
-     * cache either: a scan of a large segment then leaves the cache as it found it.
+     * cache either: a scan of a large segment then leaves the cache as it found it. With [readAheadBytes], moving on
+     * to the next block reads it and the blocks after it, up to that many bytes, in one I/O; a mapped file doesn't,
+     * as it has no system call to save and the run would only be copied twice.
      */
-    fun cursor(admit: Boolean = true): SegmentCursor = SegmentCursor(this, admit)
+    fun cursor(admit: Boolean = true, readAheadBytes: Int = 0): SegmentCursor = SegmentCursor(this, admit, if (file.mapped) 0 else readAheadBytes)
 
     /**
      * Reads every bloom page through its CRC check; a filter kept on the heap was checked when the segment
@@ -92,13 +95,53 @@ internal class SegmentReader private constructor(
         return lo
     }
 
+    /** Whether every key of block [i] is before the target. */
+    internal fun blockEndsBefore(i: Int, target: ByteArray, offset: Int, length: Int): Boolean {
+        val k = lastKeys[i]
+        return Arrays.compareUnsigned(k, 0, k.size, target, offset, offset + length) < 0
+    }
+
     /** The verified bytes of block [i], trailer included, added to the cache when read from the file if [admit]. */
     internal fun block(i: Int, admit: Boolean = true): ByteArray {
         val offset = blockOffsets[i]
         val key = cacheKey(offset)
         cache.get(key)?.let { return it }
+        return verified(i, read(offset, blockLengths[i]), admit)
+    }
+
+    /** Block [i] when the cache holds it, else null. */
+    internal fun cachedBlock(i: Int): ByteArray? = cache.get(cacheKey(blockOffsets[i]))
+
+    /** How many blocks from [first] on end within [maxBytes] of its start; at least one. */
+    internal fun runLength(first: Int, maxBytes: Int): Int {
+        val start = blockOffsets[first]
+        var n = 1
+        while (first + n < blockCount && blockOffsets[first + n] + blockLengths[first + n] - start <= maxBytes) n++
+        return n
+    }
+
+    /**
+     * The bytes of [count] blocks from [first] on, read in one I/O and not yet verified: [blockIn] takes each block
+     * out of them. A scan through small blocks then makes as few reads as one through large ones, and a block it
+     * skips is never checked.
+     */
+    internal fun readRun(first: Int, count: Int): ByteArray {
+        val start = blockOffsets[first]
+        return read(start, (blockOffsets[first + count - 1] + blockLengths[first + count - 1] - start).toInt())
+    }
+
+    /** Block [i] as [block] gives it, taken from [run], which [readRun] read from block [runFirst] on. */
+    internal fun blockIn(i: Int, run: ByteArray, runFirst: Int, admit: Boolean): ByteArray {
+        val offset = blockOffsets[i]
+        cache.get(cacheKey(offset))?.let { return it }
+        val at = (offset - blockOffsets[runFirst]).toInt()
+        return verified(i, run.copyOfRange(at, at + blockLengths[i]), admit)
+    }
+
+    /** Checks the bytes of block [i] read from the file; adds them to the cache if [admit]. */
+    private fun verified(i: Int, bytes: ByteArray, admit: Boolean): ByteArray {
+        val offset = blockOffsets[i]
         val length = blockLengths[i]
-        val bytes = read(offset, length)
         if (Crc32c.of(bytes, 0, length - 4) != LittleEndian.getInt(bytes, length - 4)) throw CorruptionException("$source@$offset", "block checksum mismatch")
         val restarts = LittleEndian.getInt(bytes, length - 8)
         val entriesEnd = length.toLong() - 8 - 4L * restarts
@@ -109,7 +152,7 @@ internal class SegmentReader private constructor(
             if (at <= previous || at >= entriesEnd || (r == 0 && at != 0)) throw CorruptionException("$source@$offset", "restart point $at")
             previous = at
         }
-        if (admit) cache.put(key, bytes)
+        if (admit) cache.put(cacheKey(offset), bytes)
         return bytes
     }
 
@@ -248,10 +291,12 @@ internal class SegmentReader private constructor(
 /**
  * Walks the entries of one segment in key order: [seekCeiling], [seekFloor], [first] and [next] position it on an
  * entry, whose [key] and value ([valueLength], inline or external) are then available. A seek that lands in the block
- * it holds keeps it rather than fetching it again. Blocks it reads go into the cache only with [admit]. Reusable; not
- * thread-safe.
+ * it holds keeps it rather than fetching it again. Blocks it reads go into the cache only with [admit]. With
+ * [readAheadBytes], a move to the block after the current one that isn't cached reads the run of blocks starting there
+ * in one I/O and holds it (at most [readAheadBytes]), taking the next blocks out of it; a seek further away reads one
+ * block. Reusable; not thread-safe.
  */
-internal class SegmentCursor(private val segment: SegmentReader, private val admit: Boolean = true) {
+internal class SegmentCursor(private val segment: SegmentReader, private val admit: Boolean = true, private val readAheadBytes: Int = 0) {
     /** Key of the current entry: `key.array[0, key.size)`. */
     val key = GrowableBytes(64)
 
@@ -271,6 +316,11 @@ internal class SegmentCursor(private val segment: SegmentReader, private val adm
         private set
 
     private var blockIndex = -1
+
+    /** Blocks `[runFirst, runFirst + runCount)` read ahead, not yet verified. */
+    private var run = EMPTY
+    private var runFirst = 0
+    private var runCount = 0
 
     /** Where errors in the current block point; built once per block, not once per entry. */
     private var blockSource = segment.source
@@ -430,10 +480,23 @@ internal class SegmentCursor(private val segment: SegmentReader, private val adm
     private fun loadBlock(b: Int) {
         // Blocks never change, so the one held is still the block; a block read past the cache isn't fetched twice.
         if (b == blockIndex && bytes !== EMPTY) return
-        bytes = segment.block(b, admit)
+        bytes = when {
+            b >= runFirst && b < runFirst + runCount -> segment.blockIn(b, run, runFirst, admit)
+            readAheadBytes > 0 && b == blockIndex + 1 -> segment.cachedBlock(b) ?: readAhead(b)
+            else -> segment.block(b, admit)
+        }
         blockSource = "${segment.source} block $b"
         blockIndex = b
         entriesEnd = bytes.size - 8 - 4 * LittleEndian.getInt(bytes, bytes.size - 8)
+    }
+
+    private fun readAhead(b: Int): ByteArray {
+        val count = segment.runLength(b, readAheadBytes)
+        if (count == 1) return segment.block(b, admit)
+        run = segment.readRun(b, count)
+        runFirst = b
+        runCount = count
+        return segment.blockIn(b, run, b, admit)
     }
 
     private fun decodeNext(): Boolean {

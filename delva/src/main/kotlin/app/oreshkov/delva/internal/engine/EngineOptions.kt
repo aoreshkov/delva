@@ -30,7 +30,8 @@ internal fun interface Clock {
  * + ingestBudgetBytes                                   buffered small inserts and their working memory
  * + largeLanes × (B + 2·T + sorter + key arena)         promoted inserts, one per lane
  * + blockCacheBytes + fragmentCacheBytes
- * + a few KiB per open segment                          O(log n) segments per index with compaction
+ * + per open segment: a few KiB + ~40 B per data block   O(log n) segments per index with compaction; blocks are
+ *                                                       segmentBlockBytes, vectorSegmentBlockBytes in vector segments
  * + compaction: read cache + list spill threshold + run bytes + 10 bits per key of the segment it writes
  * + compression: ~300 KiB native zlib state per inserting thread; one dictionary build at a time (sampleBytes × 13)
  * + reclamation: one record buffer (≤ T + T/2) + ~100 B per fragment of one RELOCATE chunk (maxRelocateFragments)
@@ -57,7 +58,9 @@ internal fun interface Clock {
  *   least [memtableBytes].
  * - [backgroundFlush]: flush on a thread of its own; false flushes on the writer thread right after the freeze, which
  *   makes simulations deterministic.
- * - [segmentBlockBytes]: target size of segment data blocks; [blockCacheBytes], [fragmentCacheBytes]: cache sizes.
+ * - [segmentBlockBytes]: target size of segment data blocks; [vectorSegmentBlockBytes]: the same for vector segments,
+ *   by default the smaller of [segmentBlockBytes] and [DEFAULT_VECTOR_SEGMENT_BLOCK_BYTES]; [blockCacheBytes],
+ *   [fragmentCacheBytes]: cache sizes.
  * - [typeQueryPlan]: how searches with a type filter run; tests force either plan.
  * - [descendingBufferHits]: hits of one document a descending search keeps at a time; tests make it tiny.
  * - [maxRangeDocuments]: the most documents a JSONPath range comparison collects for one search; tests make it tiny.
@@ -89,6 +92,7 @@ internal class EngineOptions(
     memtableBudgetBytes: Long? = null,
     val backgroundFlush: Boolean = true,
     val segmentBlockBytes: Int = DEFAULT_SEGMENT_BLOCK_BYTES,
+    vectorSegmentBlockBytes: Int? = null,
     blockCacheBytes: Long? = null,
     fragmentCacheBytes: Long? = null,
     val typeQueryPlan: TypeQueryPlan = TypeQueryPlan.AUTO,
@@ -112,6 +116,7 @@ internal class EngineOptions(
     val largeLanes: Int = largeLanes ?: (heapBytes / (512L shl 20)).coerceIn(1L, DEFAULT_LARGE_LANES.toLong()).toInt()
     val memtableBytes: Long = memtableBytes ?: (share(8, MIN_BUDGET_BYTES, DEFAULT_MEMTABLE_BUDGET_BYTES) / 4).coerceAtMost(DEFAULT_MEMTABLE_BYTES)
     val memtableBudgetBytes: Long = memtableBudgetBytes ?: maxOf(share(8, MIN_BUDGET_BYTES, DEFAULT_MEMTABLE_BUDGET_BYTES), 4 * this.memtableBytes)
+    val vectorSegmentBlockBytes: Int = vectorSegmentBlockBytes ?: minOf(segmentBlockBytes, DEFAULT_VECTOR_SEGMENT_BLOCK_BYTES)
     val blockCacheBytes: Long = blockCacheBytes ?: share(32, 4L shl 20, DEFAULT_BLOCK_CACHE_BYTES)
     val fragmentCacheBytes: Long = fragmentCacheBytes ?: share(64, 2L shl 20, DEFAULT_FRAGMENT_CACHE_BYTES)
     val compareCacheBytes: Long = compareCacheBytes ?: share(64, 1L shl 20, DEFAULT_COMPARE_CACHE_BYTES)
@@ -150,7 +155,7 @@ internal class EngineOptions(
         require(this.smallInsertThreshold >= 0 && this.ingestBudgetBytes >= 0 && this.largeLanes in 1..MAX_LARGE_LANES)
         require(writerQueueCapacity >= 1 && maxBatchRequests >= 1)
         require(this.memtableBytes >= 0 && this.memtableBudgetBytes >= this.memtableBytes) { "memtable budget ${this.memtableBudgetBytes} is below the flush size ${this.memtableBytes}" }
-        require(segmentBlockBytes >= 256 && this.blockCacheBytes >= 0 && this.fragmentCacheBytes >= 0)
+        require(segmentBlockBytes >= 256 && this.vectorSegmentBlockBytes >= 256 && this.blockCacheBytes >= 0 && this.fragmentCacheBytes >= 0)
         require(descendingBufferHits >= 1)
         require(maxRangeDocuments >= 1)
         require(this.compareCacheBytes >= 0 && this.literalMemoryBytes >= 0)
@@ -168,6 +173,12 @@ internal class EngineOptions(
         const val DEFAULT_MEMTABLE_BYTES: Long = 64L * 1024 * 1024
         const val DEFAULT_MEMTABLE_BUDGET_BYTES: Long = 256L * 1024 * 1024
         const val DEFAULT_SEGMENT_BLOCK_BYTES: Int = 64 * 1024
+
+        /**
+         * Small, because a search with a selective filter reads a whole block for each vector it wants, while a scan
+         * of every vector reads ahead across blocks and so loses little to them.
+         */
+        const val DEFAULT_VECTOR_SEGMENT_BLOCK_BYTES: Int = 8 * 1024
         const val DEFAULT_BLOCK_CACHE_BYTES: Long = 64L * 1024 * 1024
         const val DEFAULT_FRAGMENT_CACHE_BYTES: Long = 32L * 1024 * 1024
         const val DEFAULT_COMPARE_CACHE_BYTES: Long = 16L * 1024 * 1024
