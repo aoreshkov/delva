@@ -96,6 +96,7 @@ class VectorIndexSimTest {
             reclaim = ReclaimOptions(maxLiveRatio = 0.95, bytesPerSecond = 0, maxRelocateFragments = listOf(1, 16_384)[random.nextInt(2)]),
             compaction = CompactionOptions(minMergeSegments = 2, deletedRatio = 0.01, tombstoneRatio = 0.01, bytesPerSecond = 0),
             compression = TestEngines.compression(random.nextInt(3)),
+            vectorSegmentBlockBytes = listOf(null, 256, 1024)[random.nextInt(3)],
         )
         // Document n's vector, or null when it has none; never zero, so every metric takes it.
         val vectors = ArrayList<FloatArray?>()

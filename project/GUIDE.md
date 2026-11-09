@@ -257,16 +257,16 @@ the store's own:
 
 | Vectors | Dimensions | Vector index | All | 1% filter | 10% filter | All, `mmapReads` |
 |---|---|---|---|---|---|---|
-| 10,000 | 384 | 15 MiB | 7.1 ms | 4.7 ms | 7.4 ms | 4.0 ms |
-| 100,000 | 384 | 148 MiB | 61 ms | 23 ms | 53 ms | 35 ms |
-| 10,000 | 768 | 29 MiB | 12 ms | 2.3 ms | 10 ms | 7.1 ms |
-| 100,000 | 768 | 294 MiB | 115 ms | 22 ms | 96 ms | 69 ms |
-| 10,000 | 1,536 | 59 MiB | 26 ms | 2.1 ms | 21 ms | 14 ms |
-| 100,000 | 1,536 | 588 MiB | 270 ms | 26 ms | 239 ms | 154 ms |
+| 10,000 | 384 | 15 MiB | 8.8 ms | 1.7 ms | 6.1 ms | 3.6 ms |
+| 100,000 | 384 | 148 MiB | 75 ms | 5.4 ms | 49 ms | 41 ms |
+| 10,000 | 768 | 30 MiB | 14 ms | 0.7 ms | 4.3 ms | 7.5 ms |
+| 100,000 | 768 | 296 MiB | 156 ms | 5.8 ms | 56 ms | 78 ms |
+| 10,000 | 1,536 | 59 MiB | 32 ms | 1.0 ms | 4.8 ms | 15 ms |
+| 100,000 | 1,536 | 590 MiB | 280 ms | 5.9 ms | 50 ms | 149 ms |
 
 A store keeps an index of up to 1/64 of the heap, and 32 MiB at most, in its own cache, and searches it faster still.
-[`mmapReads`](#limits-and-sizing) cuts the time of a larger one by about 40 %. So exact search suits stores of up to
-about 100,000 vectors where a tenth of a second per search is fine, and larger ones whose searches are filtered. Past
+[`mmapReads`](#limits-and-sizing) cuts the time of a larger one by about half. So exact search suits stores of up to
+about 100,000 vectors where 0.1 to 0.3 seconds per search is fine, and larger ones whose searches are filtered. Past
 that, it is too slow: faster scans and an approximate index are on the [roadmap](ROADMAP.md#engine).
 [`EmbeddingSearch`](../delva-examples/README.md) in delva-examples is a whole program.
 

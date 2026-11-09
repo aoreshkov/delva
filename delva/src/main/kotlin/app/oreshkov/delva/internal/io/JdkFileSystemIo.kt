@@ -239,6 +239,8 @@ private class MappedFileIo(override val path: Path, private val channel: FileCha
         throw t
     }
 
+    override val mapped: Boolean get() = true
+
     override fun read(position: Long, destination: ByteArray, offset: Int, length: Int): Int {
         if (position >= size) return 0
         val n = minOf(length.toLong(), size - position).toInt()

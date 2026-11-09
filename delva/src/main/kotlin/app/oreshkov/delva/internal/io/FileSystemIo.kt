@@ -63,6 +63,9 @@ internal interface FileSystemIo {
 internal interface FileIo : AutoCloseable {
     val path: Path
 
+    /** Whether reads copy from a memory mapping, so that a read costs no system call and a larger one saves nothing. */
+    val mapped: Boolean get() = false
+
     /** Reads up to [length] bytes at [position]; returns the count, which is less than [length] only at the end. */
     fun read(position: Long, destination: ByteArray, offset: Int, length: Int): Int
 
