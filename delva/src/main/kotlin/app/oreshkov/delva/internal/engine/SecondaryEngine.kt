@@ -41,6 +41,7 @@ import app.oreshkov.delva.internal.types.TypeDictionary
 import app.oreshkov.delva.internal.visibility.LateCommits
 import app.oreshkov.delva.internal.visibility.Visibility
 import java.io.IOException
+import java.nio.channels.ClosedChannelException
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -697,6 +698,9 @@ private class SecondaryFiles(private val io: FileSystemIo, dir: Path) : LogReade
     }
 
     private val held = ConcurrentHashMap<Long, Held>()
+
+    /** Set before the files are closed, so a read that finds its file gone can tell a closed store from a bug. */
+    @Volatile
     private var closed = false
 
     override fun pathOf(fileNo: Long, control: Boolean, laneId: Int): Path =
@@ -740,7 +744,9 @@ private class SecondaryFiles(private val io: FileSystemIo, dir: Path) : LogReade
 
     override fun reader(fileNo: Long, control: Boolean, laneId: Int): FileIo = laneReader(fileNo)
 
-    override fun laneReader(fileNo: Long): FileIo = held[fileNo]?.file ?: throw IOException("log file $fileNo isn't open in this secondary")
+    /** The open file [fileNo]; [ClosedChannelException] once the secondary closed, which ends the read that asked. */
+    override fun laneReader(fileNo: Long): FileIo =
+        held[fileNo]?.file ?: if (closed) throw ClosedChannelException() else throw IOException("log file $fileNo isn't open in this secondary")
 }
 
 /**

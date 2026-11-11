@@ -18,9 +18,11 @@ import app.oreshkov.delva.internal.io.FileSystemIo
 import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo.Platform
+import app.oreshkov.delva.internal.log.FragmentView
 import app.oreshkov.delva.internal.log.LogFiles
 import app.oreshkov.delva.internal.log.LogOptions
 import app.oreshkov.delva.internal.log.ManifestStore
+import app.oreshkov.delva.internal.store.LogFragmentStore
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
@@ -377,6 +379,24 @@ class SecondaryEngineTest {
         assertFailsWith<StoreClosedException> { result.nextPage() }
         assertFailsWith<StoreClosedException> { secondary.refresh() }
         result.close()
+    }
+
+    /** A read that started before the secondary closed and reaches a lane file after: the store closed, nothing is damaged. */
+    @Test
+    fun `closing the secondary during a read ends the read`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options()
+        val docId = Engine.open(dir, options, fs).use { writer -> writer.insert(doc(Random(11), 0, big = true)) }
+        val secondary = secondary(fs, options)
+        val (_, version) = secondary.openView()
+        val fragments = secondary.fragmentsOf(version) as LogFragmentStore
+        val entries = fragments.index.range(docId.raw, 0, 0, Long.MAX_VALUE).toList()
+        assertTrue(entries.size >= 2, "a document of several fragments: ${entries.size}")
+        val view = FragmentView()
+        assertTrue(entries[0].let { fragments.find(it.docId, it.pre, it.kind, it.seq, view) })
+        secondary.close()
+        assertFailsWith<StoreClosedException> { entries[1].let { fragments.find(it.docId, it.pre, it.kind, it.seq, view) } }
+        version.release()
     }
 
     /** Records the files opened through [fs]. */

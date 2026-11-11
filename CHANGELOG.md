@@ -54,6 +54,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   they threw `IllegalStateException`.
 - `delva`: a secondary open across a reset of its store reads the documents written after it with the compression
   dictionaries trained after it; it read them with the old ones, which gave wrong bytes or reported damage.
+- `delva`: closing a secondary during a read fails the read with `StoreClosedException`; it threw
+  `CorruptionException`.
 
 ## [0.3.0] - 2026-10-31
 
