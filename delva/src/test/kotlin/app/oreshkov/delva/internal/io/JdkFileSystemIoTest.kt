@@ -82,6 +82,47 @@ class JdkFileSystemIoTest {
     }
 
     @Test
+    fun `a lock held in this JVM refuses every other attempt in it without opening the file`() = withTempDir { dir ->
+        val opened = AtomicInteger()
+        val counting = JdkFileSystemIo(openChannel = { path, options -> opened.incrementAndGet(); FileChannel.open(path, *options) })
+        val lockFile = dir.resolve("LOCK")
+        val first = assertNotNull(counting.tryLock(lockFile))
+        assertEquals(1, opened.get())
+        assertNull(counting.tryLock(lockFile), "the same instance")
+        assertNull(counting.tryLock(dir.resolve("./LOCK")), "the same file by another spelling")
+        assertEquals(1, opened.get(), "a refused attempt opens nothing, so closing it can't release the lock")
+        assertNull(JdkFileSystemIo().tryLock(lockFile), "another instance")
+        val link = dir.resolveSibling("${dir.fileName}-link")
+        val linked = try {
+            Files.createSymbolicLink(link, dir)
+        } catch (_: IOException) {
+            null
+        } catch (_: UnsupportedOperationException) {
+            null
+        }
+        try {
+            // Windows creates symbolic links only with a privilege tests don't have.
+            if (linked != null) assertNull(JdkFileSystemIo().tryLock(linked.resolve("LOCK")), "through a symbolic link to the directory")
+        } finally {
+            linked?.let(Files::delete)
+        }
+        first.close()
+        val second = assertNotNull(JdkFileSystemIo().tryLock(lockFile), "released by the close")
+        first.close()
+        assertNull(counting.tryLock(lockFile), "a second close of the first lock doesn't release the second")
+        second.close()
+        assertNotNull(counting.tryLock(lockFile)).close()
+    }
+
+    @Test
+    fun `a lock attempt that fails leaves the path free`() = withTempDir { dir ->
+        val failing = JdkFileSystemIo(openChannel = { _, _ -> throw IOException("open") })
+        assertEquals("open", assertFailsWith<IOException> { failing.tryLock(dir.resolve("LOCK")) }.message)
+        assertFailsWith<IOException> { JdkFileSystemIo().tryLock(dir.resolve("missing/LOCK")) }
+        JdkFileSystemIo().tryLock(dir.resolve("LOCK"))!!.close()
+    }
+
+    @Test
     fun `a store on disk rolls files under an open search, reopens, and locks its directory`() = withTempDir { dir ->
         val options = EngineOptions(
             CreationOptions(fragmentBytes = 256), StoreOptions(encoderBudgetBytes = 1024),

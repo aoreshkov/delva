@@ -15,6 +15,8 @@ import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * [FileSystemIo] over the JDK's `FileChannel` and `Files`.
@@ -83,30 +85,66 @@ internal class JdkFileSystemIo(
         onOwnThread { openChannel(dir, READ_OPTIONS).use { it.force(true) } }
     }
 
+    /**
+     * On Linux and macOS the lock is a POSIX record lock, which belongs to the process, and closing any descriptor of
+     * the file releases every such lock the process holds on it. So a second attempt in this JVM must not open the file
+     * at all: [lockedPaths] refuses it first, and only the first attempt's channel is ever opened and closed.
+     */
     override fun tryLock(path: Path): AutoCloseable? = withoutInterrupts {
-        val channel = openChannel(path, LOCK_OPTIONS)
-        val lock = try {
-            channel.tryLock()
-        } catch (_: OverlappingFileLockException) {
-            null
-        } catch (e: IOException) {
-            channel.close()
-            throw e
-        }
-        if (lock == null) {
-            channel.close()
-            return null
-        }
-        AutoCloseable {
-            try {
-                lock.release()
-            } finally {
+        val key = lockKey(path)
+        if (!lockedPaths.add(key)) return null
+        try {
+            val channel = openChannel(path, LOCK_OPTIONS)
+            val lock = try {
+                channel.tryLock()
+            } catch (_: OverlappingFileLockException) {
+                // Another FileChannel of this JVM, opened outside this class, holds it.
+                null
+            } catch (t: Throwable) {
                 channel.close()
+                throw t
             }
+            if (lock == null) {
+                channel.close()
+                lockedPaths.remove(key)
+                return null
+            }
+            val released = AtomicBoolean()
+            AutoCloseable {
+                // Once only: a second close must not remove the key of a later holder.
+                if (!released.compareAndSet(false, true)) return@AutoCloseable
+                try {
+                    lock.release()
+                } finally {
+                    try {
+                        channel.close()
+                    } finally {
+                        lockedPaths.remove(key)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            lockedPaths.remove(key)
+            throw t
         }
     }
 
     private companion object {
+        /** The lock files this JVM holds, by [lockKey]. */
+        val lockedPaths: MutableSet<Path> = ConcurrentHashMap.newKeySet()
+
+        /**
+         * [path] with its directory's real path, so a store reached through a symbolic link is the same key. Not the
+         * file's own real path: resolving that would open it, which is what a refused attempt mustn't do, and it may
+         * not exist yet. A hard link to the file, or the directory seen through a bind mount, gives another key and
+         * isn't caught.
+         */
+        fun lockKey(path: Path): Path {
+            val absolute = path.toAbsolutePath()
+            val parent = absolute.parent ?: return absolute.normalize()
+            return parent.toRealPath().resolve(absolute.fileName)
+        }
+
         val READ_OPTIONS: Array<OpenOption> = arrayOf(StandardOpenOption.READ)
         val READ_WRITE_OPTIONS: Array<OpenOption> = arrayOf(StandardOpenOption.READ, StandardOpenOption.WRITE)
         val CREATE_NEW_OPTIONS: Array<OpenOption> = arrayOf(StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)
