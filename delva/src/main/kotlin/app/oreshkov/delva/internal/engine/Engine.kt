@@ -175,8 +175,12 @@ internal class Engine private constructor(
     /** Counted down once [close] has released everything. */
     private val closed = CountDownLatch(1)
 
+    /** The first failure. [fail] sets it before the state becomes FAILED, so whoever sees FAILED finds the cause. */
+    private val failure = AtomicReference<Throwable?>()
+
+    /** Runs in [fail] between recording the cause and changing the state; for tests. */
     @Volatile
-    private var failure: Throwable? = null
+    var onFailing: () -> Unit = {}
 
     private enum class State { RUNNING, CLOSING, CLOSED, FAILED }
 
@@ -686,6 +690,7 @@ internal class Engine private constructor(
             }
         }
         var error: Throwable? = null
+        var failedWith: Throwable? = null
         fun step(block: () -> Unit) {
             try {
                 block()
@@ -698,12 +703,15 @@ internal class Engine private constructor(
             step { reclaimer.stop() }
             step { writer.stop() }
             step { indexes.close() }
-            if (failure == null && error == null) {
+            if (failure.get() == null && error == null) {
                 // Lanes still held belong to inserts that fail now; their BEGINs are aborted at the next open.
                 step { largeLanes.close { lane -> if (options.store.durability !is Durability.None) lane.log.force() } }
                 step { files.writeManifest() }
             }
         } finally {
+            // Read before CLOSED: an error from the files closing below isn't a failure of the store, and [fail] takes
+            // back a cause it recorded once it sees CLOSED.
+            failedWith = failure.get()
             state.set(State.CLOSED)
             step { files.close() }
             step { codecs.close() }
@@ -711,8 +719,8 @@ internal class Engine private constructor(
             closed.countDown()
         }
         // A failure from before the close was already reported to the operations it stopped.
-        if (from == State.RUNNING && failure != null) {
-            val failed = failedException()
+        if (from == State.RUNNING && failedWith != null) {
+            val failed = failedException(failedWith)
             error?.let(failed::addSuppressed)
             throw failed
         }
@@ -730,28 +738,26 @@ internal class Engine private constructor(
     }
 
     // A failure while closing leaves the state CLOSING; the writer and the flushes must still stop writing after it.
-    override val failed: Boolean get() = state.get() == State.FAILED || failure != null
+    override val failed: Boolean get() = state.get() == State.FAILED || failure.get() != null
 
     override fun fail(cause: Throwable): DelvaException {
-        if (state.compareAndSet(State.RUNNING, State.FAILED)) {
-            failure = cause
-            return failedException()
-        }
+        // The cause goes first: an operation that sees FAILED reports it, and must not find it missing.
+        val recorded = failure.compareAndSet(null, cause)
+        onFailing()
+        state.compareAndSet(State.RUNNING, State.FAILED)
         return when (state.get()) {
-            State.FAILED -> failedException()
             // Files stay open until the state is CLOSED, so a failure while closing is a real one, which close reports.
-            State.CLOSING -> {
-                if (failure == null) failure = cause
-                failedException()
+            State.FAILED, State.CLOSING -> failedException()
+            else -> {
+                // The store closed first, and its closing files are what failed.
+                if (recorded) failure.compareAndSet(cause, null)
+                StoreClosedException()
             }
-            else -> StoreClosedException()
         }
     }
 
-    private fun failedException(): EngineFailedException {
-        val cause = failure
-        return EngineFailedException("The engine failed and must be reopened: $cause", cause)
-    }
+    private fun failedException(cause: Throwable? = failure.get()): EngineFailedException =
+        EngineFailedException("The engine failed and must be reopened: $cause", cause)
 
     // ---- insert helpers ----------------------------------------------------------------------------------------
 

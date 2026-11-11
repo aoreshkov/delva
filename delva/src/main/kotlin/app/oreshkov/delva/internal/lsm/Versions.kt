@@ -32,7 +32,8 @@ internal class Memtable {
  * An open segment shared by the [Version]s that list it. When the last version holding it is released it's closed,
  * and deleted through [graveyard] if it was marked [obsolete] ([discard]: a delete that fails doesn't fail the store);
  * without a graveyard, in a process that only reads the store, it's only closed. A type segment's statistics ([types])
- * are read when the handle is created. [onDestroyed] runs once it was closed that way. Thread-safe.
+ * are read when the handle is created. [onDestroyed] runs once it was closed that way. A handle [close]d with the store
+ * is neither closed again nor deleted when its last version is released. Thread-safe.
  */
 internal class SegmentHandle(
     val reader: SegmentReader,
@@ -84,16 +85,27 @@ internal class SegmentHandle(
         if (refs.get() == 0) destroy()
     }
 
+    /** Whether [close] closed the file. */
+    private var closed = false
+
     /** Closes the file without deleting it (the store is closing). */
-    fun close() = reader.close()
+    @Synchronized
+    fun close() {
+        if (closed || deleted) return
+        closed = true
+        reader.close()
+    }
 
     @Synchronized
     private fun destroy() {
         if (deleted) return
         deleted = true
         try {
-            reader.close()
-            if (graveyard != null) io.discard(path, graveyard)
+            // After a close the store released its directory, so an obsolete file stays for the next open to remove.
+            if (!closed) {
+                reader.close()
+                if (graveyard != null) io.discard(path, graveyard)
+            }
         } finally {
             onDestroyed(this)
         }
