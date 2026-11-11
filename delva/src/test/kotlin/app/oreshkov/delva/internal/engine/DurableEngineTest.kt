@@ -417,6 +417,59 @@ class DurableEngineTest {
     }
 
     @Test
+    fun `a power loss while a store reopens after a crash never leaves an unsynced insert damaged`() {
+        val fs = SimulatedFileSystemIo()
+        val periodic = options(threshold = 16L * 1024, durability = Durability.Periodic(1.hours))
+        val small = doc(1)
+        val large = doc(2, 100).toByteArray()
+        val store = Engine.open(dir, periodic, fs)
+        // Acknowledged, with its COMMIT and its fragments only in the page cache.
+        val unsynced = store.insert(small).raw
+        // A large insert whose process dies mid-body: its BEGIN is in the control log, its COMMIT never comes.
+        val dying = object : InputStream() {
+            var position = 0
+
+            override fun read(): Int = throw UnsupportedOperationException()
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (position > large.size * 3 / 4) {
+                    fs.restart()
+                    throw IOException("the process died")
+                }
+                val n = minOf(len, 256, large.size - position)
+                System.arraycopy(large, position, b, off, n)
+                position += n
+                return n
+            }
+        }
+        assertFailsWith<IOException> { store.insert(dying) }
+        runCatching { store.close() }
+
+        // The reopen syncs the control log, then again after the ABORT for the unfinished insert, whose AFTER_SYNC flag
+        // marks the COMMIT before it as synced. The power goes at the first sync of another file after those two, losing
+        // every unsynced write but the control log's: in the right order the lanes were synced before either.
+        var controlForces = 0
+        var cut = false
+        fs.beforeForce { path ->
+            if (path.parent?.fileName?.toString() == LogFiles.CONTROL_DIR) {
+                controlForces++
+            } else if (controlForces >= 2 && !cut) {
+                cut = true
+                fs.crashKeeping { it.parent?.fileName?.toString() == LogFiles.CONTROL_DIR }
+            }
+        }
+        assertFailsWith<IOException> { Engine.open(dir, periodic, fs) }
+        assertTrue(cut, "the power loss came after the second force of the control log")
+        fs.beforeForce(null)
+
+        Engine.open(dir, periodic, fs).use { reopened ->
+            assertEquals(0, reopened.damagedDocIds.size)
+            assertEquals(mapOf(unsynced to small), reopened.documents())
+            assertTrue(reopened.registry.current().visibility.isAborted(unsynced + 1))
+        }
+    }
+
+    @Test
     fun `a synced COMMIT with a damaged fragment is still reported as damage`() {
         val fs = SimulatedFileSystemIo()
         val damaged: Long
