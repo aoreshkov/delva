@@ -4,13 +4,16 @@ import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.LockHolder
 import app.oreshkov.delva.StoreLockedException
 import app.oreshkov.delva.StoreOptions
+import app.oreshkov.delva.internal.io.JdkFileSystemIo
 import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
+import app.oreshkov.delva.internal.log.LogFiles
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -48,6 +51,27 @@ class StoreLockTest {
         assertFalse(fs.exists(dir.resolve("${StoreLock.OWNER_FILE}.tmp")))
         StoreReset.run(dir, fs)
         assertFalse(fs.exists(owner), "a reset leaves no record either")
+    }
+
+    /**
+     * On Linux and macOS, closing any descriptor of the lock file releases the process's lock on it, so a refused open
+     * that opened the file and closed it again would let another process in. Only another process can see that.
+     */
+    @Test
+    fun `a refused second open in this JVM keeps the lock against other processes`() {
+        val store = Files.createTempDirectory("delva-lock")
+        try {
+            val lockFile = store.resolve(LogFiles.LOCK_FILE)
+            Engine.open(store, options, JdkFileSystemIo()).use {
+                val e = assertFailsWith<StoreLockedException> { Engine.open(store, options, JdkFileSystemIo()) }
+                assertEquals(StoreLock.currentProcess(), e.holder, "the refusal names the holder")
+                assertFailsWith<StoreLockedException> { StoreReset.run(store, JdkFileSystemIo()) }
+                assertEquals(LockProbe.REFUSED, LockProbe.runChild(lockFile))
+            }
+            assertEquals(LockProbe.LOCKED, LockProbe.runChild(lockFile), "the close released it")
+        } finally {
+            store.toFile().deleteRecursively()
+        }
     }
 
     @Test
@@ -135,5 +159,33 @@ class StoreLockTest {
         fs.createDirectories(dir)
         fs.writeOwner("delva-lock 1\npid=${Long.MAX_VALUE}\nhost=${StoreLock.hostName()}\n")
         assertNull(StoreLock.holder(dir, fs), "the process is gone")
+    }
+}
+
+/** The child process of [StoreLockTest]: `LockProbe <lock file>` tries to lock it and prints [LOCKED] or [REFUSED]. */
+object LockProbe {
+    const val LOCKED = "LOCKED"
+    const val REFUSED = "REFUSED"
+
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val lock = JdkFileSystemIo().tryLock(Path.of(args[0]))
+        println(if (lock == null) REFUSED else LOCKED)
+        lock?.close()
+    }
+
+    /** Runs [main] on [lockFile] in a child JVM and returns what it printed. */
+    fun runChild(lockFile: Path): String {
+        val process = ProcessBuilder(
+            ProcessHandle.current().info().command().orElse("java"), "-cp", System.getProperty("java.class.path"), LockProbe::class.java.name, lockFile.toString(),
+        ).redirectError(ProcessBuilder.Redirect.INHERIT).start()
+        try {
+            val output = process.inputStream.bufferedReader().readText().trim()
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS), "the child didn't end within 30 seconds")
+            assertEquals(0, process.exitValue(), "the child's exit code; output: $output")
+            return output
+        } finally {
+            process.destroyForcibly()
+        }
     }
 }

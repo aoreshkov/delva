@@ -46,6 +46,11 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   stdout and stderr are merged, a line break in one starts an indented continuation line, and an option given twice
   with different values is a warning.
 
+### Fixed
+
+- `delva`: on Linux and macOS, a refused second open of a store in the same JVM no longer releases the first
+  writer's lock, which let another process open the store as a second writer.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added
