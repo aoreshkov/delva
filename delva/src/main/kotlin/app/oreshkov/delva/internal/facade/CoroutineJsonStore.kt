@@ -43,7 +43,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import java.io.FilterInputStream
 import java.io.InputStream
@@ -88,26 +87,27 @@ internal abstract class CoroutineReadableJsonStore(private val reader: ReadEngin
     override fun listTypes(): List<TypeInfo> = reader.listTypes()
 
     override suspend fun isEqual(a: CompareOperand, b: CompareOperand, options: CompareOptions): Boolean = withContext(dispatcher) {
-        val job = coroutineContext.job
+        val job = coroutineContext[Job]
         reader.isEqual(cancellable(a, job), cancellable(b, job), options)
     }
 
     override fun diff(a: CompareOperand, b: CompareOperand, options: DiffOptions): Flow<Difference> = flow {
-        val job = currentCoroutineContext().job
+        // flowOn collects in place, in a context that may have no Job, when the collector already runs on the dispatcher.
+        val job = currentCoroutineContext()[Job]
         reader.openDiff(cancellable(a, job), cancellable(b, job), options).use { cursor ->
             while (true) emit(cursor.next() ?: break)
         }
     }.flowOn(dispatcher)
 
-    /** A JSON stream operand whose reads stop once [job] is cancelled. */
-    private fun cancellable(operand: CompareOperand, job: Job): CompareOperand =
+    /** A JSON stream operand whose reads stop once [job] is cancelled; without a job, they never stop. */
+    private fun cancellable(operand: CompareOperand, job: Job?): CompareOperand =
         if (operand is CompareOperand.JsonStream) CompareOperand.JsonStream(CancellableInputStream(operand.source, job)) else operand
 
     /** Cancellation stops the scrub at its next progress report, like a cancelled insert stops at its next read. */
     override suspend fun verify(progress: VerifyProgress): VerifyReport = withContext(dispatcher) {
-        val job = coroutineContext.job
+        val job = coroutineContext[Job]
         reader.verify { phase, bytesChecked, bytesTotal ->
-            job.ensureActive()
+            job?.ensureActive()
             progress.onProgress(phase, bytesChecked, bytesTotal)
         }
     }
@@ -130,14 +130,15 @@ internal abstract class CoroutineReadableJsonStore(private val reader: ReadEngin
 
     /** Cancellation stops the comparisons at the next checkpoint; once the result exists, it is returned, as a write's is. */
     override suspend fun search(query: VectorQuery): VectorSearchResult {
-        val caller = currentCoroutineContext().job
-        caller.ensureActive()
+        // Null in a coroutine without a Job, such as `suspend fun main`, which can't be cancelled.
+        val caller = currentCoroutineContext()[Job]
+        caller?.ensureActive()
         // withContext drops its value when it dispatches back to a cancelled caller, and this value must be closed: the
         // outer call can't be cancelled, and the caller's next suspension point throws instead.
         return withContext(NonCancellable) {
             withContext(dispatcher) {
-                caller.ensureActive()
-                reader.searchVectors(query) { caller.ensureActive() }
+                caller?.ensureActive()
+                reader.searchVectors(query) { caller?.ensureActive() }
             }
         }
     }
@@ -199,15 +200,18 @@ internal class CoroutineJsonStore(internal val core: Engine, ioParallelism: Int)
         core.insertAll(sources.map { InsertSource(CancellableInputStream(it.source, caller), it.types, it.replaces, it.onExistingKey) })
     }
 
-    /** Runs [block] on the dispatcher, as the class comment describes; it gets the caller's job for its input streams. */
-    private suspend inline fun <T> write(crossinline block: (caller: Job) -> T): T {
-        val caller = currentCoroutineContext().job
-        caller.ensureActive()
+    /**
+     * Runs [block] on the dispatcher, as the class comment describes; it gets the caller's job for its input streams,
+     * null in a coroutine without a Job, such as `suspend fun main`, which can't be cancelled.
+     */
+    private suspend inline fun <T> write(crossinline block: (caller: Job?) -> T): T {
+        val caller = currentCoroutineContext()[Job]
+        caller?.ensureActive()
         // Not cancellable once started: withContext discards a committed result when it dispatches back to a
         // cancelled caller, so the outer call must not change the dispatcher, and the inner one can't be cancelled.
         return withContext(NonCancellable) {
             withContext(dispatcher) {
-                caller.ensureActive() // still before anything is written
+                caller?.ensureActive() // still before anything is written
                 block(caller)
             }
         }
@@ -231,20 +235,20 @@ internal class CoroutineSecondaryJsonStore(internal val core: SecondaryEngine, i
     override fun blocking(): BlockingSecondaryJsonStore = blockingView
 }
 
-/** [source] (not closed with this stream) that fails every read once [job] is cancelled. */
-internal class CancellableInputStream(source: InputStream, private val job: Job) : FilterInputStream(source) {
+/** [source] (not closed with this stream) that fails every read once [job] is cancelled; without a job, no read fails. */
+internal class CancellableInputStream(source: InputStream, private val job: Job?) : FilterInputStream(source) {
     override fun read(): Int {
-        job.ensureActive()
+        job?.ensureActive()
         return super.read()
     }
 
     override fun read(b: ByteArray, off: Int, len: Int): Int {
-        job.ensureActive()
+        job?.ensureActive()
         return super.read(b, off, len)
     }
 
     override fun skip(n: Long): Long {
-        job.ensureActive()
+        job?.ensureActive()
         return super.skip(n)
     }
 
