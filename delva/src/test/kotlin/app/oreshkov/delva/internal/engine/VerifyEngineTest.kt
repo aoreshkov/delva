@@ -1,6 +1,8 @@
 package app.oreshkov.delva.internal.engine
 
+import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions
+import app.oreshkov.delva.DocId
 import app.oreshkov.delva.DocumentRejectedException
 import app.oreshkov.delva.Durability
 import app.oreshkov.delva.StoreOptions
@@ -36,14 +38,17 @@ class VerifyEngineTest {
         threshold: Long = EngineOptions.DEFAULT_SMALL_INSERT_THRESHOLD,
         durability: Durability = Durability.SyncEachBatch,
         laneFileBytes: Long = 64L shl 10,
+        controlFileBytes: Long = 32L shl 10,
+        compaction: CompactionOptions = CompactionOptions(bytesPerSecond = 0),
+        reclaim: ReclaimOptions = ReclaimOptions(bytesPerSecond = 0),
         compression: CompressionOptions = CompressionOptions.DISABLED,
     ) = EngineOptions(
         CreationOptions(fragmentBytes = t), StoreOptions(encoderBudgetBytes = maxOf(2 * t, 4096), durability = durability),
         sorterBytes = 4096, smallInsertThreshold = threshold, keySeed = 11,
-        log = LogOptions(laneFileBytes = laneFileBytes, controlFileBytes = 32L shl 10, preallocateBytes = 4L shl 10, writeBufferBytes = 4096),
+        log = LogOptions(laneFileBytes = laneFileBytes, controlFileBytes = controlFileBytes, preallocateBytes = 4L shl 10, writeBufferBytes = 4096),
         segmentBlockBytes = 512,
-        compaction = CompactionOptions(bytesPerSecond = 0),
-        reclaim = ReclaimOptions(bytesPerSecond = 0),
+        compaction = compaction,
+        reclaim = reclaim,
         compression = compression,
     )
 
@@ -58,6 +63,41 @@ class VerifyEngineTest {
 
     private fun segmentFile(fs: SimulatedFileSystemIo, prefix: String): Path =
         fs.files().first { it.fileName.toString().startsWith(prefix) }
+
+    /** Control files, oldest first. */
+    private fun controlFiles(fs: SimulatedFileSystemIo): List<Path> =
+        fs.files().filter { it.parent?.fileName?.toString() == LogFiles.CONTROL_DIR }.sortedBy { LogFiles.parseControl(it.fileName.toString()) }
+
+    /** Where each record of a log file starts, and where the last one ends. */
+    private fun records(bytes: ByteArray): Pair<List<Int>, Int> {
+        val starts = ArrayList<Int>()
+        var at = LogFormat.HEADER_BYTES
+        while (at + LogFormat.RECORD_HEADER_BYTES <= bytes.size && LittleEndian.getShort(bytes, at).toInt() and 0xFFFF == LogFormat.RECORD_MAGIC) {
+            starts += at
+            at += LogFormat.padded(LogFormat.RECORD_HEADER_BYTES + LittleEndian.getInt(bytes, at + 4))
+        }
+        return starts to at
+    }
+
+    /** Inserts until the store has two control files or more, and the newest holds [newestBytes] of records. */
+    private fun fillControlLog(store: Engine, fs: SimulatedFileSystemIo, newestBytes: Int = 0) {
+        var i = 0
+        while (controlFiles(fs).size < 2 || records(fs.bytes(controlFiles(fs).last())).second < LogFormat.HEADER_BYTES + newestBytes) {
+            check(i < 10_000) { "the control log didn't grow" }
+            store.insert(doc(i++))
+        }
+    }
+
+    /** Opens the closed store again: true when recovery refused it as damaged. */
+    private fun refusedOnOpen(fs: SimulatedFileSystemIo, options: EngineOptions): Boolean {
+        fs.restart()
+        return try {
+            Engine.open(dir, options, fs).close()
+            false
+        } catch (_: CorruptionException) {
+            true
+        }
+    }
 
     @Test
     fun `an empty store verifies`() {
@@ -186,6 +226,110 @@ class VerifyEngineTest {
             val issue = report.issues.first { it.kind == VerifyIssueKind.LOG_RECORD }
             assertTrue(issue.location.startsWith("control file ") && issue.location.endsWith("@$at"), issue.toString())
             assertTrue(report.logRecordsChecked > 10, "the records after the zeroed header were read: $report")
+        }
+    }
+
+    @Test
+    fun `a control file that ends without its SEAL is reported, as recovery refuses it`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options(controlFileBytes = 4L shl 10)
+        Engine.open(dir, options, fs).use { store ->
+            fillControlLog(store, fs)
+            val older = controlFiles(fs).first()
+            // Cut at a record boundary: what is left reads as a clean end.
+            val seal = records(fs.bytes(older)).first.last()
+            fs.open(older, OpenMode.READ_WRITE).use { it.truncate(seal.toLong()) }
+
+            val issues = store.verify().issues
+            val name = "control file ${LogFiles.parseControl(older.fileName.toString())}"
+            assertTrue(issues.any { it.kind == VerifyIssueKind.LOG_RECORD && it.location == "$name@$seal" && "SEAL" in it.detail }, "$issues")
+        }
+        assertTrue(refusedOnOpen(fs, options))
+    }
+
+    @Test
+    fun `zeroed bytes before valid control records are reported, as recovery refuses them`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options(controlFileBytes = 16L shl 10)
+        Engine.open(dir, options, fs).use { store ->
+            fillControlLog(store, fs, newestBytes = 8 shl 10)
+            val newest = controlFiles(fs).last()
+            val starts = records(fs.bytes(newest)).first
+            // At least a page of zeroes, which reads as the end of the log, then whole records synced after it.
+            val from = starts[2]
+            val to = starts.first { it - from >= 4096 }
+            assertTrue(to < starts.last(), "records follow the hole")
+            val kept = controlFiles(fs).sumOf { records(fs.bytes(it)).first.size } - starts.count { it in from until to }
+            fs.open(newest, OpenMode.READ_WRITE).use { it.write(from.toLong(), ByteArray(to - from), 0, to - from) }
+
+            val report = store.verify()
+            val name = "control file ${LogFiles.parseControl(newest.fileName.toString())}"
+            val issue = report.issues.single { it.kind == VerifyIssueKind.LOG_RECORD }
+            assertEquals("$name@$from", issue.location, "${report.issues}")
+            assertEquals((to - from).toLong(), issue.damagedBytes)
+            assertEquals(kept.toLong(), report.logRecordsChecked, "the records after the hole were read")
+        }
+        assertTrue(refusedOnOpen(fs, options))
+    }
+
+    @Test
+    fun `invalid bytes after the last control record are a torn tail to verify, as they are to recovery`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options()
+        Engine.open(dir, options, fs).use { store ->
+            repeat(5) { store.insert(doc(it)) }
+            val control = controlFile(fs)
+            val end = records(fs.bytes(control)).second
+            // A record header whose body never made it to the disk.
+            fs.open(control, OpenMode.READ_WRITE).use { it.write(end.toLong(), byteArrayOf(0xA5.toByte(), 0xF7.toByte(), 0x11, 0, 99, 0, 0, 0, 1, 2, 3), 0, 11) }
+
+            assertEquals(emptyList(), store.verify().issues.map { it.toString() })
+        }
+        assertTrue(!refusedOnOpen(fs, options))
+    }
+
+    @Test
+    fun `a control file a flush drops while verify runs isn't damage`() {
+        val fs = SimulatedFileSystemIo()
+        Engine.open(dir, options(controlFileBytes = 4L shl 10), fs).use { store ->
+            fillControlLog(store, fs)
+            val before = controlFiles(fs)
+            var flushed = false
+            // The scrub has listed the files, and not opened them yet.
+            val report = store.verify { phase, _, _ ->
+                if (phase == VerifyPhase.LOG && !flushed) {
+                    flushed = true
+                    store.flush()
+                }
+            }
+            assertTrue(flushed)
+            assertTrue(controlFiles(fs).first() != before.first(), "the flush dropped the older control files")
+            assertEquals(emptyList(), report.issues.map { it.toString() })
+            assertTrue(store.verify().intact)
+        }
+    }
+
+    @Test
+    fun `fragments relocated into a new lane file while verify runs aren't damage`() {
+        val fs = SimulatedFileSystemIo()
+        // Reclamation runs only when the test asks.
+        val options = options(t = 64, compaction = CompactionOptions(bytesPerSecond = 0, deletedRatio = 0.1), reclaim = ReclaimOptions(enabled = false, bytesPerSecond = 0))
+        Engine.open(dir, options, fs).use { store ->
+            val docIds = (0 until 400).map { store.insert(doc(it)).raw }
+            store.flush()
+            store.deleteAll(docIds.filterIndexed { i, _ -> i % 5 != 0 }.map { DocId(it) })
+            store.flush()
+            store.compact()
+            assertTrue(fs.files().none { it.fileName.toString().startsWith("lane-G") })
+            var reclaimed = -1
+            // The fragment-index entries aren't read yet; the copies go to the live memtable.
+            val report = store.verify { phase, _, _ ->
+                if (phase == VerifyPhase.FRAGMENTS && reclaimed < 0) reclaimed = store.reclaim()
+            }
+            assertTrue(reclaimed > 0, "$reclaimed files reclaimed")
+            assertTrue(fs.files().any { it.fileName.toString().startsWith("lane-G") }, "the copies went to a new lane file")
+            assertEquals(emptyList(), report.issues.map { it.toString() })
+            assertTrue(store.verify().intact)
         }
     }
 
