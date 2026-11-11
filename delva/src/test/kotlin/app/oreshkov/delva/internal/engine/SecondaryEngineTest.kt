@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.engine
 
 import app.oreshkov.delva.CompareOperand
+import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocId
 import app.oreshkov.delva.DocumentKeyQuery
@@ -18,9 +19,12 @@ import app.oreshkov.delva.internal.io.FileSystemIo
 import app.oreshkov.delva.internal.io.OpenMode
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo.Platform
+import app.oreshkov.delva.internal.log.FragmentView
 import app.oreshkov.delva.internal.log.LogFiles
+import app.oreshkov.delva.internal.log.LogFormat
 import app.oreshkov.delva.internal.log.LogOptions
 import app.oreshkov.delva.internal.log.ManifestStore
+import app.oreshkov.delva.internal.store.LogFragmentStore
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
@@ -185,6 +189,44 @@ class SecondaryEngineTest {
     }
 
     /**
+     * A reset restarts compression dictionary ids at 1, and the writer then trains dictionaries of other content under
+     * the same ids: the secondary reads the documents written after the reset with those, and a result opened before it
+     * with the dictionaries its documents were written with.
+     */
+    @Test
+    fun `a secondary open across a reset reads with the dictionaries trained after it`() {
+        for (platform in Platform.entries) {
+            val fs = SimulatedFileSystemIo(platform)
+            val options = options(compression = 2)
+            val random = Random(10)
+            var i = 0
+            // Inserts until the writer adopted a dictionary, then documents compressed with it.
+            fun fill(writer: Engine, doc: (Int) -> String) {
+                while (writer.codecs.dictionaryCount == 0) writer.insert(doc(i++))
+                repeat(10) { writer.insert(doc(i++)) }
+            }
+            val before = Engine.open(dir, options, fs).use { writer ->
+                fill(writer) { doc(random, it) }
+                writer.documents()
+            }
+            secondary(fs, options).use { secondary ->
+                assertEquals(before, secondary.documents(), "$platform")
+                val pinned = secondary.search(KeyValueQuery("all", JsonQueryValue.Bool(true), ResultMode.WHOLE_DOCUMENT, limit = 10_000))
+                JsonStore.reset(dir, fs)
+                Engine.open(dir, options, fs).use { writer ->
+                    fill(writer) { n -> """{"all":true,"word":"${listOf("alpha", "beta", "gamma", "delta").random(random).repeat(random.nextInt(4, 30))}","n":$n}""" }
+                    assertTrue(writer.codecs.dictionary(1) != null, "$platform: dictionary 1 again")
+                    assertTrue(secondary.refresh(), "$platform")
+                    assertEquals(writer.documents(), secondary.documents(), "$platform: read with the new dictionaries")
+                }
+                assertEquals(before, pinned.iterator().asSequence().associate { it.node.docId.raw to it.readJsonAsString(Int.MAX_VALUE) }, "$platform: the result keeps its dictionaries")
+                pinned.close()
+                assertEquals(emptyList(), secondary.verify().issues, "$platform")
+            }
+        }
+    }
+
+    /**
      * A writer killed after its MANIFEST was renamed into place, before `CURRENT` named it: the secondary reads that
      * MANIFEST and its segments, and recovery goes back to the one before. The segments' file numbers must not name other
      * files later, or the secondary would read the new ones through what it read of the old ones.
@@ -339,6 +381,72 @@ class SecondaryEngineTest {
         assertFailsWith<StoreClosedException> { result.nextPage() }
         assertFailsWith<StoreClosedException> { secondary.refresh() }
         result.close()
+    }
+
+    /**
+     * A newer MANIFEST with the same indexes records that the writer synced more of the control log: the secondary
+     * adopts it, and a control log that ends below its `lastLsn` is damage, not a write in progress.
+     */
+    @Test
+    fun `a secondary reports damage to records a MANIFEST it adopted says were durable`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options(log = LogOptions(laneFileBytes = 1L shl 20, controlFileBytes = 1L shl 20, preallocateBytes = 0, writeBufferBytes = 4096))
+        val random = Random(12)
+        Engine.open(dir, options, fs).use { writer ->
+            repeat(3) { writer.insert(doc(random, it)) }
+            secondary(fs, options).use { secondary ->
+                val control = fs.files().single { it.startsWith(dir.resolve(LogFiles.CONTROL_DIR)) }
+                val read = fs.bytes(control).size.toLong()
+                repeat(3) { writer.insert(doc(random, 3 + it)) }
+                // The same indexes, and the inserts above as durable.
+                writer.files.writeManifest()
+                // Damage the first record after what the secondary read; records are aligned, so it starts in this range.
+                for (at in read until read + LogFormat.ALIGNMENT) fs.flipBit(control, at, 0)
+                assertFailsWith<CorruptionException> { secondary.refresh() }
+            }
+        }
+    }
+
+    /** A long-lived secondary keeps open only the segments of the epochs still read, not every segment it ever saw. */
+    @Test
+    fun `a secondary following flushes and compactions keeps only the segments it reads open`() {
+        val fs = SimulatedFileSystemIo(Platform.LINUX)
+        val options = options()
+        val random = Random(13)
+        var i = 0
+        Engine.open(dir, options, fs).use { writer ->
+            writer.insert(doc(random, i++))
+            writer.flush()
+            secondary(fs, options).use { secondary ->
+                repeat(16) { round ->
+                    repeat(3) { writer.insert(doc(random, i++)) }
+                    writer.flush()
+                    if (round % 4 == 3) assertTrue(writer.compact() > 0, "round $round: a compaction")
+                    assertTrue(secondary.refresh())
+                    val segments = fs.files().count { it.startsWith(dir.resolve(LogFiles.INDEX_DIR)) && LogFiles.parseSegment(it.fileName.toString()) != null }
+                    assertEquals(segments, secondary.openSegments, "round $round: the segments of the store")
+                }
+                assertEquals(writer.documents(), secondary.documents())
+            }
+        }
+    }
+
+    /** A read that started before the secondary closed and reaches a lane file after: the store closed, nothing is damaged. */
+    @Test
+    fun `closing the secondary during a read ends the read`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options()
+        val docId = Engine.open(dir, options, fs).use { writer -> writer.insert(doc(Random(11), 0, big = true)) }
+        val secondary = secondary(fs, options)
+        val (_, version) = secondary.openView()
+        val fragments = secondary.fragmentsOf(version) as LogFragmentStore
+        val entries = fragments.index.range(docId.raw, 0, 0, Long.MAX_VALUE).toList()
+        assertTrue(entries.size >= 2, "a document of several fragments: ${entries.size}")
+        val view = FragmentView()
+        assertTrue(entries[0].let { fragments.find(it.docId, it.pre, it.kind, it.seq, view) })
+        secondary.close()
+        assertFailsWith<StoreClosedException> { entries[1].let { fragments.find(it.docId, it.pre, it.kind, it.seq, view) } }
+        version.release()
     }
 
     /** Records the files opened through [fs]. */

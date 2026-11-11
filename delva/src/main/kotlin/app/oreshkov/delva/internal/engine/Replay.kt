@@ -96,7 +96,7 @@ internal class Replay(
 
     /** Whether every COMMIT carries a document key: the store has a key path. */
     private val keyed = options.creation.documentKey != null
-    private val durableLsn = manifest.lastLsn
+    private var durableLsn = manifest.lastLsn
     private val watermarks: Map<Long, ManifestWatermark> = manifest.watermarks.associateBy { it.docId }
 
     /** Lane files COMMIT and RELOCATE records may name, by file number. */
@@ -135,6 +135,14 @@ internal class Replay(
     /** Makes the lane files among [listed] known: the files listed when the replay starts, and each one listed later. */
     fun listLaneFiles(listed: Collection<ManifestFile>) {
         for (f in listed) if (!f.control) laneFiles[f.fileNo] = f
+    }
+
+    /**
+     * Raises the LSN up to which the writer had synced to [lsn], from a newer MANIFEST that describes the same indexes:
+     * a record up to it that doesn't check out is damage, not a write in progress.
+     */
+    fun raiseDurableLsn(lsn: Long) {
+        if (lsn > durableLsn) durableLsn = lsn
     }
 
     /**

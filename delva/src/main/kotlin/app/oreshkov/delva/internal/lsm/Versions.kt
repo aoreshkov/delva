@@ -32,9 +32,15 @@ internal class Memtable {
  * An open segment shared by the [Version]s that list it. When the last version holding it is released it's closed,
  * and deleted through [graveyard] if it was marked [obsolete] ([discard]: a delete that fails doesn't fail the store);
  * without a graveyard, in a process that only reads the store, it's only closed. A type segment's statistics ([types])
- * are read when the handle is created. Thread-safe.
+ * are read when the handle is created. [onDestroyed] runs once it was closed that way. Thread-safe.
  */
-internal class SegmentHandle(val reader: SegmentReader, val path: Path, private val io: FileSystemIo, private val graveyard: Path?) {
+internal class SegmentHandle(
+    val reader: SegmentReader,
+    val path: Path,
+    private val io: FileSystemIo,
+    private val graveyard: Path?,
+    private val onDestroyed: (SegmentHandle) -> Unit = {},
+) {
     private val refs = AtomicInteger()
 
     /** Statistics of a type segment; null for other segments. */
@@ -85,8 +91,12 @@ internal class SegmentHandle(val reader: SegmentReader, val path: Path, private 
     private fun destroy() {
         if (deleted) return
         deleted = true
-        reader.close()
-        if (graveyard != null) io.discard(path, graveyard)
+        try {
+            reader.close()
+            if (graveyard != null) io.discard(path, graveyard)
+        } finally {
+            onDestroyed(this)
+        }
     }
 }
 

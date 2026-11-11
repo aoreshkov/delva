@@ -14,6 +14,7 @@ import app.oreshkov.delva.UnsupportedFormatException
 import app.oreshkov.delva.internal.bits.DocIdSet
 import app.oreshkov.delva.internal.bits.LongHashSet
 import app.oreshkov.delva.internal.compress.DictionaryFiles
+import app.oreshkov.delva.internal.compress.FragmentCodecs
 import app.oreshkov.delva.internal.io.FileIo
 import app.oreshkov.delva.internal.io.FileSystemIo
 import app.oreshkov.delva.internal.io.JdkFileSystemIo
@@ -40,14 +41,15 @@ import app.oreshkov.delva.internal.types.TypeDictionary
 import app.oreshkov.delva.internal.visibility.LateCommits
 import app.oreshkov.delva.internal.visibility.Visibility
 import java.io.IOException
+import java.nio.channels.ClosedChannelException
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.TreeMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -63,7 +65,8 @@ import kotlin.concurrent.withLock
  * when the newest MANIFEST describes the same indexes (adopting the files it lists anew) and opens a new epoch from
  * it otherwise: after a flush, a compaction, a recovery or a reset of the writer. Snapshots published before keep
  * reading the same memtables while the replay adds to them, so a replayed COMMIT is recorded in [LateCommits] before
- * its document is indexed.
+ * its document is indexed. Epochs share the codecs that hold the compression dictionaries, except across a reset, which
+ * restarts dictionary ids: the first epoch after one reads with codecs of its own.
  *
  * **Files.** The writer deletes files as it always does; a file stays readable here as long as a handle is open on
  * it. An epoch opens every file its MANIFEST lists before it uses any of them, and when one is gone, a newer MANIFEST
@@ -108,8 +111,14 @@ internal class SecondaryEngine private constructor(
     /** Epochs by their version, until the version is released. */
     private val epochs = ConcurrentHashMap<Version, Epoch>()
 
-    /** Every segment handle opened, to close them with the store. */
-    private val opened = ConcurrentLinkedQueue<SegmentHandle>()
+    /** Codecs still used by an epoch, to close them with the store. */
+    private val generations: MutableSet<Generation> = ConcurrentHashMap.newKeySet()
+
+    /** The segment handles open, to close them with the store; a handle leaves when it's destroyed. */
+    private val opened: MutableSet<SegmentHandle> = ConcurrentHashMap.newKeySet()
+
+    /** Segment handles open; for tests. */
+    val openSegments: Int get() = opened.size
 
     /** Epochs opened and refreshes that changed the view; for tests. */
     @Volatile
@@ -154,8 +163,10 @@ internal class SecondaryEngine private constructor(
 
     override fun currentSnapshot(): Snapshot = published.snapshot
 
-    override fun fragmentsOf(version: Version): FragmentStore =
-        LogFragmentStore(files, version.fragmentIndex(), fragmentCache, codecs, options.split.maxRecordBytes)
+    override fun fragmentsOf(version: Version): FragmentStore {
+        val epoch = epochs[version] ?: throw StoreClosedException()
+        return LogFragmentStore(files, version.fragmentIndex(), fragmentCache, epoch.generation.codecs, options.split.maxRecordBytes)
+    }
 
     override fun dictionaryOf(version: Version): TypeDictionary =
         (epochs[version] ?: throw StoreClosedException()).dictionary
@@ -215,7 +226,7 @@ internal class SecondaryEngine private constructor(
                 continue
             }
             try {
-                DictionaryFiles.loadNew(io, dictionaryDir, codecs)
+                DictionaryFiles.loadNew(io, dictionaryDir, target.generation.codecs)
                 target.follow()
             } catch (t: Throwable) {
                 if (target !== current) target.discard() else target.broken = true
@@ -289,6 +300,7 @@ internal class SecondaryEngine private constructor(
         val retained = ArrayList<Long>()
         val segments = LinkedHashMap<Long, SegmentHandle>()
         val fresh = ArrayList<SegmentHandle>()
+        var generation: Generation? = null
         try {
             for (file in manifest.files) {
                 files.retain(file)
@@ -315,21 +327,52 @@ internal class SecondaryEngine private constructor(
                 val path = dir.resolve(LogFiles.INDEX_DIR).resolve(LogFiles.typeDictionaryName(manifest.typeDictionaryFileNo))
                 TypeDictionary.decode(readListedFile(path), path.toString())
             }
-            DictionaryFiles.loadNew(io, dictionaryDir, codecs)
-            val epoch = Epoch(manifest, segments, aborted, deleted, dictionary, retained, controls.subList(first, controls.size))
+            generation = generationAfter(previous).also(::retainGeneration)
+            DictionaryFiles.loadNew(io, dictionaryDir, generation.codecs)
+            val epoch = Epoch(manifest, segments, aborted, deleted, dictionary, retained, controls.subList(first, controls.size), generation)
             if (controls.isNotEmpty()) epoch.replay.lsn = created[first] - 1 else epoch.replay.lsn = manifest.indexedUpToLsn
             return epoch
         } catch (t: Throwable) {
             files.release(retained)
-            for (h in fresh) runCatching { h.close() }
+            for (h in fresh) {
+                opened -= h
+                runCatching { h.close() }
+            }
+            generation?.let(::releaseGeneration)
             throw t
         }
+    }
+
+    /**
+     * The codecs an epoch after [previous] reads with: [previous]'s, unless the store was reset since. A reset restarts
+     * dictionary ids at 1, so after one an id may name another dictionary than the one loaded under it. Epochs from
+     * before the reset keep their codecs, so results still open on them read on with the dictionaries they were
+     * written with.
+     */
+    private fun generationAfter(previous: Epoch?): Generation =
+        if (previous != null && DictionaryFiles.unchanged(io, dictionaryDir, previous.generation.codecs)) previous.generation else Generation(FragmentCodecs(options.compression))
+
+    private fun retainGeneration(generation: Generation) {
+        if (generation.epochs.getAndIncrement() == 0) generations += generation
+    }
+
+    private fun releaseGeneration(generation: Generation) {
+        if (generation.epochs.decrementAndGet() == 0) {
+            generations -= generation
+            generation.codecs.close()
+        }
+    }
+
+    /** The payload codecs and compression dictionaries of the store between two resets, shared by the epochs that read it. */
+    private class Generation(val codecs: FragmentCodecs) {
+        /** The epochs using it; it's closed with the last one. */
+        val epochs = AtomicInteger()
     }
 
     private fun openSegment(fileNo: Long, index: Int): SegmentHandle {
         val path = dir.resolve(LogFiles.INDEX_DIR).resolve(LogFiles.segmentName(fileNo, index))
         val handle = try {
-            openSegment(io, blockCache, fileNo, index, path, graveyard = null)
+            openSegment(io, blockCache, fileNo, index, path, graveyard = null) { opened -= it }
         } catch (e: NoSuchFileException) {
             throw Changed(e)
         } catch (e: AccessDeniedException) {
@@ -382,12 +425,14 @@ internal class SecondaryEngine private constructor(
         val dictionary: TypeDictionary,
         private val retained: MutableList<Long>,
         controls: List<ManifestFile>,
+        /** The codecs its fragments are read with; released with it. */
+        val generation: Generation,
     ) {
         private val memtable = Memtable()
         val late = LateCommits()
         val replay = Replay(
             files, memtable, manifest, persistedAborted, persistedDeleted, dictionary,
-            segments.values.filter { it.reader.indexKind == SegmentFormat.INDEX_TYPE }, options, codecs, stats, Replay.Tail.FOLLOW, late,
+            segments.values.filter { it.reader.indexKind == SegmentFormat.INDEX_TYPE }, options, generation.codecs, stats, Replay.Tail.FOLLOW, late,
         ).also { it.listLaneFiles(manifest.files) }
 
         val version = Version(
@@ -449,20 +494,22 @@ internal class SecondaryEngine private constructor(
             listing = newer.files
             manifestNo = newer.manifestNo
             lastLsn = newer.lastLsn
+            replay.raiseDurableLsn(lastLsn)
         }
 
         /**
          * Replays the control log from where the last call stopped, as far as it holds complete records now, and on
          * into the next control file after each SEAL that this epoch knows. Repeats while the replay is below the
-         * MANIFEST's `lastLsn`, which the writer had written before the MANIFEST; a replay that stays there is damage.
+         * `lastLsn` of the newest MANIFEST it adopted, which the writer had synced before that MANIFEST; a replay that
+         * stays there is damage.
          */
         fun follow() {
             var passes = 0
             while (true) {
                 followOnce()
-                if (replay.lsn >= manifest.lastLsn) return
+                if (replay.lsn >= lastLsn) return
                 if (++passes >= MAX_STUCK_PASSES) {
-                    throw CorruptionException(controlDir.toString(), "the control log ends at LSN ${replay.lsn}, the MANIFEST says ${manifest.lastLsn} was durable")
+                    throw CorruptionException(controlDir.toString(), "the control log ends at LSN ${replay.lsn}, the MANIFEST says $lastLsn was durable")
                 }
             }
         }
@@ -495,6 +542,7 @@ internal class SecondaryEngine private constructor(
         /** A view of it was published: the epoch lives until its version is released. */
         fun release() {
             files.release(retained)
+            releaseGeneration(generation)
         }
 
         /** Never installed: releases what it opened; segments the current epoch doesn't share close. */
@@ -502,6 +550,7 @@ internal class SecondaryEngine private constructor(
             files.release(retained)
             for ((fileNo, handle) in segments) if (epoch?.segments?.containsKey(fileNo) != true) handle.markObsolete()
             version.release()
+            releaseGeneration(generation)
         }
     }
 
@@ -523,6 +572,7 @@ internal class SecondaryEngine private constructor(
             try {
                 for (h in opened) runCatching { h.close() }
                 files.close()
+                for (g in generations) g.codecs.close()
                 codecs.close()
             } finally {
                 deleteScratch()
@@ -655,6 +705,9 @@ private class SecondaryFiles(private val io: FileSystemIo, dir: Path) : LogReade
     }
 
     private val held = ConcurrentHashMap<Long, Held>()
+
+    /** Set before the files are closed, so a read that finds its file gone can tell a closed store from a bug. */
+    @Volatile
     private var closed = false
 
     override fun pathOf(fileNo: Long, control: Boolean, laneId: Int): Path =
@@ -698,7 +751,9 @@ private class SecondaryFiles(private val io: FileSystemIo, dir: Path) : LogReade
 
     override fun reader(fileNo: Long, control: Boolean, laneId: Int): FileIo = laneReader(fileNo)
 
-    override fun laneReader(fileNo: Long): FileIo = held[fileNo]?.file ?: throw IOException("log file $fileNo isn't open in this secondary")
+    /** The open file [fileNo]; [ClosedChannelException] once the secondary closed, which ends the read that asked. */
+    override fun laneReader(fileNo: Long): FileIo =
+        held[fileNo]?.file ?: if (closed) throw ClosedChannelException() else throw IOException("log file $fileNo isn't open in this secondary")
 }
 
 /**
