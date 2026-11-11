@@ -59,6 +59,10 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva`: a secondary reports damage to the control log up to where a newer MANIFEST records it as durable; it judged
   damage only against the first MANIFEST of its view, and took what followed for writes in progress.
 - `delva`: a long-lived secondary no longer keeps every index segment it has read in memory until it closes.
+- `delva`: `verify` reports a control file that ends without its SEAL or has records after it, and zeroed bytes before
+  valid records of the control log, which make the next open fail; it no longer reports invalid bytes after the
+  newest control record, which the next open drops as an unsynced tail.
+- `delva`: `verify` no longer reports damage on a running store when a flush or space reclamation runs during it.
 
 ## [0.3.0] - 2026-10-31
 

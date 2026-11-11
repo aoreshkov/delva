@@ -171,11 +171,15 @@ internal class SecondaryEngine private constructor(
     override fun dictionaryOf(version: Version): TypeDictionary =
         (epochs[version] ?: throw StoreClosedException()).dictionary
 
-    /** The log files the view lists, and its control log only as far as its replay read it. */
+    /**
+     * The log files the view lists, and its control log only as far as its replay read it. The view's version holds
+     * them open, so none closes under the scrub; a file newer than all of them was made after the view.
+     */
     override fun openScrubView(): ScrubView {
         val view = acquire()
         val lanes = view.listed.filter { !it.control }.mapTo(HashSet()) { it.fileNo }
-        return ScrubView(view.snapshot, view.version, view.listed, files, files, { it in lanes }) { file, handle ->
+        val newFilesFrom = (view.listed.maxOfOrNull { it.fileNo } ?: 0L) + 1
+        return ScrubView(view.snapshot, view.version, view.listed, files, files, { it in lanes }, { true }, newFilesFrom) { file, handle ->
             when {
                 file.fileNo < view.controlFileNo -> handle.size()
                 file.fileNo == view.controlFileNo -> minOf(handle.size(), view.controlEnd)

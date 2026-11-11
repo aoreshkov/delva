@@ -138,6 +138,9 @@ internal class LogFiles(
     /** Whether lane file [fileNo] is listed: false once it was retired, so no fragment-index entry needs its bytes. */
     fun isListedLane(fileNo: Long): Boolean = Arrays.binarySearch(laneFileNos, fileNo) >= 0
 
+    /** Whether control file [fileNo] is listed: false once a flush indexed all its records and dropped it. */
+    fun isListedControl(fileNo: Long): Boolean = synchronized(lock) { files[fileNo]?.control == true }
+
     /** The number the next new file gets, or a larger one. */
     fun peekNextFileNo(): Long = synchronized(lock) { nextFileNo }
 

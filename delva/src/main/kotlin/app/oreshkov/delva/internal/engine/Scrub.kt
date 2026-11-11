@@ -50,8 +50,10 @@ import java.io.IOException
  *
  * Damage never throws, and neither do bytes that can't be read, which are an issue too. The extent of damage is
  * measured with the 8-byte resync scan ([RecordReader.hasValidRecordFrom]), which is only ever used to report how far
- * the damage reaches, never to skip data silently. The store keeps running throughout; a scrub pins one snapshot and one index version, so a concurrent flush or compaction doesn't disturb it,
- * and anything written while it runs simply isn't in its report.
+ * the damage reaches, never to skip data silently. The store keeps running throughout; a scrub pins one snapshot and one
+ * index version, so a concurrent flush or compaction doesn't disturb it, and anything written while it runs simply isn't
+ * in its report: neither a control file a flush drops meanwhile, which the store no longer needs, nor a lane file made
+ * after the view opened, which only newer index entries locate.
  */
 internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, private val progress: VerifyProgress) {
     private val options = engine.options
@@ -101,18 +103,22 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
 
     private fun checkLog(listed: List<ManifestFile>, snapshot: Snapshot) {
         startPhase(VerifyPhase.LOG, listed.sumOf { sizeOf(it) })
+        val newest = listed.lastOrNull { it.control }?.fileNo
         for (file in listed) {
             val handle = openOrReport(file) ?: continue
             filesChecked++
             if (!checkHeader(file, handle)) continue
             // A lane file's records are read through the COMMITs that name them, which advance the progress.
-            if (file.control) {
-                checkControlFile(file, handle, snapshot)
-                inFirstControlFile = false
-            }
+            if (file.control && checkControlFile(file, handle, file.fileNo == newest, snapshot)) inFirstControlFile = false
         }
         endPhase()
     }
+
+    /**
+     * Whether [file] is a control file a flush dropped while the scrub ran: its records are all indexed, so the store no
+     * longer needs it, and its handle may close under a read.
+     */
+    private fun dropped(file: ManifestFile): Boolean = file.control && !scrubbed.isListedControl(file.fileNo)
 
     /** The file's handle, or null with an issue when it can't be opened or is shorter than a header. */
     private fun openOrReport(file: ManifestFile): FileIo? {
@@ -120,7 +126,7 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
         val handle = try {
             files.reader(file.fileNo, file.control, file.laneId)
         } catch (e: IOException) {
-            issue(VerifyIssueKind.FILE, name, "can't be opened: ${e.message}")
+            if (!dropped(file)) issue(VerifyIssueKind.FILE, name, "can't be opened: ${e.message}")
             return null
         }
         return handle
@@ -132,7 +138,7 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
         val read = try {
             handle.read(0, bytes, 0, bytes.size)
         } catch (e: IOException) {
-            issue(VerifyIssueKind.FILE, name, "can't be read: ${e.message}")
+            if (!dropped(file)) issue(VerifyIssueKind.FILE, name, "can't be read: ${e.message}")
             return false
         }
         if (read < LogFormat.HEADER_BYTES) {
@@ -150,45 +156,88 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
             issue(VerifyIssueKind.FILE, "$name@0", "the header isn't this file's", LogFormat.HEADER_BYTES.toLong())
             return false
         }
+        // Even a control file without records yet follows the record before it.
+        if (file.control) lastLsn = maxOf(lastLsn, header.createdLsn - 1)
         return true
     }
 
+    /** The LSN of the last control record read, in any file; a SEAL has none. */
+    private var lastLsn = -1L
+
+    /** The control file being walked, whose number its SEAL must hold. */
+    private var walkedFileNo = -1L
+
     /**
-     * Walks a control file's records. Invalid bytes at the very end of the newest file are an unsynced torn tail, which
-     * the next open cuts off; anywhere else they're damage, and the resync scan says how far it reaches. Bytes that
-     * can't be read end the walk of the file.
+     * Walks a control file's records and judges its end as recovery does. Bytes that aren't a valid record are damage,
+     * and so are zeroed bytes with valid records after them; the resync scan says how far either reaches. Every file but
+     * the [newest] ends with its SEAL, and nothing follows a SEAL. The newest one ends without, and once the walk has read
+     * the snapshot's last record, whatever follows is the writer appending right now, which isn't judged: invalid bytes
+     * there may be a write in progress, and zeroes may be about to be overwritten. Bytes that can't be read end the walk
+     * of the file.
+     *
+     * Returns false when the file was dropped while it was walked, so the records before the next file are unknown.
      */
-    private fun checkControlFile(file: ManifestFile, handle: FileIo, snapshot: Snapshot) {
+    private fun checkControlFile(file: ManifestFile, handle: FileIo, newest: Boolean, snapshot: Snapshot): Boolean {
         val name = nameOf(file)
+        walkedFileNo = file.fileNo
         var at = LogFormat.HEADER_BYTES.toLong()
         try {
             val size = scrubbed.controlEnd(file, handle)
+            // A secondary reads a file only as far as its replay did, which may stop short of the SEAL.
+            val whole = size == handle.size()
             control.open(handle, at, size)
             while (true) {
                 at = control.position
-                when (control.next()) {
+                val read = control.next()
+                if (read != RecordReader.RECORD && newest && lastLsn >= snapshot.lsn) {
+                    advance(size - at)
+                    return true
+                }
+                when (read) {
                     RecordReader.RECORD -> {
                         logRecords++
                         advance(control.position - at)
                         bytesChecked += control.position - at
                         checkControlRecord(name, snapshot)
+                        if (control.type == RecordType.SEAL) {
+                            checkAfterSeal(name, size)
+                            return true
+                        }
                     }
                     RecordReader.END -> {
+                        if (at < size && control.hasValidRecordFrom(at + LogFormat.ALIGNMENT)) {
+                            val to = control.position
+                            issue(VerifyIssueKind.LOG_RECORD, "$name@$at", "zeroed bytes before valid records", to - at)
+                            advance(to - at)
+                            continue
+                        }
+                        if (!newest && whole) issue(VerifyIssueKind.LOG_RECORD, "$name@$at", "the file ends without SEAL")
                         advance(size - at)
-                        return
+                        return true
                     }
                     else -> {
                         val resumed = control.hasValidRecordFrom(at + LogFormat.ALIGNMENT)
                         val to = if (resumed) control.position else size
                         issue(VerifyIssueKind.LOG_RECORD, "$name@$at", "no valid record", to - at)
                         advance(to - at)
-                        if (!resumed) return
+                        if (!resumed) return true
                     }
                 }
             }
         } catch (e: IOException) {
+            if (dropped(file)) return false
             issue(VerifyIssueKind.FILE, "$name@$at", "can't be read: ${e.message}")
+            return true
         }
+    }
+
+    /** After a SEAL: a valid record anywhere in the rest of the file is damage, as recovery finds. */
+    private fun checkAfterSeal(name: String, size: Long) {
+        val from = control.position
+        if (control.next() == RecordReader.RECORD || control.hasValidRecordFrom(from)) {
+            issue(VerifyIssueKind.LOG_RECORD, "$name@$from", "records after SEAL", size - from)
+        }
+        advance(size - from)
     }
 
     /** Reads the record's body, and for a COMMIT the fragments its extents name. */
@@ -197,6 +246,7 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
         val type = control.type
         val isCommit = try {
             body.open(control.bytes, control.bodyOffset, control.bodyLength, type)
+            if (type != RecordType.SEAL) lastLsn = body.lsn
             readBody(type)
         } catch (e: CorruptionException) {
             issue(VerifyIssueKind.LOG_RECORD, "$name@$at", e.detail, control.recordLength.toLong())
@@ -315,7 +365,10 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
             RecordType.TYPE -> body.readType(typeRecord)
             RecordType.DELETE -> body.readDelete(deleteRecord)
             RecordType.RELOCATE -> body.readRelocate(relocateInfo)
-            RecordType.SEAL -> body.readSeal()
+            RecordType.SEAL -> {
+                val sealed = body.readSeal()
+                if (sealed != walkedFileNo) throw CorruptionException("control log", "SEAL of control file $sealed")
+            }
             RecordType.CHECKPOINT -> {
                 body.reader.skip(16)
                 if (body.reader.remaining != 0) throw CorruptionException("control log", "CHECKPOINT of ${control.bodyLength} bytes")
@@ -597,7 +650,8 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
 
     /**
      * Reads the record a fragment-index entry locates and checks that it's the fragment the entry names. An entry in a
-     * lane file the store no longer lists is damage unless it is [stale].
+     * lane file the store no longer lists is damage unless it is [stale]. One in a lane file made after the view opened
+     * was added since, by space reclamation relocating fragments, and the next scrub checks it.
      *
      * Only entries of documents committed by the snapshot are checked, visible or deleted since. A promoted insert
      * indexes its fragments as it appends them, and they may still be in its lane's write buffer: until its COMMIT they
@@ -612,7 +666,7 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
         val document = DocId(entry.docId)
         val key = "(${entry.docId}, ${entry.pre}, ${entry.kind}, ${entry.seq})"
         if (lanes[fileNo] == null) {
-            if (stale(entry)) return
+            if (fileNo >= scrubbed.newFilesFrom || stale(entry)) return
             issue(VerifyIssueKind.FRAGMENT_INDEX, at, "fragment $key is indexed in lane file $fileNo, which the store doesn't list", document = document)
             return
         }
@@ -713,8 +767,9 @@ internal class Scrub(engine: ReadEngine, private val scrubbed: ScrubView, privat
 /**
  * What a [Scrub] reads: a [snapshot], the [version] it pins (retained; the scrub releases it), the log files the view
  * lists ([listed], oldest first) and the handles to read them. [isListedLane] tells whether the view lists a lane file,
- * and [controlEnd] where the records of a control file end for the view: the file's size for the writer, and the
- * position its replay reached for a secondary, which never judges bytes it hasn't replayed.
+ * [isListedControl] whether a control file is still listed, which a flush ends, and [controlEnd] where the records of a
+ * control file end for the view: the file's size for the writer, and the position its replay reached for a secondary,
+ * which never judges bytes it hasn't replayed. A file numbered [newFilesFrom] or higher was made after the view opened.
  */
 internal class ScrubView(
     val snapshot: Snapshot,
@@ -723,5 +778,7 @@ internal class ScrubView(
     val logs: LogReaders,
     val lanes: LaneReaders,
     val isListedLane: (Long) -> Boolean,
+    val isListedControl: (Long) -> Boolean,
+    val newFilesFrom: Long,
     val controlEnd: (ManifestFile, FileIo) -> Long,
 )

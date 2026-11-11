@@ -550,7 +550,9 @@ internal class Engine private constructor(
     /** Every listed log file, read to its end. */
     override fun openScrubView(): ScrubView {
         val (snapshot, version) = openView()
-        return ScrubView(snapshot, version, files.listed(), files, files, files::isListedLane) { _, handle -> handle.size() }
+        // Taken before the listing, so a file made between the two is listed.
+        val newFilesFrom = files.peekNextFileNo()
+        return ScrubView(snapshot, version, files.listed(), files, files, files::isListedLane, files::isListedControl, newFilesFrom) { _, handle -> handle.size() }
     }
 
     // ---- types ---------------------------------------------------------------------------------------------------
