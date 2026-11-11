@@ -1,5 +1,6 @@
 package app.oreshkov.delva.internal.facade
 
+import app.oreshkov.delva.CompareOperand
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocId
 import app.oreshkov.delva.InsertSource
@@ -8,6 +9,9 @@ import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.ResultMode
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
+import app.oreshkov.delva.VectorQuery
 import app.oreshkov.delva.internal.engine.Engine
 import app.oreshkov.delva.internal.engine.EngineOptions
 import app.oreshkov.delva.internal.engine.TestEngines
@@ -21,13 +25,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/** A cancelled suspending write reports what happened: it either returns and its change is visible, or throws and changed nothing. */
+/**
+ * A cancelled suspending write reports what happened: it either returns and its change is visible, or throws and changed
+ * nothing. A coroutine without a Job can't be cancelled, and its calls run to the end.
+ */
 class CancellationTest {
     /** Three keyed documents, the first two untyped and the third of type `S`. */
     private class Fixture(val a: DocId, val b: DocId, val nodeA: NodeRef, val nodeB: NodeRef)
@@ -122,6 +132,46 @@ class CancellationTest {
                 assertIs<CancellationException>(outcome!!.exceptionOrNull(), case.name)
                 assertEquals(before, state(engine), case.name)
             }
+        }
+    }
+
+    /** Runs [block] in a coroutine whose context has no Job, as `suspend fun main` does, and returns its outcome. */
+    private fun <T> withoutJob(block: suspend () -> T): Result<T> {
+        val done = CountDownLatch(1)
+        var outcome: Result<T>? = null
+        block.startCoroutine(Continuation(EmptyCoroutineContext) {
+            outcome = it
+            done.countDown()
+        })
+        assertTrue(done.await(10, TimeUnit.SECONDS), "the coroutine finishes")
+        return outcome!!
+    }
+
+    @Test
+    fun `a write from a coroutine without a Job runs`() {
+        for (case in cases) {
+            open(SimulatedFileSystemIo()).use { store ->
+                val engine = (store as CoroutineJsonStore).core
+                val fixture = fixture(store)
+                val before = state(engine)
+                val result = withoutJob { store.(case.write)(fixture) }
+                assertTrue(result.isSuccess, "${case.name}: threw ${result.exceptionOrNull()}")
+                assertNotEquals(before, state(engine), "${case.name}: and its change is visible")
+            }
+        }
+    }
+
+    @Test
+    fun `reads that check for cancellation run from a coroutine without a Job`() {
+        val creation = CreationOptions().withVectorField(VectorField("$.v", 2, VectorMetric.EUCLIDEAN))
+        JsonStore.open(TestEngines.DIR, EngineOptions(creation, log = TestEngines.LOG), SimulatedFileSystemIo()).use { store ->
+            store.blocking().insert("""{"v":[1,0]}""")
+            store.blocking().insert("""{"v":[3,0]}""")
+            val hits = withoutJob { store.search(VectorQuery(floatArrayOf(0f, 0f), k = 1)).use { r -> r.hits.map { it.distance } } }
+            assertEquals(listOf(1f), hits.getOrThrow(), "vector search")
+            val equal = withoutJob { store.isEqual(CompareOperand.JsonStream("[1]".byteInputStream()), CompareOperand.JsonStream("[1]".byteInputStream())) }
+            assertTrue(equal.getOrThrow(), "isEqual of two streams")
+            assertEquals(emptyList(), withoutJob { store.verify() }.getOrThrow().issues, "verify")
         }
     }
 }

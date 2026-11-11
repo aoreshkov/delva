@@ -50,6 +50,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 - `delva`: on Linux and macOS, a refused second open of a store in the same JVM no longer releases the first
   writer's lock, which let another process open the store as a second writer.
+- `delva`: suspending writes and vector search work from a coroutine without a `Job`, such as `suspend fun main`;
+  they threw `IllegalStateException`.
 
 ## [0.3.0] - 2026-10-31
 
