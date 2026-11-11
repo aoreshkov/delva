@@ -63,6 +63,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   valid records of the control log, which make the next open fail; it no longer reports invalid bytes after the
   newest control record, which the next open drops as an unsynced tail.
 - `delva`: `verify` no longer reports damage on a running store when a flush or space reclamation runs during it.
+- `delva`: a power loss while a store reopens after a crash no longer leaves an insert that wasn't synced yet damaged;
+  with `Durability.Periodic` or `None`, the insert is now either whole or absent.
 
 ## [0.3.0] - 2026-10-31
 

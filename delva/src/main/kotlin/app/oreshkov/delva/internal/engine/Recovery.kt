@@ -262,21 +262,12 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
             throw CorruptionException(files.controlDir.toString(), "the control log ends at LSN ${replay.lsn}, the MANIFEST says ${manifest.lastLsn} was durable")
         }
 
-        val control = LogLane(files, control = true, laneId = 0, active = activeControl?.let { (f, tail) -> files.reopen(f.fileNo, true, 0, tail) })
-        control.active?.force()
-
-        // Inserts that began but never ended are aborted for good.
+        // Lane files end at their last committed byte; every file but a lane's newest is sealed. The lanes are made
+        // durable before the control log, as the Writer does: after a process crash, COMMITs that were never synced may
+        // still be in the page cache with their fragments. Forcing the control log first, and then the ABORT below, whose
+        // AFTER_SYNC flag marks every earlier record as synced, would let a power loss keep such a COMMIT without its
+        // fragments, and the next open would report damage instead of cutting it off as an unsynced tail.
         val scratch = GrowableBytes(64)
-        var lsn = replay.lsn
-        for (docId in replay.begun) {
-            scratch.clear()
-            ControlRecords.writeAbort(scratch, ++lsn, docId, ControlRecords.ABORT_OTHER)
-            control.append(scratch.array, 0, scratch.size, lsn)
-            replay.aborted += docId
-        }
-        if (replay.begun.isNotEmpty()) control.force()
-
-        // Lane files end at their last committed byte; every file but a lane's newest is sealed.
         val lanes = HashMap<Int, LogLane>()
         for ((laneId, laneFiles) in all.filter { !it.control }.groupBy { it.laneId }) {
             val sorted = laneFiles.sortedBy { it.fileNo }
@@ -293,6 +284,19 @@ internal class Recovery(private val engine: Engine, private val dir: Path) {
                 }
             }
         }
+
+        val control = LogLane(files, control = true, laneId = 0, active = activeControl?.let { (f, tail) -> files.reopen(f.fileNo, true, 0, tail) })
+        control.active?.force()
+
+        // Inserts that began but never ended are aborted for good.
+        var lsn = replay.lsn
+        for (docId in replay.begun) {
+            scratch.clear()
+            ControlRecords.writeAbort(scratch, ++lsn, docId, ControlRecords.ABORT_OTHER)
+            control.append(scratch.array, 0, scratch.size, lsn)
+            replay.aborted += docId
+        }
+        if (replay.begun.isNotEmpty()) control.force()
         val nextDocId = maxOf(manifest.nextDocId, replay.maxDocId + 1, 1)
         val builder = persistedAborted.builder()
         for (docId in replay.aborted) builder.add(docId)
