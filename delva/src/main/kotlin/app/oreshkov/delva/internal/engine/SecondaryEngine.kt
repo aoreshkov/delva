@@ -489,20 +489,22 @@ internal class SecondaryEngine private constructor(
             listing = newer.files
             manifestNo = newer.manifestNo
             lastLsn = newer.lastLsn
+            replay.raiseDurableLsn(lastLsn)
         }
 
         /**
          * Replays the control log from where the last call stopped, as far as it holds complete records now, and on
          * into the next control file after each SEAL that this epoch knows. Repeats while the replay is below the
-         * MANIFEST's `lastLsn`, which the writer had written before the MANIFEST; a replay that stays there is damage.
+         * `lastLsn` of the newest MANIFEST it adopted, which the writer had synced before that MANIFEST; a replay that
+         * stays there is damage.
          */
         fun follow() {
             var passes = 0
             while (true) {
                 followOnce()
-                if (replay.lsn >= manifest.lastLsn) return
+                if (replay.lsn >= lastLsn) return
                 if (++passes >= MAX_STUCK_PASSES) {
-                    throw CorruptionException(controlDir.toString(), "the control log ends at LSN ${replay.lsn}, the MANIFEST says ${manifest.lastLsn} was durable")
+                    throw CorruptionException(controlDir.toString(), "the control log ends at LSN ${replay.lsn}, the MANIFEST says $lastLsn was durable")
                 }
             }
         }

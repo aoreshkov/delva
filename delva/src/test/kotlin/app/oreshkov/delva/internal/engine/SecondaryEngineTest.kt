@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.engine
 
 import app.oreshkov.delva.CompareOperand
+import app.oreshkov.delva.CorruptionException
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocId
 import app.oreshkov.delva.DocumentKeyQuery
@@ -20,6 +21,7 @@ import app.oreshkov.delva.internal.io.SimulatedFileSystemIo
 import app.oreshkov.delva.internal.io.SimulatedFileSystemIo.Platform
 import app.oreshkov.delva.internal.log.FragmentView
 import app.oreshkov.delva.internal.log.LogFiles
+import app.oreshkov.delva.internal.log.LogFormat
 import app.oreshkov.delva.internal.log.LogOptions
 import app.oreshkov.delva.internal.log.ManifestStore
 import app.oreshkov.delva.internal.store.LogFragmentStore
@@ -379,6 +381,30 @@ class SecondaryEngineTest {
         assertFailsWith<StoreClosedException> { result.nextPage() }
         assertFailsWith<StoreClosedException> { secondary.refresh() }
         result.close()
+    }
+
+    /**
+     * A newer MANIFEST with the same indexes records that the writer synced more of the control log: the secondary
+     * adopts it, and a control log that ends below its `lastLsn` is damage, not a write in progress.
+     */
+    @Test
+    fun `a secondary reports damage to records a MANIFEST it adopted says were durable`() {
+        val fs = SimulatedFileSystemIo()
+        val options = options(log = LogOptions(laneFileBytes = 1L shl 20, controlFileBytes = 1L shl 20, preallocateBytes = 0, writeBufferBytes = 4096))
+        val random = Random(12)
+        Engine.open(dir, options, fs).use { writer ->
+            repeat(3) { writer.insert(doc(random, it)) }
+            secondary(fs, options).use { secondary ->
+                val control = fs.files().single { it.startsWith(dir.resolve(LogFiles.CONTROL_DIR)) }
+                val read = fs.bytes(control).size.toLong()
+                repeat(3) { writer.insert(doc(random, 3 + it)) }
+                // The same indexes, and the inserts above as durable.
+                writer.files.writeManifest()
+                // Damage the first record after what the secondary read; records are aligned, so it starts in this range.
+                for (at in read until read + LogFormat.ALIGNMENT) fs.flipBit(control, at, 0)
+                assertFailsWith<CorruptionException> { secondary.refresh() }
+            }
+        }
     }
 
     /** A read that started before the secondary closed and reaches a lane file after: the store closed, nothing is damaged. */

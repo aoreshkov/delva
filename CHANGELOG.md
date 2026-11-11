@@ -56,6 +56,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   dictionaries trained after it; it read them with the old ones, which gave wrong bytes or reported damage.
 - `delva`: closing a secondary during a read fails the read with `StoreClosedException`; it threw
   `CorruptionException`.
+- `delva`: a secondary reports damage to the control log up to where a newer MANIFEST records it as durable; it judged
+  damage only against the first MANIFEST of its view, and took what followed for writes in progress.
 
 ## [0.3.0] - 2026-10-31
 
