@@ -538,12 +538,20 @@ internal class Indexes(
 
 /**
  * Opens and validates the segment at [path] (for a type segment, its statistics too); closes the file on failure. Without
- * a [graveyard] the segment is never deleted (see [SegmentHandle]).
+ * a [graveyard] the segment is never deleted (see [SegmentHandle]). [onDestroyed] runs once the handle is destroyed.
  */
-internal fun openSegment(io: FileSystemIo, cache: ByteCache, fileNo: Long, indexKind: Int, path: Path, graveyard: Path?): SegmentHandle {
+internal fun openSegment(
+    io: FileSystemIo,
+    cache: ByteCache,
+    fileNo: Long,
+    indexKind: Int,
+    path: Path,
+    graveyard: Path?,
+    onDestroyed: (SegmentHandle) -> Unit = {},
+): SegmentHandle {
     val file = io.open(path, OpenMode.READ)
     try {
-        return SegmentHandle(SegmentReader.open(fileNo, file, cache, indexKind), path, io, graveyard)
+        return SegmentHandle(SegmentReader.open(fileNo, file, cache, indexKind), path, io, graveyard, onDestroyed)
     } catch (t: Throwable) {
         file.close()
         throw t

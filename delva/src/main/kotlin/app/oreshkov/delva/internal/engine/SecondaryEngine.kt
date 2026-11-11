@@ -48,7 +48,6 @@ import java.nio.file.Path
 import java.util.TreeMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
@@ -115,8 +114,11 @@ internal class SecondaryEngine private constructor(
     /** Codecs still used by an epoch, to close them with the store. */
     private val generations: MutableSet<Generation> = ConcurrentHashMap.newKeySet()
 
-    /** Every segment handle opened, to close them with the store. */
-    private val opened = ConcurrentLinkedQueue<SegmentHandle>()
+    /** The segment handles open, to close them with the store; a handle leaves when it's destroyed. */
+    private val opened: MutableSet<SegmentHandle> = ConcurrentHashMap.newKeySet()
+
+    /** Segment handles open; for tests. */
+    val openSegments: Int get() = opened.size
 
     /** Epochs opened and refreshes that changed the view; for tests. */
     @Volatile
@@ -332,7 +334,10 @@ internal class SecondaryEngine private constructor(
             return epoch
         } catch (t: Throwable) {
             files.release(retained)
-            for (h in fresh) runCatching { h.close() }
+            for (h in fresh) {
+                opened -= h
+                runCatching { h.close() }
+            }
             generation?.let(::releaseGeneration)
             throw t
         }
@@ -367,7 +372,7 @@ internal class SecondaryEngine private constructor(
     private fun openSegment(fileNo: Long, index: Int): SegmentHandle {
         val path = dir.resolve(LogFiles.INDEX_DIR).resolve(LogFiles.segmentName(fileNo, index))
         val handle = try {
-            openSegment(io, blockCache, fileNo, index, path, graveyard = null)
+            openSegment(io, blockCache, fileNo, index, path, graveyard = null) { opened -= it }
         } catch (e: NoSuchFileException) {
             throw Changed(e)
         } catch (e: AccessDeniedException) {

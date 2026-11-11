@@ -407,6 +407,30 @@ class SecondaryEngineTest {
         }
     }
 
+    /** A long-lived secondary keeps open only the segments of the epochs still read, not every segment it ever saw. */
+    @Test
+    fun `a secondary following flushes and compactions keeps only the segments it reads open`() {
+        val fs = SimulatedFileSystemIo(Platform.LINUX)
+        val options = options()
+        val random = Random(13)
+        var i = 0
+        Engine.open(dir, options, fs).use { writer ->
+            writer.insert(doc(random, i++))
+            writer.flush()
+            secondary(fs, options).use { secondary ->
+                repeat(16) { round ->
+                    repeat(3) { writer.insert(doc(random, i++)) }
+                    writer.flush()
+                    if (round % 4 == 3) assertTrue(writer.compact() > 0, "round $round: a compaction")
+                    assertTrue(secondary.refresh())
+                    val segments = fs.files().count { it.startsWith(dir.resolve(LogFiles.INDEX_DIR)) && LogFiles.parseSegment(it.fileName.toString()) != null }
+                    assertEquals(segments, secondary.openSegments, "round $round: the segments of the store")
+                }
+                assertEquals(writer.documents(), secondary.documents())
+            }
+        }
+    }
+
     /** A read that started before the secondary closed and reaches a lane file after: the store closed, nothing is damaged. */
     @Test
     fun `closing the secondary during a read ends the read`() {
