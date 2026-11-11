@@ -134,23 +134,42 @@ internal object DictionaryFiles {
         for (path in io.list(dir)) {
             val id = parseName(path.fileName.toString()) ?: continue
             if (codecs.dictionary(id) != null) continue
-            val dictionary = try {
-                io.open(path, OpenMode.READ).use { file ->
-                    val size = file.size()
-                    if (size > HEADER_BYTES + 4 + CompressionOptions.MAX_DICTIONARY_BYTES) throw CorruptionException(path.toString(), "dictionary file of $size bytes")
-                    val bytes = ByteArray(size.toInt())
-                    file.readFully(0, bytes, 0, bytes.size)
-                    decode(bytes, id, path.toString())
-                }
-            } catch (_: CorruptionException) {
-                null
-            } catch (_: IOException) {
-                null
-            } ?: continue
+            val dictionary = readOrNull(io, path, id) ?: continue
             codecs.register(dictionary, use = false)
             loaded += id
         }
         return loaded
+    }
+
+    /**
+     * Whether every dictionary [codecs] holds is still in [dir] with the same bytes, for a process that only reads the
+     * store. Files are never deleted or rewritten while the store holds data, so one that is gone or differs means the
+     * store was reset since, and its id names another dictionary, or none yet. A file that can't be read counts as
+     * changed: dictionaries loaded anew may lack it for a while, and a read that needs it fails, but no payload is ever
+     * inflated with another dictionary than the one it was written with.
+     */
+    fun unchanged(io: FileSystemIo, dir: Path, codecs: FragmentCodecs): Boolean {
+        for (id in 1..codecs.maxId) {
+            val held = codecs.dictionary(id) ?: continue
+            val found = readOrNull(io, dir.resolve(name(id)), id) ?: return false
+            if (!found.bytes.contentEquals(held.bytes)) return false
+        }
+        return true
+    }
+
+    /** The dictionary in [path], or null when it is gone, damaged or can't be read. */
+    private fun readOrNull(io: FileSystemIo, path: Path, id: Int): CompressionDictionary? = try {
+        io.open(path, OpenMode.READ).use { file ->
+            val size = file.size()
+            if (size > HEADER_BYTES + 4 + CompressionOptions.MAX_DICTIONARY_BYTES) throw CorruptionException(path.toString(), "dictionary file of $size bytes")
+            val bytes = ByteArray(size.toInt())
+            file.readFully(0, bytes, 0, bytes.size)
+            decode(bytes, id, path.toString())
+        }
+    } catch (_: CorruptionException) {
+        null
+    } catch (_: IOException) {
+        null
     }
 }
 

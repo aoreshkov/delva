@@ -185,6 +185,44 @@ class SecondaryEngineTest {
     }
 
     /**
+     * A reset restarts compression dictionary ids at 1, and the writer then trains dictionaries of other content under
+     * the same ids: the secondary reads the documents written after the reset with those, and a result opened before it
+     * with the dictionaries its documents were written with.
+     */
+    @Test
+    fun `a secondary open across a reset reads with the dictionaries trained after it`() {
+        for (platform in Platform.entries) {
+            val fs = SimulatedFileSystemIo(platform)
+            val options = options(compression = 2)
+            val random = Random(10)
+            var i = 0
+            // Inserts until the writer adopted a dictionary, then documents compressed with it.
+            fun fill(writer: Engine, doc: (Int) -> String) {
+                while (writer.codecs.dictionaryCount == 0) writer.insert(doc(i++))
+                repeat(10) { writer.insert(doc(i++)) }
+            }
+            val before = Engine.open(dir, options, fs).use { writer ->
+                fill(writer) { doc(random, it) }
+                writer.documents()
+            }
+            secondary(fs, options).use { secondary ->
+                assertEquals(before, secondary.documents(), "$platform")
+                val pinned = secondary.search(KeyValueQuery("all", JsonQueryValue.Bool(true), ResultMode.WHOLE_DOCUMENT, limit = 10_000))
+                JsonStore.reset(dir, fs)
+                Engine.open(dir, options, fs).use { writer ->
+                    fill(writer) { n -> """{"all":true,"word":"${listOf("alpha", "beta", "gamma", "delta").random(random).repeat(random.nextInt(4, 30))}","n":$n}""" }
+                    assertTrue(writer.codecs.dictionary(1) != null, "$platform: dictionary 1 again")
+                    assertTrue(secondary.refresh(), "$platform")
+                    assertEquals(writer.documents(), secondary.documents(), "$platform: read with the new dictionaries")
+                }
+                assertEquals(before, pinned.iterator().asSequence().associate { it.node.docId.raw to it.readJsonAsString(Int.MAX_VALUE) }, "$platform: the result keeps its dictionaries")
+                pinned.close()
+                assertEquals(emptyList(), secondary.verify().issues, "$platform")
+            }
+        }
+    }
+
+    /**
      * A writer killed after its MANIFEST was renamed into place, before `CURRENT` named it: the secondary reads that
      * MANIFEST and its segments, and recovery goes back to the one before. The segments' file numbers must not name other
      * files later, or the secondary would read the new ones through what it read of the old ones.
