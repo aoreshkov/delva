@@ -5,6 +5,7 @@ import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.ResultMode
+import app.oreshkov.delva.StoreClosedException
 import app.oreshkov.delva.StoreOptions
 import app.oreshkov.delva.internal.io.DISCARDED_SUFFIX
 import app.oreshkov.delva.internal.io.JdkFileSystemIo
@@ -15,6 +16,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -58,6 +60,67 @@ class MappedSegmentsTest {
             val discarded = Files.list(dir.resolve(LogFiles.TMP_DIR)).use { files -> files.filter { it.toString().endsWith(DISCARDED_SUFFIX) }.toList() }
             assertEquals(emptyList(), discarded, "segment files left in the graveyard")
             Engine.open(dir, options, io).use { store -> assertEquals(documents, store.documents()) }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    private fun mappedOptions(blockCacheBytes: Long? = null) = EngineOptions(
+        CreationOptions(fragmentBytes = 1024), StoreOptions(encoderBudgetBytes = 4096), keySeed = 5, log = TestEngines.LOG,
+        memtableBytes = 16L shl 10, backgroundFlush = false, segmentBlockBytes = 512, blockCacheBytes = blockCacheBytes,
+        compaction = CompactionOptions(minMergeSegments = 2, bytesPerSecond = 0),
+    )
+
+    private fun listing(dir: Path): Set<Path> = Files.walk(dir).use { files -> files.map { dir.relativize(it) }.toList().toSet() }
+
+    @Test
+    fun `a version released after the store closed leaves its obsolete segments alone`() {
+        val dir = Files.createTempDirectory("delva-mmap-pinned")
+        try {
+            val io = JdkFileSystemIo(mmapReads = true)
+            val options = mappedOptions()
+            val pinned = Engine.open(dir, options, io).use { store ->
+                for (i in 0 until 300) store.insert(doc(i))
+                store.flush()
+                store.indexes.versions.acquire().also {
+                    for (i in 300 until 600) store.insert(doc(i))
+                    store.flush()
+                    store.compact()
+                    assertTrue(store.indexes.compactor.compactions > 0, "nothing was compacted")
+                }
+            }
+            val obsolete = pinned.allSegments.filter { it.obsolete }
+            assertTrue(obsolete.size > 1, "${obsolete.size} obsolete segments")
+            val files = listing(dir)
+            // The store closed these segments; releasing the version neither closes them again nor touches the
+            // directory, whose lock is gone.
+            pinned.release()
+            assertTrue(obsolete.all { it.deleted }, "every segment of the version was released")
+            assertEquals(files, listing(dir))
+            Engine.open(dir, options, io).use { store -> assertEquals(600, store.documents().size) }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a mapped segment read after the store closed fails as closed`() {
+        val dir = Files.createTempDirectory("delva-mmap-closed")
+        try {
+            // No block cache, so every block read comes from the mapping.
+            val store = Engine.open(dir, mappedOptions(blockCacheBytes = 0), JdkFileSystemIo(mmapReads = true))
+            for (i in 0 until 300) store.insert(doc(i))
+            store.flush()
+            val version = store.indexes.versions.acquire()
+            // A read still running when the store closes its segments: results check the store first, so only one
+            // already past that check gets this far.
+            store.close()
+            try {
+                val segment = version.fragmentSegments.first().reader
+                assertFailsWith<StoreClosedException> { segment.cursor().first() }
+            } finally {
+                version.release()
+            }
         } finally {
             dir.toFile().deleteRecursively()
         }

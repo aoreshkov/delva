@@ -231,6 +231,16 @@ class JdkFileSystemIoTest {
     }
 
     @Test
+    fun `a closed mapped handle fails reads as a closed channel, and closes once`() = withTempDir { dir ->
+        Files.write(dir.resolve("f"), ByteArray(100) { it.toByte() })
+        val f = JdkFileSystemIo(mmapReads = true).open(dir.resolve("f"), OpenMode.READ)
+        assertTrue(f.mapped)
+        f.close()
+        assertFailsWith<ClosedChannelException> { f.read(0, ByteArray(10), 0, 10) }
+        f.close()
+    }
+
+    @Test
     fun `a mapped open that fails closes its channel`() = withTempDir { dir ->
         Files.write(dir.resolve("f"), byteArrayOf(1, 2, 3))
         var channel: FileChannel? = null

@@ -264,8 +264,8 @@ private class JdkFileIo(
 
 /**
  * A read-only file read through a shared mapping. The mapping lives in an `Arena` closed by [close], which
- * releases the addresses: a read after that throws, so the LSM must close a segment before deleting its file, as it
- * already does. Reads copy into the caller's array, so nothing refers to the mapping afterwards, and can't be
+ * releases the addresses: a read after that, or racing it, throws [ClosedChannelException], so the LSM must close a
+ * segment before deleting its file, as it already does. A second close does nothing. Reads copy into the caller's array, so nothing refers to the mapping afterwards, and can't be
  * interrupted. Thread-safe.
  */
 private class MappedFileIo(override val path: Path, private val channel: FileChannel, private val size: Long) : FileIo {
@@ -279,10 +279,20 @@ private class MappedFileIo(override val path: Path, private val channel: FileCha
 
     override val mapped: Boolean get() = true
 
+    /** Set by [close] before the arena closes, so a read that the closed arena stops can tell why. */
+    @Volatile
+    private var closed = false
+
     override fun read(position: Long, destination: ByteArray, offset: Int, length: Int): Int {
         if (position >= size) return 0
         val n = minOf(length.toLong(), size - position).toInt()
-        MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, position, destination, offset, n)
+        try {
+            MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, position, destination, offset, n)
+        } catch (e: IllegalStateException) {
+            // A read racing close fails as a read of a closed channel does; any other cause is a bug, and stays one.
+            if (!closed) throw e
+            throw ClosedChannelException().apply { initCause(e) }
+        }
         return n
     }
 
@@ -295,6 +305,10 @@ private class MappedFileIo(override val path: Path, private val channel: FileCha
     override fun size(): Long = size
 
     override fun close() {
+        synchronized(this) {
+            if (closed) return
+            closed = true
+        }
         try {
             arena.close()
         } finally {

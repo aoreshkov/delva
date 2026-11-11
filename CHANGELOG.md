@@ -65,6 +65,11 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva`: `verify` no longer reports damage on a running store when a flush or space reclamation runs during it.
 - `delva`: a power loss while a store reopens after a crash no longer leaves an insert that wasn't synced yet damaged;
   with `Durability.Periodic` or `None`, the insert is now either whole or absent.
+- `delva`: a store that fails reports the error that failed it to every operation it stops; one that ran into the
+  failure as it happened could get an `EngineFailedException` without a cause.
+- `delva`: with `mmapReads`, a read racing the store's close fails with `StoreClosedException`, and closing a result
+  after its store no longer throws `IllegalStateException`. A result closed after its store no longer removes segment
+  files from the store's directory, whose lock is gone; the next open removes them.
 
 ## [0.3.0] - 2026-10-31
 

@@ -26,11 +26,16 @@ import app.oreshkov.delva.internal.store.LogFragmentStore
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -380,6 +385,32 @@ class DurableEngineTest {
         }
         none.restart()
         Engine.open(dir, options(durability = Durability.None), none).use { assertEquals(21, it.documents().size) }
+    }
+
+    @Test
+    fun `a failure reaches every operation it stops with its cause, even while it is being recorded`() {
+        val store = Engine.open(dir, options(), SimulatedFileSystemIo())
+        try {
+            val cause = IOException("disk gone")
+            val entered = CountDownLatch(1)
+            val resume = CountDownLatch(1)
+            store.onFailing = {
+                entered.countDown()
+                resume.await()
+            }
+            val failing = thread { store.fail(cause) }
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            // In the middle of fail(): an operation still runs, or it reports the real cause, never a missing one.
+            val seen = runCatching { store.checkUsable() }.exceptionOrNull()
+            store.onFailing = {}
+            resume.countDown()
+            failing.join()
+            if (seen != null) assertSame(cause, assertIs<EngineFailedException>(seen).cause)
+            assertSame(cause, assertFailsWith<EngineFailedException> { store.checkUsable() }.cause)
+            assertSame(cause, assertFailsWith<EngineFailedException> { store.insert(doc(1)) }.cause)
+        } finally {
+            store.close()
+        }
     }
 
     @Test
