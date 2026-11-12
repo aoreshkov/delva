@@ -1,9 +1,9 @@
 [versions]
 kotlin = "2.4.21"
 kotlinxCoroutines = "1.11.0"
-kotlinxSerialization = "1.12.0"
+kotlinxSerialization = "1.13.0"
 kotlinxBenchmark = "0.5.0"
-dokka = "2.2.0"
+dokka = "2.3.0"
 # The released cli-kit that delva-cli builds on and a Delva release ships; its own train's version is clikit.version.
 cliKit = "0.4.0"
 # The released Delva that delva-intellij-plugin bundles, and so the store formats it reads; its own train's version is
