@@ -45,6 +45,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva-cli`: built on cli-kit 0.4.0, so notices, warnings and errors keep their place among the output's lines when
   stdout and stderr are merged, a line break in one starts an indented continuation line, and an option given twice
   with different values is a warning.
+- `delva-kotlinx-serialization`: built on kotlinx-serialization-json 1.13.0, so a value that fails to encode or decode
+  throws the serializer's own exception again, not one wrapped in a `JsonException`.
 
 ### Fixed
 
