@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.query
 
 import app.oreshkov.delva.CorruptionException
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.internal.bytes.BigEndian
 import app.oreshkov.delva.internal.lsm.SegmentCursor
 import app.oreshkov.delva.internal.lsm.SegmentHandle
@@ -152,8 +153,9 @@ internal class EveryDocument : Candidates(descending = false) {
  *
  * [accept], the document filter, is tested only on a candidate near enough to enter the result as it stands. The
  * filter depends on the document alone, so the result is the one testing every candidate would give, while documents
- * that can't be among the [k] nearest are never read. [checkpoint] runs every [CHECK_EVERY] vectors compared, so a
- * long search notices a closed store or a cancelled caller.
+ * that can't be among the [k] nearest are never read. [checkpoint] runs every [CHECK_EVERY] steps of the merge, each
+ * of which reads at most one candidate and one vector, so a long search notices a closed store or a cancelled caller
+ * even when it compares nothing: when every vector it meets is deleted, or no candidate has one.
  */
 internal class VectorSearch(
     private val vectors: VectorScan,
@@ -178,7 +180,9 @@ internal class VectorSearch(
     /** Runs the search; the hits are [TopK.docIds] and [TopK.distances], nearest first. */
     fun run(): TopK {
         var target = 0L
+        var steps = 0L
         while (true) {
+            if (++steps % CHECK_EVERY == 0L) checkpoint()
             candidates.seek(target)
             val c = candidates.docId
             if (c == candidates.exhausted) break
@@ -191,9 +195,9 @@ internal class VectorSearch(
             }
             target = v + 1
             if (!visibility.isVisible(v)) continue
-            if (++compared % CHECK_EVERY == 0L) checkpoint()
+            compared++
             val d = vectors.distance(distance)
-            if (d.isNaN()) throw CorruptionException(vectors.sourceName(), "the vector of document $v has a number that isn't finite")
+            if (d.isNaN()) throw CorruptionException(vectors.sourceName(), nanDistance(v))
             if (maxDistance != null && d > maxDistance) continue
             if (!top.admits(d, v)) continue
             if (accept != null) {
@@ -204,6 +208,15 @@ internal class VectorSearch(
         }
         top.sort()
         return top
+    }
+
+    /**
+     * Why the vector of [docId] gave a distance that isn't a number: a value that isn't finite under any metric, and
+     * under COSINE also a stored sum of squares that isn't a positive number.
+     */
+    private fun nanDistance(docId: Long): String {
+        val squares = if (distance.metric == VectorMetric.COSINE) ", or its stored sum of squares isn't a positive number" else ""
+        return "the vector of document $docId gives a distance that isn't a number: a value isn't finite$squares"
     }
 
     companion object {

@@ -27,10 +27,17 @@ internal class EngineVectorSearchResult(
     internal val types: TypeIndexView,
     internal val keys: KeyIndexView?,
     internal val names: TypeDictionary,
-    /** The search that found the hits, for its counters. */
-    internal val search: VectorSearch,
+    search: VectorSearch,
     top: TopK,
 ) : VectorSearchResult {
+    // The search's counters, not the search: it holds the scan's cursors and buffers, which the result doesn't need.
+
+    /** Vectors the search compared with the query, for tests. */
+    internal val compared: Long = search.compared
+
+    /** Documents whose filter the search tested, for tests. */
+    internal val filterTests: Long = search.filterTests
+
     override val snapshotLsn: Long = snapshot.lsn
 
     override val hits: List<VectorHit> = List(top.size) { EngineVectorHit(engine, this, top.docIds[it], top.distances[it]) }

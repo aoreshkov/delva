@@ -23,7 +23,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
@@ -103,9 +105,35 @@ class VectorSearchEngineTest {
                 // The three nearest of group 2 above 100.
                 assertEquals(listOf(102, 106, 110).map { ids[it] }, r.hits.map { it.docId.raw })
                 // Nearer candidates come first here, so once three are in, no farther document is read.
-                val search = (r as EngineVectorSearchResult).search
-                assertEquals(3L, search.filterTests)
-                assertTrue(search.compared < 100, "only the documents of the terms are compared: ${search.compared}")
+                val result = r as EngineVectorSearchResult
+                assertEquals(3L, result.filterTests)
+                assertTrue(result.compared < 100, "only the documents of the terms are compared: ${result.compared}")
+            }
+        }
+    }
+
+    @Test
+    fun `a search that compares nothing still reaches its checkpoints, and a cancelled caller stops it`() {
+        TestEngines.open(options(memtableBytes = 4L shl 10)).use { store ->
+            // Even documents have a vector, in group 0; odd ones have none, in group 1.
+            val ids = List(2000) { store.insert(if (it % 2 == 0) """{"i":$it,"g":0,"v":[$it,0]}""" else """{"i":$it,"g":1}""").raw }
+            store.flush()
+            val withoutVectors = VectorQuery(floatArrayOf(0f, 0f)).withDocumentFilter(DocumentFilter.compile("@.g == 1"))
+            assertEquals(false, store.explain(withoutVectors).fullScan)
+            var checks = 0
+            store.searchVectors(withoutVectors) { checks++ }.use { assertEquals(emptyList(), it.hits) }
+            assertTrue(checks > 0, "a search whose candidates have no vector reached no checkpoint")
+
+            for (i in ids.indices step 2) assertTrue(store.delete(DocId(ids[i])))
+            val deleted = VectorQuery(floatArrayOf(0f, 0f))
+            checks = 0
+            store.searchVectors(deleted) { checks++ }.use { assertEquals(emptyList(), it.hits) }
+            assertTrue(checks > 0, "a search over deleted vectors reached no checkpoint")
+
+            // The suspending facade's checkpoint throws for a cancelled caller.
+            val cancelled = Job().apply { cancel() }
+            for (query in listOf(withoutVectors, deleted)) {
+                assertFailsWith<CancellationException> { store.searchVectors(query) { cancelled.ensureActive() } }
             }
         }
     }

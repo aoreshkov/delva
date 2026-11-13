@@ -14,7 +14,7 @@ import kotlin.math.sqrt
  * so eight additions are in flight rather than one chain waiting on itself, and the query is held as doubles, which
  * saves converting it again for every vector. Thread-safe.
  */
-internal class VectorDistance(private val metric: VectorMetric, query: FloatArray) {
+internal class VectorDistance(val metric: VectorMetric, query: FloatArray) {
     private val query = DoubleArray(query.size) { query[it].toDouble() }
 
     private val querySquares: Double = Vectors.squares(query)

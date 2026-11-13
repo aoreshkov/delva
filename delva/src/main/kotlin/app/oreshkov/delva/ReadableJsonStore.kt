@@ -83,8 +83,8 @@ public interface ReadableJsonStore : AutoCloseable {
     /**
      * The `k` visible documents whose vectors are nearest to the query vector, on the current state (SPEC.md §11.3):
      * an exact search, which compares every candidate's vector before it returns. Close the result when done; its
-     * hits' documents are read when a hit is read. Cancelling the call stops the comparisons within a few hundred
-     * vectors.
+     * hits' documents are read when a hit is read. Cancelling the call stops the search within a few hundred vectors
+     * or candidates read.
      *
      * Throws [IllegalStateException] in a store without a [CreationOptions.vectorField], [IllegalArgumentException]
      * for a query vector of other dimensions or, under [VectorMetric.COSINE], a zero one, and [QueryRejectedException]
