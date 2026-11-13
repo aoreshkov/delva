@@ -344,6 +344,11 @@ mix spellings, create the store with `CreationOptions(normalization = Normalizat
 then read back normalized rather than as inserted, and [SPEC.md](SPEC.md#21-strings) has the rest of the rules. ASCII
 and text that is already normalized cost only a scan.
 
+**A vector index costs heap per block.** An open store keeps about 40 bytes of heap for each block of its vector
+index, beside the budgets the options set. A block is 8 KiB, so from 1,024 dimensions up each vector has a block of its
+own: a million vectors of 1,536 dimensions hold about 40 MB of heap, which no option bounds. Smaller vectors share
+blocks, about seven to a block at 256 dimensions, and cost a fraction of that.
+
 `StoreOptions.mmapReads` reads sealed segment files through memory mappings instead of positional reads, which saves
 a copy per block and leaves the pages to the OS. It is off by default: on Windows a mapped file cannot be deleted, so
 a compaction that retires a mapped segment waits for its readers to let go. It is worth trying on read-heavy stores
