@@ -19,8 +19,9 @@ import kotlin.test.assertEquals
  * What exact vector search costs: for each number of chunk documents and each number of dimensions, unit-length
  * Gaussian vectors under cosine, written as the shortest text that reads back as the same float32, in a store created
  * with the vector's key excluded from the index. Prints the vector index's size, insert throughput, and the median
- * latency of a top-10 search unfiltered and through a document filter that one document in 100 or in 10 passes; then
- * the same searches with segments read through memory mappings. For the first number of documents it also inserts the
+ * latency of a top-10 search unfiltered and through a document filter that 1%, 10%, 30% or 50% of the documents pass;
+ * then the same searches with segments read through memory mappings. The wide filters show where narrowing the
+ * candidates by an index term stops paying for itself against the scan. For the first number of documents it also inserts the
  * same documents into a store without a vector field, which is what the vector field costs an insert.
  *
  * The block cache is the default one for the test JVM's heap. A search keeps a vector index of up to half of it cached;
@@ -44,11 +45,10 @@ class VectorSearchReportTest {
                 for ((b, blockBytes) in blockSizes.withIndex()) {
                     val withVectors = measure(count, dimensions, blockBytes, vectorField = true)
                     val without = if (c == 0 && b == 0) measure(count, dimensions, blockBytes, vectorField = false) else null
-                    rows += "| %,d | %d | %d | %,.0f | %,.0f | %s | %.1f | %.2f | %.2f | %.1f | %.2f | %.2f |".format(
+                    rows += "| %,d | %d | %d | %,.0f | %,.0f | %s | %s |".format(
                         count, dimensions, blockBytes shr 10, withVectors.indexBytes / (1 shl 20).toDouble(),
                         count / (withVectors.insertNanos / 1e9), without?.let { "%,.0f".format(count / (it.insertNanos / 1e9)) } ?: "",
-                        withVectors.millis[0], withVectors.millis[1], withVectors.millis[2],
-                        withVectors.millis[3], withVectors.millis[4], withVectors.millis[5],
+                        withVectors.millis.joinToString(" | ") { "%.2f".format(it) },
                     )
                 }
             }
@@ -57,8 +57,8 @@ class VectorSearchReportTest {
             "\nVector search: unit-length Gaussian vectors under COSINE, top $TOP_K, median of $SEARCHES searches; " +
                 "block cache ${EngineOptions().blockCacheBytes shr 20} MiB of a ${Runtime.getRuntime().maxMemory() shr 20} MiB heap\n\n" +
                 "| Documents | Dimensions | Vector block KiB | Vector index MiB | Inserts/s | Inserts/s without a vector field | " +
-                "Top $TOP_K ms | 1% filter ms | 10% filter ms | Top $TOP_K ms, mmap | 1% filter ms, mmap | 10% filter ms, mmap |\n" +
-                "|---|---|---|---|---|---|---|---|---|---|---|---|\n" + rows.joinToString("\n"),
+                listOf("", ", mmap").joinToString(" | ") { m -> "Top $TOP_K ms$m | " + FILTERS.joinToString(" | ") { "${it.first}% filter ms$m" } } +
+                " |\n" + "|---".repeat(6 + 2 * (1 + FILTERS.size)) + "|\n" + rows.joinToString("\n"),
         )
     }
 
@@ -86,18 +86,14 @@ class VectorSearchReportTest {
             if (!vectorField) return Measured(insertNanos, 0, DoubleArray(0))
             val indexBytes = Files.list(dir.resolve("index")).use { files -> files.filter { it.fileName.toString().startsWith("vector-") }.mapToLong { Files.size(it) }.sum() }
             val query = VectorQuery(unitGaussian(random, dimensions), k = TOP_K)
-            val queries = listOf(
-                query,
-                query.withDocumentFilter(DocumentFilter.compile("@.hundredth == 7")),
-                query.withDocumentFilter(DocumentFilter.compile("@.tenth == 3")),
-            )
-            val millis = DoubleArray(6)
+            val queries = listOf(query) + FILTERS.map { query.withDocumentFilter(DocumentFilter.compile(it.second)) }
+            val millis = DoubleArray(2 * queries.size)
             for ((m, mmap) in listOf(false, true).withIndex()) {
                 Engine.open(dir, EngineOptions(creation, StoreOptions(mmapReads = mmap)), JdkFileSystemIo(mmapReads = mmap)).use { store ->
                     for ((q, vq) in queries.withIndex()) {
                         // Warm-up, so that the first rows don't measure the compiler.
                         repeat(WARMUPS) { store.search(vq).use { assertEquals(TOP_K, it.hits.size) } }
-                        millis[3 * m + q] = LongArray(SEARCHES) {
+                        millis[queries.size * m + q] = LongArray(SEARCHES) {
                             val start = System.nanoTime()
                             store.search(vq).use { r -> r.hits.size }
                             System.nanoTime() - start
@@ -120,10 +116,11 @@ class VectorSearchReportTest {
         return v
     }
 
-    /** Chunk [n]: two members a document filter can narrow by, and its [vector] as the shortest float32 text. */
+    /** Chunk [n]: the members [FILTERS] narrow by, and its [vector] as the shortest float32 text. */
     private fun chunk(n: Int, vector: FloatArray): ByteArray {
         val json = StringBuilder(vector.size * 12 + 64)
         json.append("""{"n":""").append(n).append(""","hundredth":""").append(n % 100).append(""","tenth":""").append(n % 10)
+            .append(""","thirty":""").append(if (n % 10 < 3) 1 else 0).append(""","half":""").append(n % 2)
             .append(""","embedding":[""")
         for (i in vector.indices) {
             if (i > 0) json.append(',')
@@ -140,5 +137,8 @@ class VectorSearchReportTest {
         const val SEARCHES = 7
         const val WARMUPS = 5
         const val SEED = 42L
+
+        /** The percentage of the documents each filter passes, and the filter; each narrows by one index term. */
+        val FILTERS = listOf(1 to "@.hundredth == 7", 10 to "@.tenth == 3", 30 to "@.thirty == 1", 50 to "@.half == 1")
     }
 }
