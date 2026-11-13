@@ -1,6 +1,7 @@
 package app.oreshkov.delva.internal.query
 
 import app.oreshkov.delva.CorruptionException
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.internal.bytes.BigEndian
 import app.oreshkov.delva.internal.lsm.SegmentCursor
 import app.oreshkov.delva.internal.lsm.SegmentHandle
@@ -196,7 +197,7 @@ internal class VectorSearch(
             if (!visibility.isVisible(v)) continue
             compared++
             val d = vectors.distance(distance)
-            if (d.isNaN()) throw CorruptionException(vectors.sourceName(), "the vector of document $v has a number that isn't finite")
+            if (d.isNaN()) throw CorruptionException(vectors.sourceName(), nanDistance(v))
             if (maxDistance != null && d > maxDistance) continue
             if (!top.admits(d, v)) continue
             if (accept != null) {
@@ -207,6 +208,15 @@ internal class VectorSearch(
         }
         top.sort()
         return top
+    }
+
+    /**
+     * Why the vector of [docId] gave a distance that isn't a number: a value that isn't finite under any metric, and
+     * under COSINE also a stored sum of squares that isn't a positive number.
+     */
+    private fun nanDistance(docId: Long): String {
+        val squares = if (distance.metric == VectorMetric.COSINE) ", or its stored sum of squares isn't a positive number" else ""
+        return "the vector of document $docId gives a distance that isn't a number: a value isn't finite$squares"
     }
 
     companion object {

@@ -18,7 +18,8 @@ import java.util.PriorityQueue
  * value := squares:f64 | { value:f32 }× dimensions   little-endian IEEE 754 bits, the values as the COMMIT logs them
  * ```
  * Every value has the same length, `8 + 4 × dimensions` bytes, and is always inline. `squares` is [Vectors.squares] of
- * the values, stored so that a search under any metric needs one dot product per vector. There is no bloom filter: a
+ * the values, stored so that a search under COSINE, the only metric that reads it, needs one pass over each vector, as
+ * the other metrics do. There is no bloom filter: a
  * lookup by docId is bounded by the segment's docId range and its block index, and a search reads every block anyway.
  * The stats count vectors in both `entryCount` and `itemCount`.
  */
