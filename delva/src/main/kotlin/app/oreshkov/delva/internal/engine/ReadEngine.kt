@@ -246,7 +246,7 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
     override fun search(query: VectorQuery): VectorSearchResult = searchVectors(query) {}
 
     /**
-     * The vector [search], which also runs [checkpoint] every [VectorSearch.CHECK_EVERY] vectors compared: a caller
+     * The vector [search], which also runs [checkpoint] every [VectorSearch.CHECK_EVERY] steps of its merge: a caller
      * whose wait was cancelled throws from it to stop a long scan.
      */
     fun searchVectors(query: VectorQuery, checkpoint: () -> Unit): VectorSearchResult {
