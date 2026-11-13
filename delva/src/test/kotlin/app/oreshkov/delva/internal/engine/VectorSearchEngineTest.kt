@@ -105,9 +105,9 @@ class VectorSearchEngineTest {
                 // The three nearest of group 2 above 100.
                 assertEquals(listOf(102, 106, 110).map { ids[it] }, r.hits.map { it.docId.raw })
                 // Nearer candidates come first here, so once three are in, no farther document is read.
-                val search = (r as EngineVectorSearchResult).search
-                assertEquals(3L, search.filterTests)
-                assertTrue(search.compared < 100, "only the documents of the terms are compared: ${search.compared}")
+                val result = r as EngineVectorSearchResult
+                assertEquals(3L, result.filterTests)
+                assertTrue(result.compared < 100, "only the documents of the terms are compared: ${result.compared}")
             }
         }
     }
