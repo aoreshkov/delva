@@ -170,6 +170,10 @@ class InterruptsTest {
         val before = delvaThreads()
         val store = busyStore(fs)
         val expected = store.documents()
+        // The background flushes and compactions write MANIFESTs too: one of them taking the fault fails the store
+        // instead, and close then throws EngineFailedException, or nothing if the store failed before it.
+        store.flush()
+        store.compact()
         fs.failNextForce { it.fileName.toString().startsWith("MANIFEST") }
         assertFailsWith<IOException> { store.close() }
         assertEquals(emptySet(), delvaThreads() - before)
