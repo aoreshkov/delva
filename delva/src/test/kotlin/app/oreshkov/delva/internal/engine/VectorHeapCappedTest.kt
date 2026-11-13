@@ -29,24 +29,29 @@ import kotlin.test.assertTrue
  *   against an oracle kept while the documents were generated, so neither the test nor the store holds the vectors.
  * - a vector at the end of a 2 GiB document, after everything else in it, is captured as it streams past and found.
  *
- * `-Ddelva.heapCapped.vectors=<n>` changes the number of vectors and `-Ddelva.heapCapped.bytes=<n>` the size of the
- * large document.
+ * It prints the heap the vector segments' block indexes hold, per vector: that heap grows with the number of vectors,
+ * and at high dimensions, where a block holds one vector, it is what the options don't bound.
+ *
+ * `-Ddelva.heapCapped.vectors=<n>` changes the number of vectors, `-Ddelva.heapCapped.dimensions=<d>` their dimensions
+ * (256 by default; 250,000 vectors of 1,536 are about 1.5 GiB of vector index), and `-Ddelva.heapCapped.bytes=<n>` the
+ * size of the large document.
  */
 @OptIn(ExperimentalDelvaApi::class)
 class VectorHeapCappedTest {
     private val vectors = System.getProperty("delva.heapCapped.vectors")?.toInt() ?: 1_000_000
+    private val dimensions = System.getProperty("delva.heapCapped.dimensions")?.toInt() ?: 256
     private val documentBytes = System.getProperty("delva.heapCapped.bytes")?.toLong() ?: (2L shl 30)
 
     @Test
     fun `a million vectors are searched in a heap smaller than they are`() {
         val dir = Files.createTempDirectory("delva-vector-heap")
         try {
-            val field = VectorField("$.v", DIMENSIONS, VectorMetric.EUCLIDEAN)
+            val field = VectorField("$.v", dimensions, VectorMetric.EUCLIDEAN)
             val options = EngineOptions(CreationOptions(excludedKeys = setOf("v")).withVectorField(field))
             val random = Random(SEED)
             // Values of three decimals, read the way the engine reads them: from their text, straight to float32.
             fun nextValue(): Pair<String, Float> = (random.nextInt(-999, 1000) / 1000.0).toString().let { it to it.toFloat() }
-            val query = FloatArray(DIMENSIONS) { nextValue().second }
+            val query = FloatArray(dimensions) { nextValue().second }
             val nearest = Nearest(K)
             val nearestInGroup = Nearest(K)
             LiveHeapSampler(intervalMillis = 1000).use { sampler ->
@@ -60,7 +65,7 @@ class VectorHeapCappedTest {
                             text.setLength(0)
                             text.append("""{"n":""").append(n).append(""","g":""").append(n % 100).append(""","v":[""")
                             var squares = 0.0
-                            for (i in 0 until DIMENSIONS) {
+                            for (i in 0 until dimensions) {
                                 val (spelled, value) = nextValue()
                                 if (i > 0) text.append(',')
                                 text.append(spelled)
@@ -75,7 +80,7 @@ class VectorHeapCappedTest {
                         }
                         store.insertAll(batch)
                     }
-                    println("$vectors vectors of $DIMENSIONS inserted in ${seconds(start)}, peak live heap ${sampler.peak shr 20} MiB")
+                    println("$vectors vectors of $dimensions inserted in ${seconds(start)}, peak live heap ${sampler.peak shr 20} MiB")
                     assertTrue(store.indexes.peakMemtableBytes <= options.memtableBudgetBytes + (8L shl 20), "memtables peaked at ${store.indexes.peakMemtableBytes}")
                     start = System.nanoTime()
                     check(store, query, nearest, nearestInGroup)
@@ -84,7 +89,7 @@ class VectorHeapCappedTest {
                 Engine.open(dir, options, JdkFileSystemIo()).use { store ->
                     val start = System.nanoTime()
                     check(store, query, nearest, nearestInGroup)
-                    println("reopened and searched in ${seconds(start)}, peak live heap ${sampler.peak shr 20} MiB")
+                    println("reopened and searched in ${seconds(start)}, peak live heap ${sampler.peak shr 20} MiB; ${blockIndexHeap(store)}")
                 }
             }
         } finally {
@@ -96,6 +101,21 @@ class VectorHeapCappedTest {
         val unfiltered = VectorQuery(query, k = K)
         assertNearest(nearest, store.search(unfiltered), "unfiltered")
         assertNearest(nearestInGroup, store.search(unfiltered.withDocumentFilter(DocumentFilter.compile("@.g == $GROUP"))), "filtered")
+    }
+
+    /** The heap the block indexes of the current vector segments hold, in all and per vector they store. */
+    private fun blockIndexHeap(store: Engine): String {
+        val version = store.indexes.versions.acquire()
+        try {
+            val readers = version.vectorSegments.map { it.reader }
+            val heap = readers.sumOf { it.heapBytes }
+            val count = readers.sumOf { it.stats.entryCount }
+            return "vector block indexes %,d KiB in %,d blocks for %,d vectors, %.1f bytes a vector".format(
+                heap shr 10, readers.sumOf { it.blockCount.toLong() }, count, heap.toDouble() / maxOf(1L, count),
+            )
+        } finally {
+            version.release()
+        }
     }
 
     /** The hits are the oracle's documents in its order, at its distances up to the rounding of a different sum. */
@@ -164,7 +184,6 @@ class VectorHeapCappedTest {
     private fun seconds(start: Long) = "%.1f s".format((System.nanoTime() - start) / 1e9)
 
     private companion object {
-        const val DIMENSIONS = 256
         const val K = 10
         const val GROUP = 7
         const val BATCH = 1000

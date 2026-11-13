@@ -27,7 +27,7 @@ These are left out of `check` because they take long:
 
 | Task | Runs |
 |---|---|
-| `heapCappedTest` | `*HeapCappedTest`: huge documents, and a million vectors, under a 256 MB heap, proving memory is bounded by the options, not by document size or store size; `-Ddelva.heapCapped.vectors=<n>` sets the number of vectors |
+| `heapCappedTest` | `*HeapCappedTest`: huge documents, and a million vectors, under a 256 MB heap, proving memory is bounded by the options, not by document size or store size; `-Ddelva.heapCapped.vectors=<n>` sets the number of vectors, and `-Ddelva.heapCapped.dimensions=<d>` their dimensions |
 | `crashTest` | `*CrashTest`: child JVMs killed mid-write, proving an insert is whole or absent after a real crash |
 | `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads, and `-Ddelva.report.embeddings=10000` the number of chunks its embedding sizes are measured on, and `-Ddelva.report.vectors=10000,100000` and `-Ddelva.report.dimensions=384,768,1536` the stores its vector search latencies are measured on, and `-Ddelva.report.vectorBlockBytes=8192,65536` the vector segment block sizes it compares |
 | `:delva-intellij-plugin:verifyPlugin` | the IntelliJ Plugin Verifier, against the lowest IDE the plugin supports and the newest EAP, both downloaded |
