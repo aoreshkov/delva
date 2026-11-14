@@ -28,6 +28,7 @@ import app.oreshkov.delva.SecondaryJsonStore
 import app.oreshkov.delva.SelectedNode
 import app.oreshkov.delva.StoreNotFoundException
 import app.oreshkov.delva.UnsupportedFormatException
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.VerifyIssue
 import app.oreshkov.delva.VerifyIssueKind
 import app.oreshkov.delva.VerifyPhase
@@ -76,6 +77,14 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
             info.deletedDocumentCount,
             store.writer()?.let(::describe),
             store.creationOptions.documentKey,
+            store.creationOptions.vectorField?.let { field ->
+                val metric = when (field.metric) {
+                    VectorMetric.COSINE -> VectorFieldSummary.Metric.COSINE
+                    VectorMetric.DOT_PRODUCT -> VectorFieldSummary.Metric.DOT_PRODUCT
+                    VectorMetric.EUCLIDEAN -> VectorFieldSummary.Metric.EUCLIDEAN
+                }
+                VectorFieldSummary(field.path, field.dimensions, metric, field.required)
+            },
         )
     }
 
@@ -117,8 +126,14 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
                 val (hits, next) = result.use { page(it, limit) { hit -> hit.toStoreHit() } }
                 HitPage(hits, next)
             } catch (e: QueryRejectedException) {
-                if (e.reason != QueryRejectedException.Reason.NEEDS_SCAN) throw e
-                throw StoreAccessException(DelvaBundle.message("search.needsScan"), e)
+                // Delva states what it found and leaves the remedy to the program, which names it in its own controls.
+                val message = when (e.reason) {
+                    QueryRejectedException.Reason.NEEDS_SCAN -> DelvaBundle.message("search.needsScan")
+                    QueryRejectedException.Reason.RANGE_TOO_WIDE -> DelvaBundle.message("search.rangeTooWide", e.detail)
+                    QueryRejectedException.Reason.NOT_INDEXED -> DelvaBundle.message("search.notIndexed", e.detail)
+                    QueryRejectedException.Reason.TOO_MANY_SEGMENTS -> DelvaBundle.message("search.tooManySegments", e.detail)
+                }
+                throw StoreAccessException(message, e)
             } catch (e: DocumentRejectedException) {
                 // The value is parsed when the search starts; text that isn't JSON most likely meant a string.
                 if (query !is StoreQuery.ByKeyValue || query.valueIsText) throw e
@@ -320,6 +335,7 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
             VerifyIssueKind.COMMIT -> VerifyProblem.Kind.COMMIT
             VerifyIssueKind.FRAGMENT_INDEX -> VerifyProblem.Kind.FRAGMENT_INDEX
             VerifyIssueKind.KEY_INDEX -> VerifyProblem.Kind.KEY_INDEX
+            VerifyIssueKind.VECTOR_INDEX -> VerifyProblem.Kind.VECTOR_INDEX
         }
         return VerifyProblem(kind, location, detail, damagedBytes, document?.raw)
     }

@@ -3,6 +3,8 @@ package app.oreshkov.delva.intellij.store
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonStore
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -323,15 +325,59 @@ class EmbeddedStoreBackendTest {
 
     @Test
     fun `names the format of a store another version of Delva wrote, and leaves it exactly as it was`() {
-        val newer = storeInFormat("newer", 2)
+        val newer = storeInFormat("newer", 3)
         val before = contents(newer)
 
         val e = assertThrows(StoreAccessException::class.java) { runBlocking { backend.info(newer) } }
-        assertEquals("This store is in format 2, which a newer version of Delva writes; this plugin reads format 1.", e.message)
+        assertEquals("This store is in format 3, which a newer version of Delva writes; this plugin reads formats 1, 2.", e.message)
         assertEquals(before, contents(newer))
 
         val older = assertThrows(StoreAccessException::class.java) { runBlocking { backend.info(storeInFormat("older", 0)) } }
-        assertEquals("This store is in format 0, which an older version of Delva writes; this plugin reads format 1.", older.message)
+        assertEquals("This store is in format 0, which an older version of Delva writes; this plugin reads formats 1, 2.", older.message)
+    }
+
+    @Test
+    @OptIn(ExperimentalDelvaApi::class)
+    fun `gives a store's vector field, and reads the format a store with one is in`() = runBlocking {
+        val plain = temp.newFolder("plain").toPath()
+        JsonStore.create(plain).close()
+        assertNull(backend.info(plain).vectorField)
+
+        for (metric in VectorMetric.entries) {
+            val dir = temp.newFolder("vectors-$metric").toPath()
+            val field = VectorField("$.embedding", 3, metric, required = metric == VectorMetric.EUCLIDEAN)
+            JsonStore.create(dir, CreationOptions().withVectorField(field)).use { writer ->
+                writer.insert("""{"embedding": [0.5, -1, 2]}""")
+                writer.insert("""{"embedding": [1, 0, 0]}""")
+            }
+
+            assertEquals(StoreProbe.Readable(2), backend.probe(dir))
+            val info = backend.info(dir)
+            assertEquals(2, info.documents)
+            val summary = VectorFieldSummary("$.embedding", 3, VectorFieldSummary.Metric.valueOf(metric.name), field.required)
+            assertEquals(summary, info.vectorField)
+            assertEquals(emptyList<VerifyProblem>(), backend.verify(dir) { _, _, _ -> }.problems)
+        }
+    }
+
+    @Test
+    fun `names the remedy for a search the store refuses in the plugin's own words`() {
+        val dir = temp.newFolder("store").toPath()
+        runBlocking {
+            JsonStore.create(dir, CreationOptions(excludedKeys = setOf("note"))).use { writer -> writer.insert("""{"note": "x"}""") }
+        }
+
+        val notIndexed = assertThrows(StoreAccessException::class.java) {
+            runBlocking { backend.search(dir, StoreQuery.ByKeyValue("note", "x", valueIsText = true, wholeDocuments = false), null, 10) }
+        }
+        assertEquals(
+            "The store can't answer this search: the key \"note\" isn't indexed by this store. What a store indexes is fixed when it's created.",
+            notIndexed.message,
+        )
+
+        val deep = "$" + ".a".repeat(32)
+        val tooManySegments = assertThrows(StoreAccessException::class.java) { runBlocking { backend.search(dir, path(deep), null, 10) } }
+        assertEquals("The store refuses this search: $deep has 32 segments; a search takes at most 31.", tooManySegments.message)
     }
 
     @Test
@@ -342,11 +388,11 @@ class EmbeddedStoreBackendTest {
         JsonStore.create(current).use { writer -> writer.insert("""{"n": 1}""") }
         assertEquals(StoreProbe.Readable(1), backend.probe(current))
 
-        val newer = storeInFormat("newer", 2)
+        val newer = storeInFormat("newer", 3)
         val before = contents(newer)
         val other = backend.probe(newer)
-        assertEquals(StoreProbe.OtherFormat(2, listOf(1)), other)
-        assertTrue((other as StoreProbe.OtherFormat).message, other.message.startsWith("This store is in format 2, which a newer"))
+        assertEquals(StoreProbe.OtherFormat(3, listOf(1, 2)), other)
+        assertTrue((other as StoreProbe.OtherFormat).message, other.message.startsWith("This store is in format 3, which a newer"))
         assertEquals(before, contents(newer))
 
         val damaged = temp.newFolder("damaged").toPath()

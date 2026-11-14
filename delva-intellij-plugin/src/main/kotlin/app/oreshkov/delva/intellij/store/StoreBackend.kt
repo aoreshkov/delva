@@ -94,7 +94,27 @@ internal data class StoreSummary(
     val writer: String?,
     /** The JSON path of the string that names each document, or null in a store without document keys. */
     val documentKey: String?,
+    /** Where each document holds its vector, or null in a store without a vector field. */
+    val vectorField: VectorFieldSummary?,
 )
+
+/** A store's vector field: where each document holds its vector, its length, and how distances are measured. */
+internal data class VectorFieldSummary(
+    /** The JSON path of the array that holds each document's vector. */
+    val path: String,
+    /** How many numbers every vector has. */
+    val dimensions: Int,
+    val metric: Metric,
+    /** Whether every document must have a vector. */
+    val required: Boolean,
+) {
+    /** How the distance between two vectors is measured. */
+    enum class Metric {
+        COSINE,
+        DOT_PRODUCT,
+        EUCLIDEAN,
+    }
+}
 
 internal data class DocumentPage(
     val documents: List<DocumentEntry>,
@@ -199,6 +219,7 @@ internal data class VerifyProblem(
         COMMIT,
         FRAGMENT_INDEX,
         KEY_INDEX,
+        VECTOR_INDEX,
     }
 }
 

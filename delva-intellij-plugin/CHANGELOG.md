@@ -7,6 +7,18 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ## [Unreleased]
 
+### Added
+
+- The tool window shows a store's vector field: its path, dimensions and metric, and whether every document has a
+  vector.
+- **Verify Store** reports damage to a store's vector index.
+
+### Changed
+
+- Built on Delva 0.4.0, so the plugin reads stores created with a vector field, which are in format 2.
+- A search the store refuses says what the store found, and for a range too wide or a key the store doesn't index,
+  what to do instead, in the plugin's own words.
+
 ## [0.3.0] - 2026-11-01
 
 ### Added
