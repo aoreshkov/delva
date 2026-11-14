@@ -8,6 +8,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+
 ### Added
 
 - `delva`: `QueryRejectedException.detail` is what the store found, without the message's prefix, and
@@ -135,7 +137,8 @@ First public release.
 - `delva-cli`: the `delva` command line, attached to the release with SHA-256 sums and build provenance.
 - `cli-kit` and `cli-kit-testing`: a toolkit for Kotlin command-line programs, and its test kit.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aoreshkov/delva/releases/tag/v0.4.0
 [0.3.0]: https://github.com/aoreshkov/delva/releases/tag/v0.3.0
 [0.2.0]: https://github.com/aoreshkov/delva/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aoreshkov/delva/releases/tag/v0.1.0
