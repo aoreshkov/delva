@@ -3,6 +3,7 @@ package app.oreshkov.delva.intellij.ui
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.intellij.actions.StoredNode
 import app.oreshkov.delva.intellij.actions.openNode
+import app.oreshkov.delva.intellij.store.VectorFieldSummary
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.testFramework.LightVirtualFile
@@ -61,6 +62,15 @@ class StoreDetailsPanelTest : BasePlatformTestCase() {
         openNode(project, dir, StoredNode(document))
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
         assertSame(file, editors.openFiles.single())
+    }
+
+    fun `test describes a vector field`() {
+        val cosine = VectorFieldSummary("$.embedding", 768, VectorFieldSummary.Metric.COSINE, required = false)
+        assertEquals("$.embedding, 768 dimensions, cosine", describeVectorField(cosine))
+        val one = VectorFieldSummary("$['v']", 1, VectorFieldSummary.Metric.DOT_PRODUCT, required = true)
+        assertEquals("$['v'], 1 dimension, dot product; every document has one", describeVectorField(one))
+        val euclidean = VectorFieldSummary("$.e", 3, VectorFieldSummary.Metric.EUCLIDEAN, required = false)
+        assertEquals("$.e, 3 dimensions, Euclidean", describeVectorField(euclidean))
     }
 
     private fun waitUntil(what: String, condition: () -> Boolean) =

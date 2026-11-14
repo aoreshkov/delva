@@ -10,6 +10,7 @@ import app.oreshkov.delva.intellij.store.DocumentEntry
 import app.oreshkov.delva.intellij.store.DocumentPage
 import app.oreshkov.delva.intellij.store.StoreAccessException
 import app.oreshkov.delva.intellij.store.StoreSummary
+import app.oreshkov.delva.intellij.store.VectorFieldSummary
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.DataSink
@@ -172,6 +173,10 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
                 text(summary.writer ?: DelvaBundle.message("explorer.details.writer.none"))
             }
             summary.documentKey?.let { key -> row(DelvaBundle.message("explorer.details.documentKey")) { text(key) } }
+            summary.vectorField?.let { field ->
+                // As plain text, since the label reads HTML and a path can have `<` and `&` in it.
+                row(DelvaBundle.message("explorer.details.vectorField")) { text(StringUtil.escapeXmlEntities(describeVectorField(field))) }
+            }
             row {
                 val order = if (summary.documentKey != null) "explorer.documents.byKey" else "explorer.documents.byId"
                 label(DelvaBundle.message(order)).bold()
@@ -195,6 +200,13 @@ internal fun failure(reason: String): JComponent = panel {
         text(StringUtil.escapeXmlEntities(reason))
     }
 }.apply { border = JBUI.Borders.empty(0, 8) }
+
+/** [field] as a person reads it, such as `$.embedding, 768 dimensions, cosine`. */
+internal fun describeVectorField(field: VectorFieldSummary): String {
+    val metric = DelvaBundle.message("explorer.details.vectorField.metric.${field.metric.name}")
+    val key = if (field.required) "explorer.details.vectorField.required" else "explorer.details.vectorField.value"
+    return DelvaBundle.message(key, field.path, field.dimensions, metric)
+}
 
 /** A document as its key, or its id in a store without keys, then its id and roughly how large it is. */
 private class DocumentRenderer : ColoredListCellRenderer<DocumentEntry>() {

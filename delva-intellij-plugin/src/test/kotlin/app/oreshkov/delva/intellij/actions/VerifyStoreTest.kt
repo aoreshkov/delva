@@ -58,17 +58,19 @@ class VerifyStoreTest : BasePlatformTestCase() {
             VerifyProblem(VerifyProblem.Kind.LOG_RECORD, "data/lane-S-000001.frag @ 4096", "checksum mismatch", 128, 7),
             VerifyProblem(VerifyProblem.Kind.FRAGMENT_INDEX, "index/seg-000002.sst @ 0", "locates no fragment", 0, 7),
             VerifyProblem(VerifyProblem.Kind.SEGMENT, "index/seg-000003.sst @ 512", "bad block", 0, null),
+            VerifyProblem(VerifyProblem.Kind.VECTOR_INDEX, "vector index", "document 9 has no vector in the index", 0, 9),
         )
         val report = verifyReport(Path.of("orders"), VerifyResult(4, 8192, problems))
         assertEquals(
             """
             Verified orders: 4 files, ${StringUtil.formatFileSize(8192)}.
-            3 problems; reads of the data they name fail, everything else is still served.
-            Documents that can't be read: #7
+            4 problems; reads of the data they name fail, everything else is still served.
+            Documents that can't be read: #7, #9
 
             Log record at data/lane-S-000001.frag @ 4096: checksum mismatch (${StringUtil.formatFileSize(128)} damaged) [document #7]
             Fragment index at index/seg-000002.sst @ 0: locates no fragment [document #7]
             Index segment at index/seg-000003.sst @ 512: bad block
+            Vector index at vector index: document 9 has no vector in the index [document #9]
             """.trimIndent() + "\n",
             report.replace("\r\n", "\n"),
         )
