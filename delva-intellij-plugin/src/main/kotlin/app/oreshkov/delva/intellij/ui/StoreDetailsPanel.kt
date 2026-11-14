@@ -60,10 +60,16 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
         list.emptyText.text = DelvaBundle.message("explorer.documents.empty")
     }
 
+    /** The summary of the store shown, once it's read, else null; read from any thread, as actions' updates do. */
+    @Volatile
+    var summary: StoreSummary? = null
+        private set
+
     /** Shows what the store in [dir] holds now, or nothing for null. */
     fun show(dir: Path?) {
         cancel()
         shown = dir
+        summary = null
         documents.removeAll()
         next = null
         if (dir == null) {
@@ -83,6 +89,7 @@ internal class StoreDetailsPanel(private val project: Project) : BorderLayoutPan
                 if (shown != dir) return@withContext
                 when (content) {
                     is Loaded -> {
+                        summary = content.summary
                         documents.replaceAll(content.page.documents)
                         next = content.page.next
                         display(header(dir, content), documentsPane)

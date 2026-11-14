@@ -12,6 +12,8 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 - The tool window shows a store's vector field: its path, dimensions and metric, and whether every document has a
   vector.
 - **Verify Store** reports damage to a store's vector index.
+- The **Search** tab searches a store with a vector field by vector, listing the documents nearest to a vector with
+  their distances, and **Find Similar Documents** searches by the vector of the document selected.
 
 ### Changed
 
