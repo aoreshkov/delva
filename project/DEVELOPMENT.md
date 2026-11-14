@@ -82,7 +82,8 @@ light and the dark theme:
 3. **Documents**: **Show more documents** pages; a double click opens a read-only JSON editor; a store inside the
    project offers to exclude itself from indexing.
 4. **Search**: a JSONPath query with a filter, a key–value search, **Explain**, the refusal of a query that would read
-   every document, and **Stop** on a long search.
+   every document, and **Stop** on a long search; in a store with a vector field, a vector search and **Find Similar
+   Documents**.
 5. **Types**: a type's objects page and open.
 6. **Compare** (Ctrl+D) on two documents shows them in the diff viewer.
 7. **Verify Store** reports an intact store, can be cancelled, and with a byte of a data file changed shows its

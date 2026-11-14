@@ -381,6 +381,79 @@ class EmbeddedStoreBackendTest {
     }
 
     @Test
+    @OptIn(ExperimentalDelvaApi::class)
+    fun `finds the documents nearest to a vector, within a distance and among those a filter accepts`() {
+        val dir = temp.newFolder("store").toPath()
+        val options = CreationOptions(documentKey = "$.name").withVectorField(VectorField("$.v", 2, VectorMetric.EUCLIDEAN))
+        runBlocking {
+            JsonStore.create(dir, options).use { writer ->
+                writer.insert("""{"name": "a", "kind": "x", "v": [0, 0]}""")
+                writer.insert("""{"name": "b", "kind": "y", "v": [3, 4]}""")
+                writer.insert("""{"name": "c", "kind": "x", "v": [1, 0]}""")
+                writer.insert("""{"name": "d", "kind": "x"}""")
+            }
+        }
+        fun nearest(k: Int = 10, maxDistance: Float? = null, where: String? = null, scan: Boolean = false) =
+            runBlocking { backend.search(dir, StoreQuery.ByVector(listOf(0f, 0f), k, maxDistance, where, scan), null, limit = 1) }
+
+        val all = nearest()
+        assertEquals("all on one page, whatever the limit", listOf("a", "c", "b"), all.hits.map { it.documentKey })
+        assertNull(all.next)
+        assertEquals(listOf(0f, 1f, 5f), all.hits.map { it.distance })
+        val first = all.hits.first()
+        assertEquals(0L, first.nodePre)
+        assertEquals("$", first.path)
+        assertEquals("""{"name":"a","kind":"x","v":[0,0]}""", first.preview)
+        assertNotNull(first.encodedSize)
+
+        assertEquals(listOf("a", "c"), nearest(k = 2).hits.map { it.documentKey })
+        assertEquals(listOf("a", "c"), nearest(maxDistance = 2f).hits.map { it.documentKey })
+        assertEquals(listOf("b"), nearest(where = "@.kind == 'y'").hits.map { it.documentKey })
+        assertEquals(listOf("a", "c"), nearest(where = "@.kind != 'y'", scan = true).hits.map { it.documentKey })
+        val needsScan = assertThrows(StoreAccessException::class.java) { nearest(where = "@.kind != 'y'") }
+        assertTrue(needsScan.message, needsScan.message!!.startsWith("No index term narrows Where, so the search would test every"))
+        val badFilter = assertThrows(StoreAccessException::class.java) { nearest(where = "@.kind ==") }
+        assertTrue(badFilter.message, badFilter.message!!.startsWith("Invalid filter at "))
+
+        val longer = assertThrows(StoreAccessException::class.java) {
+            runBlocking { backend.search(dir, StoreQuery.ByVector(listOf(1f, 2f, 3f), 10, null, null, false), null, 10) }
+        }
+        assertEquals("The store's vectors have 2 numbers, and this one has 3.", longer.message)
+    }
+
+    @Test
+    @OptIn(ExperimentalDelvaApi::class)
+    fun `reads the vector a document holds`() = runBlocking {
+        val dir = temp.newFolder("store").toPath()
+        val (with, without) = JsonStore.create(dir, CreationOptions().withVectorField(VectorField("$.v", 2, VectorMetric.DOT_PRODUCT))).use { writer ->
+            writer.insert("""{"v": [0.25, -1.5e2]}""").raw to writer.insert("""{"n": 1}""").raw
+        }
+
+        assertEquals(listOf(0.25f, -150f), parseVector(backend.vectorOf(dir, with)!!))
+        assertNull(backend.vectorOf(dir, without))
+    }
+
+    @Test
+    @OptIn(ExperimentalDelvaApi::class)
+    fun `explains a vector search the store can't run`() {
+        val plain = temp.newFolder("plain").toPath()
+        val plainId = runBlocking { JsonStore.create(plain).use { writer -> writer.insert("""{"v": [1, 0]}""").raw } }
+        val noField = "The store has no vector field: it was created without one, so it can't be searched by vector."
+        val search = assertThrows(StoreAccessException::class.java) {
+            runBlocking { backend.search(plain, StoreQuery.ByVector(listOf(1f, 0f), 10, null, null, false), null, 10) }
+        }
+        assertEquals(noField, search.message)
+        assertEquals(noField, assertThrows(StoreAccessException::class.java) { runBlocking { backend.vectorOf(plain, plainId) } }.message)
+
+        val cosine = temp.newFolder("cosine").toPath()
+        runBlocking { JsonStore.create(cosine, CreationOptions().withVectorField(VectorField("$.v", 2, VectorMetric.COSINE))).close() }
+        val zero = assertThrows(StoreAccessException::class.java) {
+            runBlocking { backend.search(cosine, StoreQuery.ByVector(listOf(0f, -0f), 10, null, null, false), null, 10) }
+        }
+        assertEquals("The store measures distances by cosine, and a vector of zeros has no direction to measure them by.", zero.message)
+    }
+
+    @Test
     fun `probes whether a directory holds a store it reads`() = runBlocking {
         assertEquals(StoreProbe.NoStore, backend.probe(temp.newFolder("empty").toPath()))
 

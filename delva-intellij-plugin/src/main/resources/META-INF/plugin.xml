@@ -33,6 +33,8 @@
         <!-- Compares as Compare Files does elsewhere, so it takes that action's shortcut in the tool window's lists. -->
         <action id="app.oreshkov.delva.CompareNodes" class="app.oreshkov.delva.intellij.actions.CompareNodesAction"
                 icon="AllIcons.Actions.Diff" use-shortcut-of="CompareTwoFiles"/>
+        <action id="app.oreshkov.delva.FindSimilarDocuments"
+                class="app.oreshkov.delva.intellij.actions.FindSimilarDocumentsAction"/>
 
         <group id="app.oreshkov.delva.ToolWindow">
             <reference ref="app.oreshkov.delva.AddStore"/>
@@ -47,6 +49,7 @@
         <group id="app.oreshkov.delva.NodePopup">
             <reference ref="EditSource"/>
             <reference ref="app.oreshkov.delva.CompareNodes"/>
+            <reference ref="app.oreshkov.delva.FindSimilarDocuments"/>
         </group>
     </actions>
 </idea-plugin>

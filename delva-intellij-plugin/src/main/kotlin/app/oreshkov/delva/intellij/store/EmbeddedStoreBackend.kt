@@ -28,7 +28,9 @@ import app.oreshkov.delva.SecondaryJsonStore
 import app.oreshkov.delva.SelectedNode
 import app.oreshkov.delva.StoreNotFoundException
 import app.oreshkov.delva.UnsupportedFormatException
+import app.oreshkov.delva.VectorHit
 import app.oreshkov.delva.VectorMetric
+import app.oreshkov.delva.VectorQuery
 import app.oreshkov.delva.VerifyIssue
 import app.oreshkov.delva.VerifyIssueKind
 import app.oreshkov.delva.VerifyPhase
@@ -116,19 +118,20 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         require(limit > 0) { "limit must be positive, was $limit" }
         // Compiled before the store is opened, so a mistake in the query is reported as one even where no store is.
         val pathQuery = (query as? StoreQuery.ByPath)?.toDelva(limit + 1)
+        val vectorFilter = (query as? StoreQuery.ByVector)?.where?.let(::compileFilter)
         return reading(dir) { store ->
             val cursor = after?.let(Cursor::parse)
             try {
-                val result = when (query) {
-                    is StoreQuery.ByPath -> store.search(pathQuery!!.copy(after = cursor))
-                    is StoreQuery.ByKeyValue -> store.search(query.toDelva(limit + 1, cursor))
+                when (query) {
+                    is StoreQuery.ByPath -> hitPage(store.search(pathQuery!!.copy(after = cursor)), limit)
+                    is StoreQuery.ByKeyValue -> hitPage(store.search(query.toDelva(limit + 1, cursor)), limit)
+                    is StoreQuery.ByVector -> nearest(store, query, vectorFilter)
                 }
-                val (hits, next) = result.use { page(it, limit) { hit -> hit.toStoreHit() } }
-                HitPage(hits, next)
             } catch (e: QueryRejectedException) {
                 // Delva states what it found and leaves the remedy to the program, which names it in its own controls.
                 val message = when (e.reason) {
-                    QueryRejectedException.Reason.NEEDS_SCAN -> DelvaBundle.message("search.needsScan")
+                    QueryRejectedException.Reason.NEEDS_SCAN ->
+                        DelvaBundle.message(if (query is StoreQuery.ByVector) "search.vector.needsScan" else "search.needsScan")
                     QueryRejectedException.Reason.RANGE_TOO_WIDE -> DelvaBundle.message("search.rangeTooWide", e.detail)
                     QueryRejectedException.Reason.NOT_INDEXED -> DelvaBundle.message("search.notIndexed", e.detail)
                     QueryRejectedException.Reason.TOO_MANY_SEGMENTS -> DelvaBundle.message("search.tooManySegments", e.detail)
@@ -139,6 +142,14 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
                 if (query !is StoreQuery.ByKeyValue || query.valueIsText) throw e
                 throw StoreAccessException(DelvaBundle.message("search.valueNotJson", query.value), e)
             }
+        }
+    }
+
+    override suspend fun vectorOf(dir: Path, docId: Long): String? = reading(dir) { store ->
+        val field = store.creationOptions.vectorField ?: throw StoreAccessException(DelvaBundle.message("search.vector.noField"))
+        store.select(NodeRef(DocId(docId), 0), JsonPath.compile(field.path)).use { result ->
+            val selected = result.iterator()
+            if (selected.hasNext()) selected.next().readJsonAsString(JsonFormat.COMPACT, MAX_VECTOR_CHARS) else null
         }
     }
 
@@ -223,25 +234,55 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
         return entries to null
     }
 
+    /** Up to [limit] of [result]'s hits, and where the next page starts; closes [result]. */
+    private fun CoroutineScope.hitPage(result: SearchResult, limit: Int): HitPage = result.use {
+        val (hits, next) = page(it, limit) { hit -> hit.toStoreHit() }
+        HitPage(hits, next)
+    }
+
+    /** The hits of [query], nearest first, among the documents [filter] accepts, all on one page. */
+    private suspend fun CoroutineScope.nearest(store: SecondaryJsonStore, query: StoreQuery.ByVector, filter: DocumentFilter?): HitPage {
+        // Delva refuses these with exceptions meant for a program's mistakes, so they're told apart here, in a person's terms.
+        val field = store.creationOptions.vectorField ?: throw StoreAccessException(DelvaBundle.message("search.vector.noField"))
+        if (query.vector.size != field.dimensions) {
+            throw StoreAccessException(DelvaBundle.message("search.vector.dimensions", field.dimensions, query.vector.size))
+        }
+        if (field.metric == VectorMetric.COSINE && query.vector.all { it == 0f }) {
+            throw StoreAccessException(DelvaBundle.message("search.vector.zero"))
+        }
+        val vectorQuery = VectorQuery(query.vector.toFloatArray(), query.k, query.maxDistance, scanPolicy(query.scan))
+            .withDocumentFilter(filter)
+        return store.search(vectorQuery).use { result ->
+            val hits = result.hits.map { hit ->
+                ensureActive()
+                hit.toStoreHit()
+            }
+            HitPage(hits, next = null)
+        }
+    }
+
     private fun StoreQuery.ByPath.toDelva(limit: Int): JsonPathQuery {
         val compiled = try {
             JsonPath.compile(path)
         } catch (e: InvalidJsonPathException) {
             throw StoreAccessException(DelvaBundle.message("query.invalid", e.offset, e.reason), e)
         }
-        val filter = try {
-            where?.let(DocumentFilter::compile)
-        } catch (e: InvalidJsonPathException) {
-            throw StoreAccessException(DelvaBundle.message("filter.invalid", e.offset, e.reason), e)
-        }
         return JsonPathQuery(
             compiled,
             mode = mode(wholeDocuments),
             limit = limit,
-            scan = if (scan) ScanPolicy.ALLOW_SCAN else ScanPolicy.REJECT,
-            documentFilter = filter,
+            scan = scanPolicy(scan),
+            documentFilter = where?.let(::compileFilter),
         )
     }
+
+    private fun compileFilter(where: String): DocumentFilter = try {
+        DocumentFilter.compile(where)
+    } catch (e: InvalidJsonPathException) {
+        throw StoreAccessException(DelvaBundle.message("filter.invalid", e.offset, e.reason), e)
+    }
+
+    private fun scanPolicy(scan: Boolean) = if (scan) ScanPolicy.ALLOW_SCAN else ScanPolicy.REJECT
 
     private fun StoreQuery.ByKeyValue.toDelva(limit: Int, after: Cursor?) = KeyValueQuery(
         key,
@@ -291,6 +332,11 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
     private fun SearchHit.toStoreHit(): StoreHit {
         val (preview, cut) = preview { out -> writeJsonTo(out, JsonFormat.COMPACT) }
         return StoreHit(docId.raw, node.nodePre, documentKey, path, preview, cut, encodedSize)
+    }
+
+    private fun VectorHit.toStoreHit(): StoreHit {
+        val (preview, cut) = preview { out -> writeJsonTo(out, JsonFormat.COMPACT) }
+        return StoreHit(docId.raw, 0, documentKey, "$", preview, cut, encodedSize, distance)
     }
 
     /** The start of the JSON [write] writes, and whether it was cut off there. */
@@ -355,6 +401,9 @@ internal class EmbeddedStoreBackend : StoreBackend, AutoCloseable {
 
         /** Characters of a document key's JSON read at most; far more than a list row or a tab title shows. */
         const val MAX_KEY_CHARS = 64 * 1024
+
+        /** Characters of a vector's JSON read at most: a vector of the most dimensions Delva takes is far shorter. */
+        const val MAX_VECTOR_CHARS = 1024 * 1024
     }
 }
 

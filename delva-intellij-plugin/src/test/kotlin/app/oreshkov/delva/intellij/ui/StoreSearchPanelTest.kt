@@ -1,6 +1,10 @@
 package app.oreshkov.delva.intellij.ui
 
+import app.oreshkov.delva.CreationOptions
+import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonStore
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.intellij.actions.StoredNode
 import app.oreshkov.delva.intellij.actions.openNode
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -118,6 +122,66 @@ class StoreSearchPanelTest : BasePlatformTestCase() {
             "Reads: Every document, as no index term narrows the query\nTerms: None\nWithin: Anywhere in the document",
             panel.statusText,
         )
+    }
+
+    @OptIn(ExperimentalDelvaApi::class)
+    fun `test lists the documents nearest to a vector, and to a document's`() {
+        val options = CreationOptions().withVectorField(VectorField("$.v", 2, VectorMetric.EUCLIDEAN))
+        val (far, near) = runBlocking {
+            JsonStore.create(dir, options).use { writer ->
+                writer.insert("""{"n": 1, "v": [0, 4]}""").raw to writer.insert("""{"n": 2, "v": [0, 1]}""").raw
+            }
+        }
+        val panel = searching(dir)
+
+        panel.setVectorQuery("[0, 0]")
+        panel.search()
+        awaitRead(panel)
+        assertEquals("2 hits.", panel.statusText)
+        assertEquals(listOf(near, far), panel.listed.map { it.docId })
+        assertEquals(listOf(1f, 4f), panel.listed.map { it.distance })
+        assertFalse(panel.hasMore)
+
+        panel.setVectorQuery("[0, 0]", nearest = "1")
+        panel.search()
+        awaitRead(panel)
+        assertEquals(listOf(near), panel.listed.map { it.docId })
+
+        panel.setVectorQuery("[0, 0]")
+        panel.searchSimilar(far)
+        PlatformTestUtil.waitWithEventsDispatching("no hits in time", { panel.listed.isNotEmpty() }, 30)
+        awaitRead(panel)
+        assertEquals("[0,4]", panel.vectorText.replace(" ", ""))
+        assertEquals(listOf(far, near), panel.listed.map { it.docId })
+        assertEquals(listOf(0f, 3f), panel.listed.map { it.distance })
+    }
+
+    fun `test reads nothing for a vector search with a mistake`() {
+        runBlocking { JsonStore.create(dir).close() }
+        val panel = searching(dir)
+
+        for ((vector, nearest, maxDistance) in listOf(
+            Triple("", "10", ""),
+            Triple("[1, x]", "10", ""),
+            Triple("[1]", "0", ""),
+            Triple("[1]", "10001", ""),
+            Triple("[1]", "10", "near"),
+        )) {
+            panel.setVectorQuery(vector, nearest, maxDistance)
+            panel.search()
+            assertFalse("$vector $nearest $maxDistance", panel.isReading)
+        }
+
+        panel.setVectorQuery("[1]", maxDistance = "0.5")
+        panel.search()
+        awaitRead(panel)
+        assertEquals("The store has no vector field: it was created without one, so it can't be searched by vector.", panel.statusText)
+    }
+
+    fun `test describes a hit's distance`() {
+        assertEquals("0.1235", formatDistance(0.123456f))
+        assertEquals("0.000", formatDistance(0f))
+        assertEquals("∞", formatDistance(Float.POSITIVE_INFINITY))
     }
 
     private fun searching(dir: Path) = StoreSearchPanel(project, testRootDisposable).apply { show(dir) }

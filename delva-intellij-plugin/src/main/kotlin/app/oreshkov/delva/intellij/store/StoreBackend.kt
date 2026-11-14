@@ -33,10 +33,17 @@ internal interface StoreBackend {
 
     /**
      * Up to [limit] hits of [query] in the store in [dir], in the order they were stored. The first page when [after] is
-     * null, else the page after the one whose [HitPage.next] it is. Throws [StoreAccessException], also for a query the
-     * store refuses.
+     * null, else the page after the one whose [HitPage.next] it is. A [StoreQuery.ByVector] has a single page, of its
+     * [StoreQuery.ByVector.k] hits at most, nearest first, whatever [limit] is. Throws [StoreAccessException], also for a
+     * query the store refuses.
      */
     suspend fun search(dir: Path, query: StoreQuery, after: String?, limit: Int): HitPage
+
+    /**
+     * The vector the document [docId] of the store in [dir] holds, as compact JSON, or null when it holds none. Throws
+     * [StoreAccessException], also in a store without a vector field.
+     */
+    suspend fun vectorOf(dir: Path, docId: Long): String?
 
     /** How the store in [dir] would find the documents [query] searches, without reading any. */
     suspend fun explain(dir: Path, query: StoreQuery.ByPath): SearchPlan
@@ -147,6 +154,21 @@ internal sealed interface StoreQuery {
      */
     data class ByKeyValue(val key: String, val value: String, val valueIsText: Boolean, override val wholeDocuments: Boolean) :
         StoreQuery
+
+    /**
+     * The [k] documents whose vectors are nearest to [vector] under the store's metric, and no farther than [maxDistance]
+     * when it isn't null, among those whose root passes [where] when it isn't null. Unless [scan] allows testing every
+     * document with a vector, a [where] that no index term narrows is refused.
+     */
+    data class ByVector(val vector: List<Float>, val k: Int, val maxDistance: Float?, val where: String?, val scan: Boolean) :
+        StoreQuery {
+        override val wholeDocuments: Boolean get() = true
+
+        companion object {
+            /** The most hits a vector search returns: Delva keeps them all in memory until the search ends. */
+            const val MAX_K = 10_000
+        }
+    }
 }
 
 internal data class HitPage(
@@ -169,6 +191,8 @@ internal data class StoreHit(
     val previewCut: Boolean,
     /** Payload bytes that store the node, before compression, or null when the store doesn't say, as for a type's. */
     val encodedSize: Long?,
+    /** The distance of the document's vector to a vector search's, smaller being nearer, or null for other hits. */
+    val distance: Float? = null,
 )
 
 internal data class TypeSummary(

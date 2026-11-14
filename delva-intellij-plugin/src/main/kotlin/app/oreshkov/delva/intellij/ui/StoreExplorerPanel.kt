@@ -92,6 +92,16 @@ internal class StoreExplorerPanel(private val project: Project) : SimpleToolWind
         search.focusForm()
     }
 
+    /** Whether the selected store has a vector field, as far as its summary has been read; read from any thread. */
+    val selectedStoreHasVectors: Boolean get() = details.summary?.vectorField != null
+
+    /** Lists the documents of [dir] nearest to its document [docId] on the Search tab, when [dir] is the selected store. */
+    fun searchSimilar(dir: Path, docId: Long) {
+        if (selectedStore != dir) return
+        tabs.selectedComponent = search
+        search.searchSimilar(docId)
+    }
+
     override fun uiDataSnapshot(sink: DataSink) {
         super.uiDataSnapshot(sink)
         sink[PANEL] = this

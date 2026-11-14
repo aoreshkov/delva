@@ -8,7 +8,8 @@ Install it from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/356
 <!-- Plugin description -->
 Tools for [Delva](https://github.com/aoreshkov/delva), the embedded JSON document database for the JVM: list a project's
 stores on disk, see what each holds, browse and open their documents and typed objects, search them with RFC 9535
-JSONPath, compare two documents and verify a store from the IDE, even while an application has a store open.
+JSONPath or by vector, compare two documents and verify a store from the IDE, even while an application has a store
+open.
 
 Stores are read-only in the IDE: they are opened as Delva *secondaries*, which take no lock and never write.
 The plugin reads the store formats its bundled Delva reads: 0.4.x bundles Delva 0.4.0, which reads stores of Delva 0.1
@@ -27,12 +28,16 @@ to 0.4.
   get` writes out a larger one.
 - A store inside the project's content would be indexed with it, which only costs time for a store's binary files: the
   tool window offers to exclude it, as **Mark Directory as | Excluded** does.
-- The **Search** tab searches the selected store by an RFC 9535 JSONPath query or by a key and a value, and lists the
-  hits a hundred at a time, each with its document, where in the document it is and how it starts. A double click or
-  Enter opens a hit in a read-only JSON editor. A JSONPath search can be limited to the documents whose root passes a
-  filter, as `--where` does on the command line, and can list whole documents instead of the nodes it selects;
+- The **Search** tab searches the selected store by an RFC 9535 JSONPath query, by a key and a value, or by vector, and
+  lists the hits a hundred at a time, each with its document, where in the document it is and how it starts. A double
+  click or Enter opens a hit in a read-only JSON editor. A JSONPath search can be limited to the documents whose root
+  passes a filter, as `--where` does on the command line, and can list whole documents instead of the nodes it selects;
   **Explain** shows which index terms narrow it down. A query that no index term narrows would read every document,
   so it runs only once that's allowed. **Search Delva Store…** in the Tools menu opens the tab.
+- In a store created with a vector field, a **vector** search lists the documents nearest to a vector typed as a JSON
+  array, nearest first, each with its distance: as many as asked for, up to 10,000, and, when asked, only those within
+  a distance or whose root passes a filter. **Find Similar Documents** in a document's context menu searches by the
+  vector that document holds.
 - The **Types** tab lists the types assigned in the store, each with how many objects have it, and the objects of the
   one chosen, a hundred at a time, each with its document, where in the document it is and how it starts.
 - Every list of documents, hits or objects takes several selected at once. **Compare** in its context menu, or the

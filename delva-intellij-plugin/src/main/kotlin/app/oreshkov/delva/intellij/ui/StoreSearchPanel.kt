@@ -8,6 +8,9 @@ import app.oreshkov.delva.intellij.store.SearchPlan
 import app.oreshkov.delva.intellij.store.StoreAccessException
 import app.oreshkov.delva.intellij.store.StoreHit
 import app.oreshkov.delva.intellij.store.StoreQuery
+import app.oreshkov.delva.intellij.store.checkVector
+import app.oreshkov.delva.intellij.store.parseJsonFloat
+import app.oreshkov.delva.intellij.store.parseVector
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.UiDataProvider
@@ -25,9 +28,12 @@ import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBList
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.COLUMNS_SHORT
+import com.intellij.ui.dsl.builder.COLUMNS_TINY
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
+import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
@@ -37,13 +43,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.TestOnly
 import java.nio.file.Path
+import java.util.Locale
 import javax.swing.JComponent
 import javax.swing.JList
 
 /**
- * Searches the selected store, by JSONPath or by a key and value, and lists the hits a page at a time, each opened in
- * an editor on a double click or Enter; for JSONPath it also explains how the store would find the documents. Touched
- * on the EDT only; reads run on the project's coroutine scope.
+ * Searches the selected store, by JSONPath, by a key and value or by vector, and lists the hits a page at a time, each
+ * opened in an editor on a double click or Enter; for JSONPath it also explains how the store would find the
+ * documents. Touched on the EDT only; reads run on the project's coroutine scope.
  */
 internal class StoreSearchPanel(private val project: Project, parent: Disposable) : BorderLayoutPanel(), UiDataProvider {
     private val stores = DelvaStoresService.getInstance(project)
@@ -58,9 +65,15 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     private val value = graph.property("")
     private val valueIsText = graph.property(false)
     private val keyValueHits = graph.property(HitScope.DOCUMENTS)
+    private val vector = graph.property("")
+    private val nearest = graph.property(DEFAULT_NEAREST.toString())
+    private val maxDistance = graph.property("")
+    private val vectorWhere = graph.property("")
+    private val vectorScan = graph.property(false)
 
     private lateinit var pathField: JComponent
     private lateinit var keyField: JComponent
+    private lateinit var vectorField: JComponent
     private val form: DialogPanel = form()
 
     private val hits = CollectionListModel<StoreHit>()
@@ -115,7 +128,31 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
 
     /** Puts the focus in the form's first field. */
     fun focusForm() {
-        IdeFocusManager.getInstance(project).requestFocus(if (kind.get() == Kind.PATH) pathField else keyField, true)
+        val field = when (kind.get()) {
+            Kind.PATH -> pathField
+            Kind.KEY_VALUE -> keyField
+            Kind.VECTOR -> vectorField
+        }
+        IdeFocusManager.getInstance(project).requestFocus(field, true)
+    }
+
+    /**
+     * Lists the documents nearest to the document [docId], by the vector it holds, with the vector search's other
+     * settings; the vector goes in the form, for the search to be changed and run again.
+     */
+    fun searchSimilar(docId: Long) {
+        val dir = shown ?: return
+        kind.set(Kind.VECTOR)
+        clear()
+        read(dir, { stores.backend.vectorOf(dir, docId) }) { found ->
+            if (found == null) {
+                showStatus(DelvaBundle.message("search.vector.none", docId.toString()))
+            } else {
+                vector.set(found)
+                showStatus("")
+                search()
+            }
+        }
     }
 
     /** Fills in a JSONPath search, as a person would. */
@@ -137,6 +174,21 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
         this.valueIsText.set(valueIsText)
         keyValueHits.set(if (wholeDocuments) HitScope.DOCUMENTS else HitScope.MATCHES)
     }
+
+    /** Fills in a vector search, as a person would. */
+    @TestOnly
+    fun setVectorQuery(vector: String, nearest: String = "$DEFAULT_NEAREST", maxDistance: String = "", where: String = "", scan: Boolean = false) {
+        kind.set(Kind.VECTOR)
+        this.vector.set(vector)
+        this.nearest.set(nearest)
+        this.maxDistance.set(maxDistance)
+        vectorWhere.set(where)
+        vectorScan.set(scan)
+    }
+
+    /** The vector search's query vector, as the form shows it. */
+    @get:TestOnly
+    val vectorText: String get() = vector.get()
 
     /** What the line under the form says, as plain text. */
     var statusText: String = ""
@@ -248,6 +300,14 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     private fun query(): StoreQuery = when (kind.get()) {
         Kind.PATH -> StoreQuery.ByPath(path.get(), where.get().ifBlank { null }, pathHits.get() == HitScope.DOCUMENTS, scan.get())
         Kind.KEY_VALUE -> StoreQuery.ByKeyValue(key.get(), value.get(), valueIsText.get(), keyValueHits.get() == HitScope.DOCUMENTS)
+        // The form's validation has checked each field.
+        Kind.VECTOR -> StoreQuery.ByVector(
+            parseVector(vector.get()),
+            nearest.get().trim().toInt(),
+            maxDistance.get().trim().ifEmpty { null }?.let { parseJsonFloat(it)!! },
+            vectorWhere.get().ifBlank { null },
+            vectorScan.get(),
+        )
     }
 
     private fun form(): DialogPanel = panel {
@@ -309,6 +369,53 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
                 comboBox(HitScope.entries, scopeRenderer(HitScope::keyValueKey)).bindItem(keyValueHits)
             }
         }.visibleIf(kind.equalsTo(Kind.KEY_VALUE))
+        rowsRange {
+            row(DelvaBundle.message("search.vector")) {
+                vectorField = expandableTextField()
+                    .bindText(vector)
+                    .align(AlignX.FILL)
+                    .comment(DelvaBundle.message("search.vector.comment"))
+                    .validationOnInput { field -> if (field.text.isBlank()) null else checkVector(field.text)?.let { error(it) } }
+                    .validationOnApply { field ->
+                        when {
+                            kind.get() != Kind.VECTOR -> null
+                            field.text.isBlank() -> error(DelvaBundle.message("search.vector.empty"))
+                            else -> checkVector(field.text)?.let { error(it) }
+                        }
+                    }
+                    .applyToComponent { addActionListener { search() } }
+                    .component
+            }
+            row(DelvaBundle.message("search.nearest")) {
+                textField()
+                    .bindText(nearest)
+                    .columns(COLUMNS_TINY)
+                    .validationOnInput { field -> checkNearest(field.text)?.let { error(it) } }
+                    .validationOnApply { field -> if (kind.get() != Kind.VECTOR) null else checkNearest(field.text)?.let { error(it) } }
+                    .applyToComponent { addActionListener { search() } }
+            }
+            row(DelvaBundle.message("search.maxDistance")) {
+                textField()
+                    .bindText(maxDistance)
+                    .columns(COLUMNS_SHORT)
+                    .comment(DelvaBundle.message("search.maxDistance.comment"))
+                    .validationOnInput { field -> checkDistance(field.text)?.let { error(it) } }
+                    .validationOnApply { field -> if (kind.get() != Kind.VECTOR) null else checkDistance(field.text)?.let { error(it) } }
+                    .applyToComponent { addActionListener { search() } }
+            }
+            row(DelvaBundle.message("search.where")) {
+                expandableTextField()
+                    .bindText(vectorWhere)
+                    .align(AlignX.FILL)
+                    .comment(DelvaBundle.message("search.where.comment"))
+                    .validationOnInput { field -> checkFilter(field.text)?.let { error(it) } }
+                    .validationOnApply { field -> if (kind.get() != Kind.VECTOR) null else checkFilter(field.text)?.let { error(it) } }
+                    .applyToComponent { addActionListener { search() } }
+            }
+            row {
+                checkBox(DelvaBundle.message("search.vector.scan")).bindSelected(vectorScan)
+            }
+        }.visibleIf(kind.equalsTo(Kind.VECTOR))
         row {
             button(DelvaBundle.message("search.run")) { search() }
             button(DelvaBundle.message("search.explain")) { explain() }.visibleIf(kind.equalsTo(Kind.PATH))
@@ -321,6 +428,17 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     /** Why [filter] can't be applied, or null when it can or is blank, which applies none. */
     private fun checkFilter(filter: String): String? = if (filter.isBlank()) null else stores.backend.checkFilter(filter)
 
+    /** Why [text] isn't a number of hits a vector search returns, or null when it is one. */
+    private fun checkNearest(text: String): String? {
+        val k = text.trim().toIntOrNull()
+        return if (k != null && k in 1..StoreQuery.ByVector.MAX_K) null
+        else DelvaBundle.message("search.nearest.invalid", StoreQuery.ByVector.MAX_K)
+    }
+
+    /** Why [text] isn't a distance, or null when it is one or is blank, which sets none. */
+    private fun checkDistance(text: String): String? =
+        if (text.isBlank() || parseJsonFloat(text.trim()) != null) null else DelvaBundle.message("search.maxDistance.invalid")
+
     /** Shows each [HitScope] as the message its [key] names. */
     private fun scopeRenderer(key: (HitScope) -> String) =
         textListCellRenderer<HitScope?> { it?.let { scope -> DelvaBundle.message(key(scope)) } }
@@ -328,6 +446,7 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
     private enum class Kind(val key: String) {
         PATH("search.kind.path"),
         KEY_VALUE("search.kind.keyValue"),
+        VECTOR("search.kind.vector"),
     }
 
     /** What each hit is, as each kind of search words it. */
@@ -338,7 +457,17 @@ internal class StoreSearchPanel(private val project: Project, parent: Disposable
 
     private companion object {
         const val PAGE_SIZE = 100
+
+        /** The hits a vector search returns unless told otherwise, as in Delva. */
+        const val DEFAULT_NEAREST = 10
     }
+}
+
+/** [distance] to four significant digits, which tells near hits apart without a float's noise. */
+internal fun formatDistance(distance: Float): String = when {
+    distance == Float.POSITIVE_INFINITY -> "∞"
+    distance == Float.NEGATIVE_INFINITY -> "-∞"
+    else -> String.format(Locale.ROOT, "%.4g", distance)
 }
 
 internal fun statusMessage(text: String): JComponent = panel { row { text(StringUtil.escapeXmlEntities(text)) } }
@@ -357,12 +486,16 @@ private fun planView(plan: SearchPlan): JComponent = panel {
     for ((name, says) in planLines(plan)) row(name) { text(StringUtil.escapeXmlEntities(says)) }
 }
 
-/** A hit as its document's key, or its id in a store without keys, then where it is in the document and how it starts. */
+/**
+ * A hit as its document's key, or its id in a store without keys, then where it is in the document, or its distance for
+ * a vector search's, and how it starts.
+ */
 internal class HitRenderer : ColoredListCellRenderer<StoreHit>() {
     override fun customizeCellRenderer(list: JList<out StoreHit>, value: StoreHit?, index: Int, selected: Boolean, hasFocus: Boolean) {
         if (value == null) return
         append(value.documentKey ?: DelvaBundle.message("explorer.documents.id", value.docId.toString()))
         if (value.nodePre != 0L) append("  ${value.path}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        value.distance?.let { append("  ${DelvaBundle.message("search.hit.distance", formatDistance(it))}") }
         append("  ${value.preview}${if (value.previewCut) "…" else ""}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
     }
 }
