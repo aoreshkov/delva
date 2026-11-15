@@ -18,6 +18,7 @@ import app.oreshkov.delva.NestedHits
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.ResultMode
 import app.oreshkov.delva.SearchOrder
+import app.oreshkov.delva.VectorMetric
 
 /**
  * delva's values as the command line spells them. Each is checked while parsing, so a malformed one is a usage error
@@ -147,6 +148,73 @@ internal object ValueArgs {
     val deleteTarget: ValueConverter<DeleteTarget> = ValueConverter { raw ->
         if (raw == "-") ConversionResult.Ok(DeleteTarget.FromStdin) else docId.convert(raw).map { DeleteTarget.One(it) }
     }
+
+    /** A vector metric: `cosine`, `dot-product` or `euclidean`. */
+    @OptIn(ExperimentalDelvaApi::class)
+    val metric: ValueConverter<VectorMetric> = Converters.enum(VectorMetric.entries)
+
+    /** A distance: any number but NaN. It may be negative, since under the dot product a distance is the negated product. */
+    val distance: ValueConverter<Float> = ValueConverter { raw ->
+        val value = raw.toFloatOrNull()
+        if (value == null || value.isNaN()) ConversionResult.Invalid("'$raw' is not a distance") else ConversionResult.Ok(value)
+    }
+
+    /** The vector a vector search looks near: given, read from a file or standard input, or the one a stored document has. */
+    sealed interface QueryVector : ReadsStandardInput {
+        /** The vector as it was written on the command line. */
+        class Given(val values: FloatArray) : QueryVector {
+            override val readsStandardInput: Boolean get() = false
+        }
+
+        /** A JSON array of numbers in a file, or on standard input. */
+        data class Input(val source: InputSource) : QueryVector {
+            override val readsStandardInput: Boolean get() = source.readsStandardInput
+        }
+
+        /** The vector of a document of the store. */
+        data class Stored(val doc: DocId) : QueryVector {
+            override val readsStandardInput: Boolean get() = false
+        }
+    }
+
+    /**
+     * `42` is the vector of document 42, text that starts with `[` the vector itself, `-` standard input, and anything
+     * else a file that holds the vector. A file whose name is all digits is written `./42`.
+     */
+    val queryVector: ValueConverter<QueryVector> = ValueConverter { raw ->
+        when {
+            DOC_ONLY.matches(raw) -> docId.convert(raw).map { QueryVector.Stored(it) }
+            raw.startsWith('[') -> try {
+                ConversionResult.Ok(QueryVector.Given(parseVector(raw)))
+            } catch (e: IllegalArgumentException) {
+                ConversionResult.Invalid(e.message ?: "not a vector")
+            }
+            else -> Converters.inputSource.convert(raw).map { QueryVector.Input(it) }
+        }
+    }
+
+    /**
+     * The numbers of [text], a JSON array of numbers such as `[0.12, -0.5, 3e-2]`, as floats. Throws
+     * [IllegalArgumentException], naming the element, for any other text and for a number too large for a float.
+     */
+    fun parseVector(text: String): FloatArray {
+        val array = text.trim()
+        require(array.length >= 2 && array.startsWith('[') && array.endsWith(']')) { "a vector is a JSON array of numbers, such as [0.12, -0.5]" }
+        val elements = array.substring(1, array.length - 1)
+        require(elements.isNotBlank()) { "the vector is empty" }
+        val numbers = elements.split(',')
+        return FloatArray(numbers.size) { i ->
+            val number = numbers[i].trim()
+            require(JSON_NUMBER.matches(number)) { "element $i of the vector, '${number.take(MAX_SHOWN)}', is not a number" }
+            number.toFloat().also { require(it.isFinite()) { "element $i of the vector, ${number.take(MAX_SHOWN)}, is too large" } }
+        }
+    }
+
+    /** A JSON number (RFC 8259 §6); Kotlin's own parsing also takes `NaN`, `1f` and hexadecimal. */
+    private val JSON_NUMBER = Regex("""-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?""")
+
+    /** Characters of a wrong element a message quotes at most. */
+    private const val MAX_SHOWN = 40
 
     private val DOC_ONLY = Regex("\\d+")
     private val NODE = Regex("\\d+:\\d+")

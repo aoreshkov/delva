@@ -25,6 +25,7 @@ import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.KeyConflict
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.Normalization
+import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.cli.DelvaCommands
 import app.oreshkov.delva.cli.ValueArgs
 import app.oreshkov.delva.cli.storeDir
@@ -53,7 +54,17 @@ internal val init = CommandHandler { context ->
             minIndexedStringBytes = values[DelvaCommands.minIndexedString] ?: defaults.minIndexedStringBytes,
             maxIndexedStringBytes = values[DelvaCommands.maxIndexedString] ?: defaults.maxIndexedStringBytes,
             normalization = values[DelvaCommands.normalization] ?: Normalization.NONE,
-        ).withDocumentKey(values[DelvaCommands.documentKey])
+        ).withDocumentKey(values[DelvaCommands.documentKey]).withVectorField(
+            // The command's constraints give the three together, or none of them.
+            values[DelvaCommands.vectorField]?.let { path ->
+                VectorField(
+                    path,
+                    values.required(DelvaCommands.vectorDimensions),
+                    values.required(DelvaCommands.vectorMetric),
+                    values[DelvaCommands.vectorRequired],
+                )
+            },
+        )
     } catch (e: IllegalArgumentException) {
         throw CommandFailure(ExitStatus.USAGE, e.message ?: "invalid creation options")
     }

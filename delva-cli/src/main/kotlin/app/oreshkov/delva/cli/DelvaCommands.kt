@@ -23,6 +23,9 @@ import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.Normalization
 import app.oreshkov.delva.ResultMode
 import app.oreshkov.delva.SearchOrder
+import app.oreshkov.delva.VectorField
+import app.oreshkov.delva.VectorMetric
+import app.oreshkov.delva.VectorQuery
 import java.nio.file.Path
 
 /**
@@ -263,10 +266,54 @@ internal object DelvaCommands {
         constraints = searchConstraints,
     )
 
+    val queryVector: Argument.Single<ValueArgs.QueryVector> = Argument.Single(
+        "vector",
+        ValueArgs.queryVector,
+        "A JSON array of numbers, a file that holds one, or - for standard input; or a document (42), for its vector",
+    )
+
+    /** A vector search has no rest to resume from, so its `--limit` is how many it finds, and not a page of them. */
+    @OptIn(ExperimentalDelvaApi::class)
+    val nearest: Option.Single<Int> = Option.Single(
+        "--limit",
+        Converters.intRange(1..VectorQuery.MAX_K),
+        "-n",
+        help = "The n nearest documents",
+        valueName = "n",
+        defaultDisplay = "10",
+    )
+
+    val maxDistance: Option.Single<Float> = Option.Single(
+        "--max-distance",
+        ValueArgs.distance,
+        help = "Only the documents at most this far, by the store's metric",
+        valueName = "distance",
+    )
+
+    val vectorScan: Option.Flag =
+        Option.Flag("--scan", help = "Compare every vector when no index term of --where narrows the search")
+
+    @OptIn(ExperimentalDelvaApi::class)
+    val searchVector: CommandSpec = CommandSpec(
+        "vector",
+        "Find the documents whose vectors are nearest to a vector, in a store created with --vector-field\n\n" +
+            "The hits are whole documents, nearest first, each with its distance.",
+        options = listOf(nearest, maxDistance, where, vectorScan, exitStatus),
+        arguments = listOf(queryVector),
+        examples = listOf(
+            Example("delva -s store search vector query.json", "The ten documents nearest to the vector in a file"),
+            Example("delva -s store search vector 42 -n 5", "The five nearest to document 42's vector, itself the first"),
+            Example(
+                "delva -s store search vector query.json --where \"@.kind == 'order'\" --max-distance 0.3",
+                "Among the orders, and no farther than 0.3",
+            ),
+        ),
+    )
+
     val search: CommandSpec = CommandSpec(
         "search",
         "Search every document",
-        subcommands = listOf(searchKv, searchPath, searchKey),
+        subcommands = listOf(searchKv, searchPath, searchKey, searchVector),
     )
 
     val explainQuery: Argument.Single<JsonPath> =
@@ -393,16 +440,60 @@ internal object DelvaCommands {
         valueName = "path",
     )
 
+    val vectorField: Option.Single<String> = Option.Single(
+        "--vector-field",
+        Converters.string,
+        help = "The JSONPath of the array of numbers that is each document's vector, for delva search vector",
+        valueName = "path",
+    )
+
+    @OptIn(ExperimentalDelvaApi::class)
+    val vectorDimensions: Option.Single<Int> = Option.Single(
+        "--vector-dimensions",
+        Converters.intRange(1..VectorField.MAX_DIMENSIONS),
+        help = "How many numbers every vector has",
+        valueName = "n",
+    )
+
+    @OptIn(ExperimentalDelvaApi::class)
+    val vectorMetric: Option.Single<VectorMetric> = Option.Single(
+        "--vector-metric",
+        ValueArgs.metric,
+        help = "How the distance between two vectors is measured",
+        valueName = "metric",
+    )
+
+    val vectorRequired: Option.Flag = Option.Flag("--vector-required", help = "Reject a document that has no vector")
+
+    /** A vector field is its path, dimensions and metric together, and none of them has a default worth guessing. */
+    @OptIn(ExperimentalDelvaApi::class)
+    private val vectorFieldConstraints: List<Constraint> = listOf(
+        Constraint.Requires(vectorField, vectorDimensions),
+        Constraint.Requires(vectorField, vectorMetric),
+        Constraint.Requires(vectorDimensions, vectorField),
+        Constraint.Requires(vectorMetric, vectorField),
+        Constraint.Requires(vectorRequired, vectorField),
+    )
+
+    @OptIn(ExperimentalDelvaApi::class)
     val init: CommandSpec = CommandSpec(
         "init",
         "Create a store; what it is created with is fixed for its life",
-        options = listOf(normalization, fragmentSize, noHashTerms, indexKey, excludeKey, minIndexedString, maxIndexedString, documentKey),
+        options = listOf(
+            normalization, fragmentSize, noHashTerms, indexKey, excludeKey, minIndexedString, maxIndexedString, documentKey,
+            vectorField, vectorDimensions, vectorMetric, vectorRequired,
+        ),
         arguments = listOf(initDir),
         examples = listOf(
             Example("delva init ./data/store", "A store that indexes everything"),
             Example("delva init ./data/store --normalization nfc --exclude-key notes", "Unicode-normalized, without the notes"),
             Example("delva init ./data/store --document-key '\$.id'", "Each document named by its id member"),
+            Example(
+                "delva init ./data/store --vector-field '\$.embedding' --vector-dimensions 768 --vector-metric cosine --exclude-key embedding",
+                "Each document with an embedding to search by, its numbers left out of the other indexes",
+            ),
         ),
+        constraints = vectorFieldConstraints,
     )
 
     val insertTypes: Option.Repeated<Pair<String, String>> = Option.Repeated(

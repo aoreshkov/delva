@@ -13,6 +13,10 @@ Examples:
   # Each document named by its id member
   delva init ./data/store --document-key '$.id'
 
+  # Each document with an embedding to search by, its numbers left out of the
+  # other indexes
+  delva init ./data/store --vector-field '$.embedding' --vector-dimensions 768 --vector-metric cosine --exclude-key embedding
+
 Arguments:
   dir  Where to create the store
 
@@ -31,6 +35,12 @@ Options:
       --max-indexed-string <n>  Index only string values of at most n bytes
       --document-key <path>     The JSONPath of the string that names each
                                 document; no two documents then share one
+      --vector-field <path>     The JSONPath of the array of numbers that is
+                                each document's vector, for delva search vector
+      --vector-dimensions <n>   How many numbers every vector has
+      --vector-metric <metric>  How the distance between two vectors is measured
+                                (cosine|dot-product|euclidean)
+      --vector-required         Reject a document that has no vector
 
 Global options:
   -s, --store <dir>  The store directory [env: DELVA_STORE]
@@ -49,3 +59,10 @@ Environment:
   COLUMNS         The default for --width
   DELVA_OPTS      JVM options for the start script, such as -Xmx4g (or
                   JAVA_OPTS)
+
+Notes:
+  --vector-field requires --vector-dimensions
+  --vector-field requires --vector-metric
+  --vector-dimensions requires --vector-field
+  --vector-metric requires --vector-field
+  --vector-required requires --vector-field
