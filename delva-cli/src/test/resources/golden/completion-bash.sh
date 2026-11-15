@@ -7,13 +7,14 @@ _delva_complete() {
     --nested) COMPREPLY=($(compgen -W "all outermost" -- "$cur")); return ;;
     --order) COMPREPLY=($(compgen -W "asc desc" -- "$cur")); return ;;
     --normalization) COMPREPLY=($(compgen -W "none nfc" -- "$cur")); return ;;
-    --store|-s|--width|--key|-k|--path|-p|--line-width|--max-levels|--type|-t|--limit|-n|--max-documents|-m|--after|--max-bytes|--where|--fragment-size|--index-key|--exclude-key|--min-indexed-string|--max-indexed-string|--document-key|--replace|--ignore-key|--ignore-path|--max-differences) return ;;
+    --vector-metric) COMPREPLY=($(compgen -W "cosine dot-product euclidean" -- "$cur")); return ;;
+    --store|-s|--width|--key|-k|--path|-p|--line-width|--max-levels|--type|-t|--limit|-n|--max-documents|-m|--after|--max-bytes|--where|--max-distance|--fragment-size|--index-key|--exclude-key|--min-indexed-string|--max-indexed-string|--document-key|--vector-field|--vector-dimensions|--replace|--ignore-key|--ignore-path|--max-differences) return ;;
   esac
   local cmdpath="" skip=0 i
   for ((i = 1; i < COMP_CWORD; i++)); do
     if ((skip)); then [[ "${COMP_WORDS[i]}" == "=" ]] || skip=0; continue; fi
     case "${COMP_WORDS[i]}" in
-      --store|-s|--width|--key|-k|--path|-p|--line-width|--max-levels|--mode|--nested|--type|-t|--limit|-n|--max-documents|-m|--order|--after|--max-bytes|--where|--normalization|--fragment-size|--index-key|--exclude-key|--min-indexed-string|--max-indexed-string|--document-key|--replace|--ignore-key|--ignore-path|--max-differences) skip=1 ;;
+      --store|-s|--width|--key|-k|--path|-p|--line-width|--max-levels|--mode|--nested|--type|-t|--limit|-n|--max-documents|-m|--order|--after|--max-bytes|--where|--max-distance|--normalization|--fragment-size|--index-key|--exclude-key|--min-indexed-string|--max-indexed-string|--document-key|--vector-field|--vector-dimensions|--vector-metric|--replace|--ignore-key|--ignore-path|--max-differences) skip=1 ;;
       -*) ;;
       *) cmdpath="${cmdpath:+$cmdpath }${COMP_WORDS[i]}" ;;
     esac
@@ -23,10 +24,11 @@ _delva_complete() {
     "") candidates="info get search explain path types init insert delete reset verify compare completion --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "info") candidates="--store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "get") candidates="--key -k --path -p --exit-status -e --pretty --compact --line-width --max-levels --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
-    "search") candidates="kv path key --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
+    "search") candidates="kv path key vector --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "search kv") candidates="--string -S --mode --nested --type -t --limit -n --max-documents -m --order --after --max-bytes --count -c --exit-status -e --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "search path") candidates="--scan --where --mode --nested --type -t --limit -n --max-documents -m --order --after --max-bytes --count -c --exit-status -e --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "search key") candidates="--limit -n --order --after --max-bytes --count -c --exit-status -e --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
+    "search vector") candidates="--limit -n --max-distance --where --scan --exit-status -e --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "explain") candidates="--where --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "path") candidates="--store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "types") candidates="list count objects assign clear --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
@@ -35,7 +37,7 @@ _delva_complete() {
     "types objects") candidates="--after --limit -n --exit-status -e --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "types assign") candidates="--store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "types clear") candidates="--store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
-    "init") candidates="--normalization --fragment-size --no-hash-terms --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
+    "init") candidates="--normalization --fragment-size --no-hash-terms --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --vector-field --vector-dimensions --vector-metric --vector-required --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "insert") candidates="--type -t --replace --upsert -u --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "delete") candidates="--dry-run --force -f --no-input --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;
     "reset") candidates="--force -f --no-input --store -s --json --verbose -v --quiet -q --no-color --width --help" ;;

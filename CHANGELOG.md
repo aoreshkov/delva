@@ -8,6 +8,14 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 
 ## [Unreleased]
 
+### Added
+
+- `delva-cli`: `init` creates a store with a vector field, from `--vector-field`, `--vector-dimensions`,
+  `--vector-metric` and `--vector-required`.
+- `delva-cli`: `search vector <vector>` prints the documents nearest to a vector, each with its distance; the vector
+  is a JSON array of numbers, given, in a file or on standard input, or the vector of a stored document. It takes
+  `--limit` (`-n`), `--max-distance`, `--where` and `--scan`.
+
 ## [0.4.0] - 2026-11-14
 
 ### Added

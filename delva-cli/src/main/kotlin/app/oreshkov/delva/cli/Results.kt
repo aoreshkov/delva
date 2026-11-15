@@ -15,6 +15,7 @@ import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonFormat
 import app.oreshkov.delva.JsonPath
 import app.oreshkov.delva.SearchHit
+import app.oreshkov.delva.VectorSearchResult
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 
@@ -90,7 +91,7 @@ internal class HitWriter(private val context: CommandContext) {
                 }
             }
         } else {
-            val row = listOf(ValueArgs.text(hit.node), hit.path, hit.type ?: "", Format.bytes(hit.encodedSize), preview(hit))
+            val row = listOf(ValueArgs.text(hit.node), hit.path, hit.type ?: "", Format.bytes(hit.encodedSize), preview(hit::writeJsonTo))
             rows += if (keyed == true) listOf(key ?: "") + row else row
             // A table sizes its columns from its rows, so a long result is printed a batch at a time: memory stays
             // bounded, at the price of columns that may shift a little from one batch to the next.
@@ -125,13 +126,59 @@ internal class HitWriter(private val context: CommandContext) {
 }
 
 /**
- * The start of a hit's JSON on one line, its nested containers cut to `{...}` and `[...]`: enough to recognize it,
- * read in a bounded number of bytes however large the hit is.
+ * The hits of a vector search, nearest first: a table of each document's distance and a short preview of its JSON, or
+ * JSON Lines whose `value` is the whole document streamed in. A distance too large for a float is `null` in a record,
+ * since JSON has no number for it. There is no cursor: a vector search finds all its hits at once.
  */
-private fun preview(hit: SearchHit): String {
+@OptIn(ExperimentalDelvaApi::class)
+internal fun CommandContext.printNearest(result: VectorSearchResult): Int {
+    val hits = result.hits
+    if (hits.isEmpty()) {
+        output.notice("no hits")
+        return queryStatus(false)
+    }
+    if (output.machineReadable) {
+        val lines = JsonLines(io.payloadStream())
+        for (hit in hits) {
+            val key = hit.documentKey
+            lines.record {
+                writeObject {
+                    field("doc", hit.docId.raw)
+                    if (key != null) field("key", key)
+                    if (hit.distance.isFinite()) name("distance").rawValue(hit.distance.toString(), reindent = false) else name("distance").nullValue()
+                    field("type", hit.type)
+                    field("size", hit.encodedSize)
+                    name("value").rawValue { hit.writeJsonTo(lines.stream()) }
+                }
+            }
+        }
+    } else {
+        // The store has document keys when its hits do, and then each hit names its document's key.
+        val keyed = hits.first().documentKey != null
+        val columns = listOf(
+            Output.fixed("DOC", Align.Right),
+            Output.fixed("DISTANCE", Align.Right),
+            Column("TYPE"),
+            Output.fixed("SIZE", Align.Right),
+            Column("VALUE"),
+        )
+        val rows = hits.map { hit ->
+            val row = listOf(hit.docId.raw.toString(), hit.distance.toString(), hit.type ?: "", Format.bytes(hit.encodedSize), preview(hit::writeJsonTo))
+            if (keyed) listOf(hit.documentKey ?: "") + row else row
+        }
+        output.table(if (keyed) listOf(Column("KEY")) + columns else columns, rows, empty = "")
+    }
+    return queryStatus(true)
+}
+
+/**
+ * The start of a hit's JSON on one line, its nested containers cut to `{...}` and `[...]`: enough to recognize it,
+ * read in a bounded number of bytes however large the hit is. [write] writes the hit's JSON in the format it's given.
+ */
+private fun preview(write: (OutputStream, JsonFormat) -> Unit): String {
     val bytes = Bounded(PREVIEW_BYTES)
     try {
-        hit.writeJsonTo(bytes, PREVIEW_FORMAT)
+        write(bytes, PREVIEW_FORMAT)
     } catch (_: Bounded.Full) {
         // Enough read; the rest of the hit is never touched.
     }

@@ -1,0 +1,49 @@
+Find the documents whose vectors are nearest to a vector, in a store created
+with --vector-field
+
+The hits are whole documents, nearest first, each with its distance.
+
+Usage:
+  delva search vector [options] <vector>
+
+Examples:
+  # The ten documents nearest to the vector in a file
+  delva -s store search vector query.json
+
+  # The five nearest to document 42's vector, itself the first
+  delva -s store search vector 42 -n 5
+
+  # Among the orders, and no farther than 0.3
+  delva -s store search vector query.json --where "@.kind == 'order'" --max-distance 0.3
+
+Arguments:
+  vector  A JSON array of numbers, a file that holds one, or - for standard
+          input; or a document (42), for its vector
+
+Options:
+  -n, --limit <n>                The n nearest documents [default: 10]
+      --max-distance <distance>  Only the documents at most this far, by the
+                                 store's metric
+      --where <filter>           Only the documents whose root passes this
+                                 filter, such as "@.kind == 'order'"
+      --scan                     Compare every vector when no index term of
+                                 --where narrows the search
+  -e, --exit-status              Exit 1 when nothing was found
+
+Global options:
+  -s, --store <dir>  The store directory [env: DELVA_STORE]
+      --json         Machine-readable output on stdout
+  -v, --verbose      More detail on stderr
+  -q, --quiet        Nothing on stderr but errors
+      --no-color     Never emit colour
+      --width <n>    Columns to fit output to [default: $COLUMNS or 80]
+
+Environment:
+  DELVA_STORE     Same as --store
+  NO_COLOR        Not empty: never emit colour, as --no-color does
+  FORCE_COLOR     Not empty: emit colour even down a pipe; --no-color and
+                  NO_COLOR win
+  CLICOLOR_FORCE  1: the same as FORCE_COLOR
+  COLUMNS         The default for --width
+  DELVA_OPTS      JVM options for the start script, such as -Xmx4g (or
+                  JAVA_OPTS)

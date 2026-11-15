@@ -14,6 +14,7 @@ import app.oreshkov.delva.cli.commands.reset
 import app.oreshkov.delva.cli.commands.searchKey
 import app.oreshkov.delva.cli.commands.searchKv
 import app.oreshkov.delva.cli.commands.searchPath
+import app.oreshkov.delva.cli.commands.searchVector
 import app.oreshkov.delva.cli.commands.typesAssign
 import app.oreshkov.delva.cli.commands.typesClear
 import app.oreshkov.delva.cli.commands.typesCount
@@ -37,6 +38,7 @@ internal object DelvaProgram {
             DelvaCommands.searchKv to searchKv,
             DelvaCommands.searchPath to searchPath,
             DelvaCommands.searchKey to searchKey,
+            DelvaCommands.searchVector to searchVector,
             DelvaCommands.explain to explain,
             DelvaCommands.nodePath to nodePath,
             DelvaCommands.typesList to typesList,

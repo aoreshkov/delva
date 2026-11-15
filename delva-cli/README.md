@@ -26,6 +26,7 @@ delva insert orders/*.json                         # one document per file; prin
 delva search kv status open --string               # documents with "status": "open"
 delva search kv sku B2 -S --mode element --json    # the matching objects, as JSON Lines
 delva search path '$..[?@.qty < 1].sku'            # a JSONPath search
+delva search vector 42 -n 5                        # the documents most like document 42, by their vectors
 delva get 42 --path '$.items[*].sku'               # nodes of one document
 delva verify                                       # read everything, report damage; exit 1 if any
 delva compare 41 42 --diff                         # what changed between two versions
@@ -44,7 +45,12 @@ by `--store` or `DELVA_STORE`, so a mistyped path is an error rather than a new 
   `delva info` names the writer.
 - **Document keys**: `init --document-key '$.id'` creates a keyed store; then `get --key`, `search key [prefix]` and
   `insert --upsert` work by key, and search hits carry their key.
-- **Document filters**: `search path` and `explain` take one as `--where "@.kind == 'order'"`.
+- **Document filters**: `search path`, `search vector` and `explain` take one as `--where "@.kind == 'order'"`.
+- **Vector search**: `init --vector-field '$.embedding' --vector-dimensions 768 --vector-metric cosine` creates a
+  store with a [vector field](../project/GUIDE.md#vector-search); then `search vector <vector>` prints the nearest
+  documents, nearest first, each with its distance. The vector is a JSON array of numbers, written out, in a file or
+  on standard input (`-`), or a document's id, for that document's own vector. `-n` says how many (10), and
+  `--max-distance` how far at most.
 - **Safety**: `delete` and `reset` ask for confirmation at a terminal, and need `--force` without one.
 
 ## Exit statuses

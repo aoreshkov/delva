@@ -4,10 +4,12 @@ Usage:
   delva search [options] <command>
 
 Commands:
-  kv    Find the objects with a member equal to a value
-  path  Find the nodes a JSONPath query selects, in every document
-  key   List documents in the order of their keys, in a store created with
-        --document-key
+  kv      Find the objects with a member equal to a value
+  path    Find the nodes a JSONPath query selects, in every document
+  key     List documents in the order of their keys, in a store created with
+          --document-key
+  vector  Find the documents whose vectors are nearest to a vector, in a store
+          created with --vector-field
 
 Global options:
   -s, --store <dir>  The store directory [env: DELVA_STORE]

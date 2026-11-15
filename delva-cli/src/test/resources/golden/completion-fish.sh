@@ -10,7 +10,7 @@ function __delva_at
             continue
         end
         switch $word
-            case --store -s --width --key -k --path -p --line-width --max-levels --mode --nested --type -t --limit -n --max-documents -m --order --after --max-bytes --where --normalization --fragment-size --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --replace --ignore-key --ignore-path --max-differences
+            case --store -s --width --key -k --path -p --line-width --max-levels --mode --nested --type -t --limit -n --max-documents -m --order --after --max-bytes --where --max-distance --normalization --fragment-size --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --vector-field --vector-dimensions --vector-metric --replace --ignore-key --ignore-path --max-differences
                 set skip 1
             case '-*'
             case '*'
@@ -61,6 +61,7 @@ complete -c delva -n '__delva_at get' -l width -r -F -d 'Columns to fit output t
 complete -c delva -n '__delva_at search' -a 'kv' -d 'Find the objects with a member equal to a value'
 complete -c delva -n '__delva_at search' -a 'path' -d 'Find the nodes a JSONPath query selects, in every document'
 complete -c delva -n '__delva_at search' -a 'key' -d 'List documents in the order of their keys, in a store created with --document-key'
+complete -c delva -n '__delva_at search' -a 'vector' -d 'Find the documents whose vectors are nearest to a vector, in a store created with --vector-field'
 complete -c delva -n '__delva_at search' -l store -s s -r -F -d 'The store directory'
 complete -c delva -n '__delva_at search' -l json -d 'Machine-readable output on stdout'
 complete -c delva -n '__delva_at search' -l verbose -s v -d 'More detail on stderr'
@@ -114,6 +115,17 @@ complete -c delva -n '__delva_at search key' -l verbose -s v -d 'More detail on 
 complete -c delva -n '__delva_at search key' -l quiet -s q -d 'Nothing on stderr but errors'
 complete -c delva -n '__delva_at search key' -l no-color -d 'Never emit colour'
 complete -c delva -n '__delva_at search key' -l width -r -F -d 'Columns to fit output to'
+complete -c delva -n '__delva_at search vector' -l limit -s n -r -F -d 'The n nearest documents'
+complete -c delva -n '__delva_at search vector' -l max-distance -r -F -d 'Only the documents at most this far, by the store'\''s metric'
+complete -c delva -n '__delva_at search vector' -l where -r -F -d 'Only the documents whose root passes this filter, such as "@.kind == '\''order'\''"'
+complete -c delva -n '__delva_at search vector' -l scan -d 'Compare every vector when no index term of --where narrows the search'
+complete -c delva -n '__delva_at search vector' -l exit-status -s e -d 'Exit 1 when nothing was found'
+complete -c delva -n '__delva_at search vector' -l store -s s -r -F -d 'The store directory'
+complete -c delva -n '__delva_at search vector' -l json -d 'Machine-readable output on stdout'
+complete -c delva -n '__delva_at search vector' -l verbose -s v -d 'More detail on stderr'
+complete -c delva -n '__delva_at search vector' -l quiet -s q -d 'Nothing on stderr but errors'
+complete -c delva -n '__delva_at search vector' -l no-color -d 'Never emit colour'
+complete -c delva -n '__delva_at search vector' -l width -r -F -d 'Columns to fit output to'
 complete -c delva -n '__delva_at explain' -l where -r -F -d 'Only the documents whose root passes this filter, such as "@.kind == '\''order'\''"'
 complete -c delva -n '__delva_at explain' -l store -s s -r -F -d 'The store directory'
 complete -c delva -n '__delva_at explain' -l json -d 'Machine-readable output on stdout'
@@ -179,6 +191,10 @@ complete -c delva -n '__delva_at init' -l exclude-key -r -F -d 'Never index memb
 complete -c delva -n '__delva_at init' -l min-indexed-string -r -F -d 'Index only string values of at least n bytes'
 complete -c delva -n '__delva_at init' -l max-indexed-string -r -F -d 'Index only string values of at most n bytes'
 complete -c delva -n '__delva_at init' -l document-key -r -F -d 'The JSONPath of the string that names each document; no two documents then share one'
+complete -c delva -n '__delva_at init' -l vector-field -r -F -d 'The JSONPath of the array of numbers that is each document'\''s vector, for delva search vector'
+complete -c delva -n '__delva_at init' -l vector-dimensions -r -F -d 'How many numbers every vector has'
+complete -c delva -n '__delva_at init' -l vector-metric -x -a 'cosine dot-product euclidean' -d 'How the distance between two vectors is measured'
+complete -c delva -n '__delva_at init' -l vector-required -d 'Reject a document that has no vector'
 complete -c delva -n '__delva_at init' -l store -s s -r -F -d 'The store directory'
 complete -c delva -n '__delva_at init' -l json -d 'Machine-readable output on stdout'
 complete -c delva -n '__delva_at init' -l verbose -s v -d 'More detail on stderr'
