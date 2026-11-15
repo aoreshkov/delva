@@ -29,7 +29,7 @@ These are left out of `check` because they take long:
 |---|---|
 | `heapCappedTest` | `*HeapCappedTest`: huge documents, and a million vectors, under a 256 MB heap, proving memory is bounded by the options, not by document size or store size; `-Ddelva.heapCapped.vectors=<n>` sets the number of vectors, and `-Ddelva.heapCapped.dimensions=<d>` their dimensions |
 | `crashTest` | `*CrashTest`: child JVMs killed mid-write, proving an insert is whole or absent after a real crash |
-| `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads, and `-Ddelva.report.embeddings=10000` the number of chunks its embedding sizes are measured on, and `-Ddelva.report.vectors=10000,100000` and `-Ddelva.report.dimensions=384,768,1536` the stores its vector search latencies are measured on, and `-Ddelva.report.vectorBlockBytes=8192,65536` the vector segment block sizes it compares |
+| `reportTest` | `*ReportTest`: the benchmark report the guide's performance numbers come from (minutes); `-Ddelva.report.megabytes=50,500` sets its loads, and `-Ddelva.report.embeddings=10000` the number of chunks its embedding sizes are measured on, and `-Ddelva.report.vectors=10000,100000` and `-Ddelva.report.dimensions=384,768,1536` the stores its vector search latencies are measured on, and `-Ddelva.report.vectorBlockBytes=8192,65536` the vector segment block sizes it compares; with `-Ddelva.recall.set=<dir>`, also the recall of vector search on real embeddings ([below](#recall-on-real-embeddings)) |
 | `:delva-intellij-plugin:verifyPlugin` | the IntelliJ Plugin Verifier, against the lowest IDE the plugin supports and the newest EAP, both downloaded |
 | `:delva-intellij-plugin:integrationTest` | `*IntegrationTest`: the plugin's ZIP installed in the IntelliJ IDEA it builds against and driven through its UI, with JetBrains' Starter and Driver; see [below](#the-intellij-plugin) |
 
@@ -45,6 +45,23 @@ build on the source instead:
 
 delva-cli's golden files follow the pinned cli-kit, so a change to cli-kit's help rendering fails them under the
 switch until the pin moves.
+
+## Recall on real embeddings
+
+Generated vectors say little about how a search does on real embeddings, so `VectorRecallReportTest` measures recall
+on a set that isn't in the repository: a directory with `vectors.npy`, a NumPy array of float32 rows, and
+`tests.jsonl`, a query on each line with its `query` vector, the layout public vector search benchmark sets are shared
+in. It inserts the vectors, searches for the queries, and holds each result against the true nearest vectors, found
+by comparing every pair in double precision. Exact search has to reach a recall of 1; the latencies it prints are
+those of real queries.
+
+```shell
+./gradlew :delva:reportTest --tests "*VectorRecallReportTest*" -Ddelva.recall.set=<dir>
+```
+
+`-Ddelva.recall.vectors=<n>` takes only the set's first vectors, `-Ddelva.recall.queries=<n>` sets how many queries
+are searched (100), and `-Ddelva.recall.metric=<metric>` the metric (cosine). `VectorRecallTest` runs the same
+measurement on a small generated set under `check`.
 
 ## The IntelliJ plugin
 
