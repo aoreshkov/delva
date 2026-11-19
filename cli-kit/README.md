@@ -11,7 +11,7 @@ even Delva, and knows no command of any program's: a program declares its own tr
   [options that can also be given positionally](#an-option-given-positionally), and values that converters can call
   "not given", such as an unfilled template.
 - Rules between options — not both (`Constraint.Exclusive`), exactly one of (`Constraint.ExactlyOne`), needs
-  (`Constraint.Requires`), needs a value (`Constraint.RequiresValue`, [experimental](#experimental-api)) — and a single
+  (`Constraint.Requires`), [needs a value](#an-option-that-needs-a-value) (`Constraint.RequiresValue`) — and a single
   reader of standard input, checked while parsing.
 - Converters for durations, times (`-30d`, ISO-8601, epoch milliseconds) and `@file` values.
 - Help pages wrapped to the terminal, at most 100 columns, from `help` texts that can hold paragraphs, with an
@@ -143,6 +143,26 @@ and the positional slot completes as the option's value does.
 
 Declared as two operands under `Constraint.ExactlyOne(formsDir, formsDirArgument)`, the variable would count as one of
 them, and `FORMS_DIR=/a serve /b` would be refused for giving both.
+
+## An option that needs a value
+
+`Constraint.RequiresValue` is a rule that one operand needs an option to have one of some values:
+
+```kotlin
+val transport = Option.Single("--transport", Converters.choice("stdio", "http"), env = "TRANSPORT")
+val port = Option.Single("--port", Converters.positiveInt)
+
+val serve = CommandSpec(
+    "serve",
+    options = listOf(transport, port),
+    constraints = listOf(Constraint.RequiresValue(port, transport, "http")),
+)
+```
+
+Help notes `--port requires --transport http`, and `serve --port 8080 --transport stdio` is a usage error that says
+so: `--port requires --transport http, but --transport is 'stdio'`. The values are written as they would be typed and
+converted by the option's converter when the constraint is built, so a misspelt one fails then, not on a user's
+command line. An absent option never matches, because the parser can't see the handler's default.
 
 ## Values that mean "not given"
 
@@ -332,27 +352,17 @@ read without an `@` the user typed, and a secret is still never taken from a val
 it needs `@OptIn(ExperimentalCliKitApi::class)`, and the [changelog](CHANGELOG.md) says when a mark is lifted. It marks
 the types of [configuration files](#configuration-files), `Settings`, `Setting`, `SettingsException` and
 `ConfigurationFiles`, and the constructors of `Program`, `Parser` and `HelpRenderer` that take settings, while an
-option's `config` key is stable. It marks `Program.withArgumentFiles` for [argument files](#argument-files),
-`Argument.Single.spelling` and `spellingOf` for [an option given positionally](#an-option-given-positionally), and
-`Constraint.RequiresValue`, a rule that one operand needs an option to
-have one of some values:
+option's `config` key is stable. It marks `Program.withArgumentFiles` for [argument files](#argument-files), and
+`Argument.Single.spelling` and `spellingOf` for [an option given positionally](#an-option-given-positionally).
 
-```kotlin
-val transport = Option.Single("--transport", Converters.choice("stdio", "http"), env = "TRANSPORT")
-val port = Option.Single("--port", Converters.positiveInt)
+A mark is lifted in the minor release after one that shipped the feature unchanged. Configuration files and argument
+files also wait until a program has used them, since only use shows whether their design holds:
 
-@OptIn(ExperimentalCliKitApi::class)
-val serve = CommandSpec(
-    "serve",
-    options = listOf(transport, port),
-    constraints = listOf(Constraint.RequiresValue(port, transport, "http")),
-)
-```
-
-Help notes `--port requires --transport http`, and `serve --port 8080 --transport stdio` is a usage error that says
-so: `--port requires --transport http, but --transport is 'stdio'`. The values are written as they would be typed and
-converted by the option's converter when the constraint is built, so a misspelt one fails then, not on a user's
-command line. An absent option never matches, because the parser can't see the handler's default.
+| Feature | Experimental since | Graduates |
+|---|---|---|
+| Configuration files | 0.3.0 | in the release after a program ships with a key in a real file |
+| An option given positionally | 0.4.0 | in 0.6.0, if unchanged |
+| Argument files | 0.4.0, changed in 0.5.0 | in 0.6.0, if delva-cli, which turns them on with 0.5.0, needs no change to them |
 
 ## cli-kit-testing
 
