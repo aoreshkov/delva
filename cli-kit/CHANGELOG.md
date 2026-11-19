@@ -15,6 +15,7 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ### Changed
 
+- `Constraint.RequiresValue` is no longer experimental and needs no opt-in.
 - Argument files (experimental): only the first argument can name one. Every later word is taken as typed, so an
   operand such as `@id` needs no `@@` and never reads a file, and `tool query @args.txt` no longer expands.
 

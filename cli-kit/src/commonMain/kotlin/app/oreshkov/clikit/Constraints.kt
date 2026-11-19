@@ -69,7 +69,6 @@ public sealed class Constraint(public val operands: List<Operand>) {
      * Give the option a variable or make it required rather than count on a default the rule can't check. The option
      * may be required, since the rule is about its value; [subject] may not.
      */
-    @ExperimentalCliKitApi
     public class RequiresValue(
         /** The operand that, given, needs [option] to have one of [values]. */
         public val subject: Operand,
