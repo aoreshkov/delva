@@ -8,6 +8,8 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-20
+
 ### Added
 
 - `GoldenFiles.assertSurface(program)` pins what a program prints by running it, so the files show its configuration
@@ -102,7 +104,8 @@ listed in [Delva's changelog](../CHANGELOG.md#010---2026-10-15).
 
 - A run that wrote nothing to stdout no longer exits 74 when another writer on the same stream failed.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/cli-kit-v0.4.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/cli-kit-v0.5.0...HEAD
+[0.5.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.5.0
 [0.4.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.4.0
 [0.3.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.3.0
 [0.2.0]: https://github.com/aoreshkov/delva/releases/tag/cli-kit-v0.2.0
