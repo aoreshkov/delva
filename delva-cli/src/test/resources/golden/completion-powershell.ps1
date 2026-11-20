@@ -8,7 +8,7 @@ Register-ArgumentCompleter -Native -CommandName delva -ScriptBlock {
   $skip = $false
   foreach ($word in $before) {
     if ($skip) { $skip = $false; continue }
-    if ($valued -ccontains $word) { $skip = $true } elseif ($word -notlike '-*') { $words += $word }
+    if ($valued -ccontains $word) { $skip = $true } elseif ($word -notlike '-*' -and $word -notmatch '^[''"]?@') { $words += $word }
   }
   $previous = if ($before.Count -gt 0) { $before[-1] } else { '' }
   if (($valued -ccontains $previous) -and -not (@('--mode', '--nested', '--order', '--normalization', '--vector-metric') -ccontains $previous)) { return }

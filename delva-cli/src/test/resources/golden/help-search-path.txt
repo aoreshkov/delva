@@ -65,3 +65,5 @@ Environment:
 Notes:
   --count and --max-bytes cannot be combined
   --nested requires --mode element
+
+Start with @file to read arguments from it, one per line; @@ for a literal @.

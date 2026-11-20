@@ -23,3 +23,5 @@ Environment:
   COLUMNS         The default for --width
   DELVA_OPTS      JVM options for the start script, such as -Xmx4g (or
                   JAVA_OPTS)
+
+Start with @file to read arguments from it, one per line; @@ for a literal @.

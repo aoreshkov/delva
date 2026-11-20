@@ -66,3 +66,5 @@ Notes:
   --vector-dimensions requires --vector-field
   --vector-metric requires --vector-field
   --vector-required requires --vector-field
+
+Start with @file to read arguments from it, one per line; @@ for a literal @.
