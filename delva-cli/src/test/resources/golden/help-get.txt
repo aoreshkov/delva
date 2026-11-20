@@ -56,3 +56,5 @@ Notes:
   --json and --max-levels cannot be combined
   --json and --line-width cannot be combined
   exactly one of <doc> and --key
+
+Start with @file to read arguments from it, one per line; @@ for a literal @.

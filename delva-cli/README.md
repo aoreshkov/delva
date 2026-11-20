@@ -52,6 +52,9 @@ by `--store` or `DELVA_STORE`, so a mistyped path is an error rather than a new 
   on standard input (`-`), or a document's id, for that document's own vector. `-n` says how many (10), and
   `--max-distance` how far at most.
 - **Safety**: `delete` and `reset` ask for confirmation at a terminal, and need `--force` without one.
+- **Argument files**: on Windows, `delva.bat` hands its arguments to `cmd`, which breaks a filter with `|`, `&` or `^`
+  in it however it was quoted. Write the arguments in a file instead, one per line, and run `delva @args.txt` (in
+  PowerShell, `delva '@args.txt'`); [cli-kit's README](../cli-kit/README.md#argument-files) gives the rules.
 
 ## Exit statuses
 

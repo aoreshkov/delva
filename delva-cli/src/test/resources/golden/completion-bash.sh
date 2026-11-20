@@ -15,7 +15,7 @@ _delva_complete() {
     if ((skip)); then [[ "${COMP_WORDS[i]}" == "=" ]] || skip=0; continue; fi
     case "${COMP_WORDS[i]}" in
       --store|-s|--width|--key|-k|--path|-p|--line-width|--max-levels|--mode|--nested|--type|-t|--limit|-n|--max-documents|-m|--order|--after|--max-bytes|--where|--max-distance|--normalization|--fragment-size|--index-key|--exclude-key|--min-indexed-string|--max-indexed-string|--document-key|--vector-field|--vector-dimensions|--vector-metric|--replace|--ignore-key|--ignore-path|--max-differences) skip=1 ;;
-      -*) ;;
+      -*|@*) ;;
       *) cmdpath="${cmdpath:+$cmdpath }${COMP_WORDS[i]}" ;;
     esac
   done

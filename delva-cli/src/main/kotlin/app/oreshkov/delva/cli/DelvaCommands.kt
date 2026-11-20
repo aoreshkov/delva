@@ -6,7 +6,6 @@ import app.oreshkov.clikit.Constraint
 import app.oreshkov.clikit.Converters
 import app.oreshkov.clikit.EnvironmentVariable
 import app.oreshkov.clikit.Example
-import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.InputSource
 import app.oreshkov.clikit.Option
 import app.oreshkov.clikit.StandardOptions
@@ -150,7 +149,6 @@ internal object DelvaCommands {
     private val searchConstraints: List<Constraint> = listOf(Constraint.Exclusive(count, maxBytes))
 
     /** `--nested` filters hits inside other hits, which only `--mode element` has; an absent `--mode` is `document`. */
-    @OptIn(ExperimentalCliKitApi::class)
     private val nestedConstraint: Constraint = Constraint.RequiresValue(nested, mode, "element")
 
     /** For the searches that take `--mode` and `--nested`: `search key` has neither. */

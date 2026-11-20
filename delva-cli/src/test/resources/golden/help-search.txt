@@ -30,3 +30,5 @@ Environment:
                   JAVA_OPTS)
 
 Run 'delva search <command> --help' for more on a command.
+
+Start with @file to read arguments from it, one per line; @@ for a literal @.

@@ -45,3 +45,5 @@ Environment:
 
 Notes:
   --max-differences requires --diff
+
+Start with @file to read arguments from it, one per line; @@ for a literal @.

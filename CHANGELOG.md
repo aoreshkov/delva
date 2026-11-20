@@ -15,6 +15,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva-cli`: `search vector <vector>` prints the documents nearest to a vector, each with its distance; the vector
   is a JSON array of numbers, given, in a file or on standard input, or the vector of a stored document. It takes
   `--limit` (`-n`), `--max-distance`, `--where` and `--scan`.
+- `delva-cli`: argument files: `delva @args.txt` reads its arguments from a file, one per line, past the Windows start
+  script, which breaks a filter with `|`, `&` or `^` in it.
 
 ## [0.4.0] - 2026-11-14
 

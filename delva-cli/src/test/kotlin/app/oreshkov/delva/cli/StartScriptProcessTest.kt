@@ -158,6 +158,20 @@ class StartScriptProcessTest {
     }
 
     @Test
+    fun `an argument file carries a value the Windows script's cmd would break`() {
+        val store = work.resolve("store")
+        assertEquals(0, delva("init", store.toString()).status)
+        val env = mapOf("DELVA_STORE" to store.toString())
+        assertEquals(0, delva("insert", "-", stdin = """{"kind":"a|b"}""".toByteArray(), env = env).status)
+        assertEquals(0, delva("insert", "-", stdin = """{"kind":"a"}""".toByteArray(), env = env).status)
+
+        val args = work.resolve("args.txt").also { it.writeText("search\nkv\nkind\na|b\n--string\n--count\n") }
+        val run = delva("@$args", env = env)
+        assertEquals(0, run.status, run.stderr)
+        assertEquals("1", run.text.trim())
+    }
+
+    @Test
     fun `a file argument is read, and a missing one is exit 66`() {
         val store = work.resolve("store")
         delva("init", store.toString())

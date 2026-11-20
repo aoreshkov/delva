@@ -12,7 +12,7 @@ function __delva_at
         switch $word
             case --store -s --width --key -k --path -p --line-width --max-levels --mode --nested --type -t --limit -n --max-documents -m --order --after --max-bytes --where --max-distance --normalization --fragment-size --index-key --exclude-key --min-indexed-string --max-indexed-string --document-key --vector-field --vector-dimensions --vector-metric --replace --ignore-key --ignore-path --max-differences
                 set skip 1
-            case '-*'
+            case '-*' '@*'
             case '*'
                 set -a cmdpath $word
         end

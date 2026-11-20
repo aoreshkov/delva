@@ -1,7 +1,9 @@
 package app.oreshkov.delva.cli
 
+import app.oreshkov.clikit.ExperimentalCliKitApi
 import app.oreshkov.clikit.Program
 import app.oreshkov.clikit.implementationVersion
+import app.oreshkov.clikit.withArgumentFiles
 import app.oreshkov.delva.cli.commands.compare
 import app.oreshkov.delva.cli.commands.delete
 import app.oreshkov.delva.cli.commands.explain
@@ -28,7 +30,12 @@ internal object DelvaProgram {
     /** The program as a process runs it, reading `DELVA_STORE` and the like from the real environment. */
     val program: Program = create(System::getenv)
 
-    /** The program with [environment] as its environment, so a test controls what `DELVA_STORE` says. */
+    /**
+     * The program with [environment] as its environment, so a test controls what `DELVA_STORE` says. Argument files
+     * are on because the Windows start script hands the arguments to `cmd`, which breaks a filter such as
+     * `@.kind == 'a|b'` however it was quoted, and `delva @args.txt` reads them from a file instead.
+     */
+    @OptIn(ExperimentalCliKitApi::class)
     fun create(environment: (String) -> String?): Program = Program(
         DelvaCommands.root,
         "delva ${implementationVersion(DelvaProgram::class)}",
@@ -55,5 +62,5 @@ internal object DelvaProgram {
         ),
         Failures::translate,
         environment,
-    )
+    ).withArgumentFiles()
 }
