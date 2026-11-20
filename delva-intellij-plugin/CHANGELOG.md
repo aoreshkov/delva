@@ -7,7 +7,7 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-11-19
+## [0.4.0] - 2026-11-20
 
 ### Added
 
