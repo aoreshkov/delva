@@ -7,6 +7,8 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-19
+
 ### Added
 
 - The tool window shows a store's vector field: its path, dimensions and metric, and whether every document has a
@@ -50,6 +52,7 @@ Each version's section becomes the plugin's change notes on JetBrains Marketplac
 - The plugin has its own logo, and the IDE's error reporter sends an exception in the plugin to its maintainer
   through JetBrains Marketplace.
 
-[Unreleased]: https://github.com/aoreshkov/delva/compare/delva-tools-v0.3.0...HEAD
+[Unreleased]: https://github.com/aoreshkov/delva/compare/delva-tools-v0.4.0...HEAD
+[0.4.0]: https://github.com/aoreshkov/delva/releases/tag/delva-tools-v0.4.0
 [0.3.0]: https://github.com/aoreshkov/delva/releases/tag/delva-tools-v0.3.0
 [0.2.0]: https://github.com/aoreshkov/delva/releases/tag/delva-tools-v0.2.0
