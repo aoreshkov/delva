@@ -35,8 +35,11 @@ internal object DocumentKeys {
 internal class KeyHitSource(private val scan: KeyIndexView.KeyScan?) : HitSource {
     override var hit: HitAddress? = null
         private set
+    override var checkpoint: () -> Unit = {}
 
     override fun next(): Boolean {
+        // Every candidate is a hit, so this matters only to a count, which passes them without handing any out.
+        checkpoint()
         if (scan == null || !scan.valid) {
             hit = null
             return false

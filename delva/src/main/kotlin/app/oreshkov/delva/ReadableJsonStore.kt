@@ -55,6 +55,7 @@ public interface ReadableJsonStore : AutoCloseable {
      * the same candidates and matches, with the query's `after`, type, mode and nested-hit filter, but no hit's JSON is
      * read, and `limit` and `maxBytes` don't apply. `count(query, n) == n` tells whether there are at least `n` hits,
      * and stops at the `n`-th. Refuses what [search] refuses; a negative [atMost] throws [IllegalArgumentException].
+     * Cancelling the call stops the count before the next document it reads (SPEC.md §8).
      */
     public suspend fun count(query: KeyValueQuery, atMost: Long = Long.MAX_VALUE): Long
 

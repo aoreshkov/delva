@@ -51,8 +51,8 @@ import java.nio.file.Path
 
 /**
  * The suspending facade of the reads: runs the blocking [reader] on a dispatcher limited to `ioParallelism` threads.
- * The only place, with its subclasses and the results' flows ([app.oreshkov.delva.internal.engine.iteratorFlow]), where
- * the engine meets coroutines.
+ * The only place, with its subclasses and the results' flows ([app.oreshkov.delva.internal.engine.iteratorFlow] and
+ * [app.oreshkov.delva.internal.engine.EngineSearchResult.hits]), where the engine meets coroutines.
  *
  * Cancellation doesn't interrupt the thread, though an interrupt would do no harm: the engine's I/O isn't
  * interruptible. An input is read through a stream that throws [kotlinx.coroutines.CancellationException] once the
@@ -120,13 +120,19 @@ internal abstract class CoroutineReadableJsonStore(private val reader: ReadEngin
 
     override fun explain(query: JsonPathQuery): QueryPlan = reader.explain(query)
 
-    override suspend fun count(query: KeyValueQuery, atMost: Long): Long = withContext(dispatcher) { reader.count(query, atMost) }
+    override suspend fun count(query: KeyValueQuery, atMost: Long): Long = counting { reader.count(query, atMost, it) }
 
-    override suspend fun count(query: JsonPathQuery, atMost: Long): Long = withContext(dispatcher) { reader.count(query, atMost) }
+    override suspend fun count(query: JsonPathQuery, atMost: Long): Long = counting { reader.count(query, atMost, it) }
 
     override fun search(query: DocumentKeyQuery): SearchResult = reader.search(query)
 
-    override suspend fun count(query: DocumentKeyQuery, atMost: Long): Long = withContext(dispatcher) { reader.count(query, atMost) }
+    override suspend fun count(query: DocumentKeyQuery, atMost: Long): Long = counting { reader.count(query, atMost, it) }
+
+    /** Cancellation stops a count before its next candidate document, which may be many documents before its next hit. */
+    private suspend fun counting(count: (checkpoint: () -> Unit) -> Long): Long = withContext(dispatcher) {
+        val job = coroutineContext[Job]
+        count { job?.ensureActive() }
+    }
 
     /** Cancellation stops the comparisons at the next checkpoint; once the result exists, it is returned, as a write's is. */
     override suspend fun search(query: VectorQuery): VectorSearchResult {

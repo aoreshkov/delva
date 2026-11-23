@@ -18,6 +18,11 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva-cli`: argument files: `delva @args.txt` reads its arguments from a file, one per line, past the Windows start
   script, which breaks a filter with `|`, `&` or `^` in it.
 
+### Fixed
+
+- `delva`: cancelling the collector of a search's `hits`, or a `count`, stops the search before its next document;
+  before, a search ran on to its next hit, which a scan with few hits may find only at the end of the store.
+
 ## [0.4.0] - 2026-11-14
 
 ### Added

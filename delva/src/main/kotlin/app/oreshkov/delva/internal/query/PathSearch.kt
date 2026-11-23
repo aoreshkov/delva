@@ -834,7 +834,8 @@ internal class PathSearch(
     override var boundReached: Boolean = false
         private set
     private var stoppedAtBound = false
-    private val anchors = if (anchor != null) AnchorContainers(anchorTerms, anchor.postingHash) else null
+    override var checkpoint: () -> Unit = {}
+    private val anchors =if (anchor != null) AnchorContainers(anchorTerms, anchor.postingHash) else null
 
     /** Nodes whose children the document walks considered, for tests and plans. */
     var nodesVisited: Long = 0
@@ -1035,6 +1036,7 @@ internal class PathSearch(
         var root: PathNode
         var evaluator: PathEvaluator
         while (true) {
+            checkpoint()
             candidates.seek(from)
             val next = candidates.docId
             if (next == candidates.exhausted) return false

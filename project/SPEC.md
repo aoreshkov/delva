@@ -548,6 +548,10 @@ without the other.
   meanwhile, and the caller's next suspension point throws; so a call that throws `CancellationException` never made
   a change. Only reading an input stream stops early: a cancelled insert, replace or upsert stops at its next read of
   the input, and nothing of that document becomes visible, while `insertAll` ends there as on any other error.
+- A cancelled search stops early. Collecting a search's hits as a flow, or counting them, stops before the next
+  document the search reads once the caller is cancelled, however many documents lie between two hits; a vector
+  search stops within a few hundred vectors or candidates read. A result's iterator and pages can't be cancelled: a
+  search read through them runs on to its next hit or its end.
 - A store directory is used by one open writer at a time (secondaries, [8.1](#81-secondaries), don't count); opening it
   again fails with `StoreLockedException`, which
   names the process that has it open — its pid, start time and host — when that process recorded itself. The record
