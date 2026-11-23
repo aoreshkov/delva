@@ -9,6 +9,7 @@
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
@@ -31,6 +32,9 @@ extensions.configure<KotlinMultiplatformExtension> {
     }
     compilerOptions {
         allWarningsAsErrors = true
+        // The same Kotlin floor as delva.kotlin-jvm: the 2.4 standard library, whichever compiler builds the code.
+        languageVersion = KotlinVersion.KOTLIN_2_4
+        apiVersion = KotlinVersion.KOTLIN_2_4
     }
     sourceSets.named("commonTest") {
         dependencies {

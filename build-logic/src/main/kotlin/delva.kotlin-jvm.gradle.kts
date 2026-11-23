@@ -16,6 +16,7 @@
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -36,6 +37,10 @@ extensions.configure<KotlinJvmProjectExtension> {
         jvmTarget = JvmTarget.JVM_22
         // No DefaultImpls classes: there are no pre-2.2 Kotlin consumers to stay binary compatible with.
         freeCompilerArgs.addAll("-Xjdk-release=22", "-jvm-default=no-compatibility")
+        // The Kotlin floor, held apart from the compiler's version so that a newer compiler can't raise it: consumers
+        // need the 2.4 standard library, which IntelliJ 2026.2, the oldest IDE Delva Tools supports, runs Delva on.
+        languageVersion = KotlinVersion.KOTLIN_2_4
+        apiVersion = KotlinVersion.KOTLIN_2_4
     }
 }
 
