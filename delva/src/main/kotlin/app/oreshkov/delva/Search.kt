@@ -25,7 +25,8 @@ public interface SearchResult : AutoCloseable {
 
     /**
      * The remaining hits as a flow. Collecting it reads the store on the collecting coroutine's thread, so collect
-     * on a dispatcher that allows blocking work.
+     * on a dispatcher that allows blocking work. Cancelling the collector stops the search before the next document it
+     * reads, even where hits are many documents apart, which [iterator] and [nextPage] can't do (SPEC.md §8).
      */
     public val hits: Flow<SearchHit>
 }

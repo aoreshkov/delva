@@ -59,6 +59,12 @@ internal interface HitSource {
      * documents remained, so a search resumed past the last hit may find more. The candidates aren't evaluated to tell.
      */
     val boundReached: Boolean get() = false
+
+    /**
+     * Runs before [next] considers each candidate document, read or skipped, and may throw to stop the search there.
+     * A search can pass many documents between two hits; a suspending caller checks its cancellation here.
+     */
+    var checkpoint: () -> Unit
 }
 
 /**
@@ -157,6 +163,7 @@ internal class QueryExecutor(
     override var boundReached: Boolean = false
         private set
     private var stoppedAtBound = false
+    override var checkpoint: () -> Unit = {}
 
     private val locator = NodeLocator(fragments)
     private val matcher = ValueMatcher()
@@ -379,6 +386,7 @@ internal class QueryExecutor(
         }
         val merged = sources ?: openSources().also { sources = it }
         while (true) {
+            checkpoint()
             if (typeDriven && !nextTypedDocument(merged)) return false
             val next = merged.docId
             if (next == merged.exhausted) return false

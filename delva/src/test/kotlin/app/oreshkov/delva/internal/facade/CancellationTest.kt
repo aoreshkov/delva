@@ -4,11 +4,14 @@ import app.oreshkov.delva.CompareOperand
 import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocId
 import app.oreshkov.delva.InsertSource
+import app.oreshkov.delva.JsonPath
+import app.oreshkov.delva.JsonPathQuery
 import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.ResultMode
+import app.oreshkov.delva.ScanPolicy
 import app.oreshkov.delva.VectorField
 import app.oreshkov.delva.VectorMetric
 import app.oreshkov.delva.VectorQuery
@@ -23,6 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.coroutines.Continuation
@@ -172,6 +176,10 @@ class CancellationTest {
             val equal = withoutJob { store.isEqual(CompareOperand.JsonStream("[1]".byteInputStream()), CompareOperand.JsonStream("[1]".byteInputStream())) }
             assertTrue(equal.getOrThrow(), "isEqual of two streams")
             assertEquals(emptyList(), withoutJob { store.verify() }.getOrThrow().issues, "verify")
+            val scan = JsonPathQuery(JsonPath.compile("$.v[0]"), scan = ScanPolicy.ALLOW_SCAN)
+            val found = withoutJob { store.search(scan).use { r -> r.hits.toList().map { it.readJsonAsString() } } }
+            assertEquals(listOf("1", "3"), found.getOrThrow(), "the hits of a search")
+            assertEquals(2, withoutJob { store.count(scan) }.getOrThrow(), "count")
         }
     }
 }

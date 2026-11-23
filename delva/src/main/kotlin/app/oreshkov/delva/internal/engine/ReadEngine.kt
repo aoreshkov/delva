@@ -221,11 +221,21 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
         }
     }
 
-    override fun count(query: KeyValueQuery, atMost: Long): Long = countHits(atMost) { search(query) }
+    override fun count(query: KeyValueQuery, atMost: Long): Long = count(query, atMost) {}
 
-    override fun count(query: JsonPathQuery, atMost: Long): Long = countHits(atMost) { search(query) }
+    override fun count(query: JsonPathQuery, atMost: Long): Long = count(query, atMost) {}
 
-    override fun count(query: DocumentKeyQuery, atMost: Long): Long = countHits(atMost) { search(query) }
+    override fun count(query: DocumentKeyQuery, atMost: Long): Long = count(query, atMost) {}
+
+    /**
+     * The [count]s, which also run [checkpoint] before each candidate document: a caller whose wait was cancelled
+     * throws from it to stop a long count.
+     */
+    fun count(query: KeyValueQuery, atMost: Long, checkpoint: () -> Unit): Long = countHits(atMost, checkpoint) { search(query) }
+
+    fun count(query: JsonPathQuery, atMost: Long, checkpoint: () -> Unit): Long = countHits(atMost, checkpoint) { search(query) }
+
+    fun count(query: DocumentKeyQuery, atMost: Long, checkpoint: () -> Unit): Long = countHits(atMost, checkpoint) { search(query) }
 
     override fun search(query: DocumentKeyQuery): SearchResult {
         checkKeyed()
@@ -339,10 +349,13 @@ internal abstract class ReadEngine(val options: EngineOptions) : BlockingReadabl
     /** The document keys of [version] for hits to name their documents' keys; null in a store without keys. */
     private fun keysOf(version: Version): KeyIndexView? = if (options.creation.documentKey == null) null else KeyIndexView(version, null)
 
-    /** Opens the search [open] starts, which checks and refuses as a search does, and counts its hits up to [atMost]. */
-    private inline fun countHits(atMost: Long, open: () -> SearchResult): Long {
+    /**
+     * Opens the search [open] starts, which checks and refuses as a search does, and counts its hits up to [atMost],
+     * running [checkpoint] before each candidate document.
+     */
+    private inline fun countHits(atMost: Long, noinline checkpoint: () -> Unit, open: () -> SearchResult): Long {
         require(atMost >= 0) { "atMost must not be negative: $atMost" }
-        return (open() as EngineSearchResult).use { it.countHits(atMost) }
+        return (open() as EngineSearchResult).use { it.countHits(atMost, checkpoint) }
     }
 
     override fun explain(query: JsonPathQuery): QueryPlan {

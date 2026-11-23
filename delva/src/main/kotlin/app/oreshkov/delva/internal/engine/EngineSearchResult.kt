@@ -23,7 +23,11 @@ import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.lang.ref.Cleaner
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /**
  * A search over one [Snapshot]: pages are cut by `limit` and the byte budget, with one hit of
@@ -103,7 +107,16 @@ internal class EngineSearchResult(
         override fun next(): SearchHit = take() ?: throw NoSuchElementException()
     }
 
-    override val hits: Flow<SearchHit> get() = iteratorFlow(::iterator)
+    override val hits: Flow<SearchHit> get() = flow {
+        // Null in a coroutine without a Job, such as `suspend fun main`, which can't be cancelled.
+        val collector = currentCoroutineContext()[Job]
+        source.checkpoint = { collector?.ensureActive() }
+        try {
+            for (hit in iterator()) emit(hit)
+        } finally {
+            source.checkpoint = {}
+        }
+    }
 
     override fun close() {
         closed = true
@@ -118,19 +131,24 @@ internal class EngineSearchResult(
 
     /**
      * Counts the hits not taken yet, stopping at [atMost]: the source finds them as for pages, but no hit is made and no
-     * node is read.
+     * node is read. [checkpoint] runs before each candidate document, as [HitSource.checkpoint] says.
      */
-    internal fun countHits(atMost: Long): Long {
+    internal fun countHits(atMost: Long, checkpoint: () -> Unit = {}): Long {
         checkReadable()
-        var count = 0L
-        if (pending != null && atMost > 0) {
-            pending = null
-            count++
+        source.checkpoint = checkpoint
+        try {
+            var count = 0L
+            if (pending != null && atMost > 0) {
+                pending = null
+                count++
+            }
+            while (count < atMost && !exhausted) {
+                if (source.next()) count++ else exhausted = true
+            }
+            return count
+        } finally {
+            source.checkpoint = {}
         }
-        while (count < atMost && !exhausted) {
-            if (source.next()) count++ else exhausted = true
-        }
-        return count
     }
 
     internal fun cursorOf(hit: SearchHit): Cursor = if (keyOrder) {
