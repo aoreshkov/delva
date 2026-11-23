@@ -6,6 +6,7 @@
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import java.util.zip.ZipFile
 
 plugins {
@@ -29,6 +30,10 @@ kotlin {
         // As in Delva's own modules. It also keeps the compiler from overriding the platform interfaces' default methods
         // with stubs, which would count as uses of the experimental ones among them.
         freeCompilerArgs.add("-jvm-default=no-compatibility")
+        // The plugin runs on the IDE's standard library, 2.4 in 2026.2, the oldest IDE it supports; a newer compiler
+        // mustn't let it call anything later.
+        languageVersion = KotlinVersion.KOTLIN_2_4
+        apiVersion = KotlinVersion.KOTLIN_2_4
     }
 }
 

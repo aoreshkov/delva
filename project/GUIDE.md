@@ -371,6 +371,10 @@ written by one version is not guaranteed to be readable by another; the format v
 such a mismatch an `UnsupportedFormatException` rather than a misread, and `JsonStore.probe` (experimental) tells
 whether a store opens without opening it ([SPEC §8](SPEC.md#8-consistency)).
 
+Delva is compiled with Kotlin language and API version 2.4, so it needs the Kotlin 2.4 standard library or newer,
+whichever compiler a release was built with. Raising that floor is an incompatible change, made only in a minor
+version and named in the changelog.
+
 Delva can be embedded in an IntelliJ Platform plugin for IDEs from 2026.2, the first that run on a JDK Delva needs.
 The plugin must use the IDE's Kotlin standard library and kotlinx-coroutines rather than bundle its own, since a
 second kotlinx-coroutines breaks the platform's: set `kotlin.stdlib.default.dependency=false` and exclude both from
