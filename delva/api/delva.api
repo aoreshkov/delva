@@ -363,7 +363,7 @@ public final class app/oreshkov/delva/InvalidJsonPathException : java/lang/Illeg
 	public final fun getText ()Ljava/lang/String;
 }
 
-public final class app/oreshkov/delva/InvalidTypeNameException : app/oreshkov/delva/DelvaException {
+public final class app/oreshkov/delva/InvalidTypeNameException : java/lang/IllegalArgumentException {
 	public fun <init> (Ljava/lang/String;)V
 }
 

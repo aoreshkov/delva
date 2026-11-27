@@ -26,7 +26,7 @@ class ExceptionsTest {
         val all: List<RuntimeException> = listOf(
             CorruptionException("x", "y"), EngineFailedException("fsync failed"),
             DocumentRejectedException(RejectReason.MALFORMED_JSON, 0), DocumentNotFoundException(DocId(1)),
-            StoreClosedException(), InvalidTypeNameException("empty"),
+            StoreClosedException(),
         )
         all.forEach { assertIs<DelvaException>(it) }
     }
@@ -76,7 +76,7 @@ class ExceptionsTest {
     }
 
     @Test
-    fun `an invalid query or cursor stays an IllegalArgumentException, with the details as fields`() {
+    fun `an invalid query, cursor or type name is an IllegalArgumentException, with the details as fields`() {
         val path = assertFailsWith<InvalidJsonPathException> { JsonPath.compile("$[0 1]") }
         assertEquals("$[0 1]", path.text)
         assertEquals(4, path.offset)
@@ -87,5 +87,9 @@ class ExceptionsTest {
         val cursor = assertFailsWith<InvalidCursorException> { Cursor.parse("not a cursor") }
         assertIs<IllegalArgumentException>(cursor)
         assertTrue(cursor.message!!.startsWith("not a cursor"), cursor.message)
+
+        val type: Exception = InvalidTypeNameException("empty")
+        assertIs<IllegalArgumentException>(type)
+        assertEquals("Invalid type name: empty", type.message)
     }
 }

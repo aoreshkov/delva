@@ -8,7 +8,6 @@ import app.oreshkov.delva.DelvaException
 import app.oreshkov.delva.DocumentNotFoundException
 import app.oreshkov.delva.DocumentRejectedException
 import app.oreshkov.delva.EngineFailedException
-import app.oreshkov.delva.InvalidTypeNameException
 import app.oreshkov.delva.QueryLimitException
 import app.oreshkov.delva.QueryRejectedException
 import app.oreshkov.delva.ResultTooLargeException
@@ -37,7 +36,6 @@ internal object Failures {
         StoreLockedException::class to ExitStatus.TEMP_FAIL,
         StoreExistsException::class to ExitStatus.CONFIG,
         DocumentRejectedException::class to ExitStatus.DATA_ERR,
-        InvalidTypeNameException::class to ExitStatus.DATA_ERR,
         QueryLimitException::class to ExitStatus.DATA_ERR,
         CreationOptionsMismatchException::class to ExitStatus.DATA_ERR,
         UnsupportedFormatException::class to ExitStatus.DATA_ERR,
@@ -65,7 +63,7 @@ internal object Failures {
         is NoSuchFileException -> CommandFailure(ExitStatus.NO_INPUT, "no such file: ${error.file}")
         is AccessDeniedException -> CommandFailure(ExitStatus.NO_PERM, "access denied: ${error.file}")
         is IOException -> CommandFailure(ExitStatus.IO_ERR, error.message ?: error::class.simpleName!!)
-        // Delva's other refusals of a request: a node that doesn't exist, or isn't an object.
+        // Delva's other refusals of a request: an invalid type name, a node that doesn't exist, or isn't an object.
         is IllegalArgumentException -> CommandFailure(ExitStatus.DATA_ERR, error.message ?: "invalid request")
         else -> null
     }

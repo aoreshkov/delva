@@ -387,7 +387,15 @@ class ReadCommandsTest {
         assertEquals(objects.drop(2), run("types", "objects", "Customer", "--after", objects[1]).stdout.lines().filter { it.isNotEmpty() })
 
         assertEquals(ExitStatus.FAILURE, run("types", "objects", "Nobody", "-e").status)
-        assertEquals(ExitStatus.DATA_ERR, program.record("types", "count", "").status)
+    }
+
+    @Test
+    fun `an invalid type name is a data error, with the library's message`() {
+        for (args in listOf(listOf("types", "count", ""), listOf("types", "objects", "a\u0007b"))) {
+            val invalid = program.record(*args.toTypedArray())
+            assertEquals(ExitStatus.DATA_ERR, invalid.status, invalid.stderr)
+            assertContains(invalid.stderr, "Invalid type name: ")
+        }
     }
 
     // ----------------------------------------------------------------------------------- beside a writer

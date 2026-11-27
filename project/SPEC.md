@@ -409,7 +409,7 @@ A type is a name attached to one object node. It's metadata: it doesn't change t
 
 - Only objects can have a type, and an object has at most one.
 - A type name is 1–256 bytes of UTF-8 without control characters (Unicode category Cc). Names are compared exactly.
-  An invalid name fails with `InvalidTypeNameException`. In a store with normalization ([2.1](#21-strings)), a name
+  An invalid name fails with `InvalidTypeNameException`, an `IllegalArgumentException`. In a store with normalization ([2.1](#21-strings)), a name
   and the key steps of a path are normalized before they are used, so the name a store holds is the normalized one.
 
 ### 6.1 Assigning types

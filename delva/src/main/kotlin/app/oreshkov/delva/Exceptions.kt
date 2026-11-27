@@ -6,9 +6,9 @@ import java.nio.file.Path
  * Base class of every exception Delva throws for data, state or storage problems. It is sealed, but the constructors of
  * its subclasses are public, so a fake [JsonStore] in a test ([DelvaImplementationApi]) can throw what the store throws.
  *
- * Arguments a caller got wrong stay [IllegalArgumentException], Kotlin's convention for programming errors. Two of
+ * Arguments a caller got wrong stay [IllegalArgumentException], Kotlin's convention for programming errors. Three of
  * them are subclasses a caller can catch on their own, because their text often comes from a user:
- * [InvalidJsonPathException] and [InvalidCursorException].
+ * [InvalidJsonPathException], [InvalidCursorException] and [InvalidTypeNameException].
  */
 public sealed class DelvaException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
@@ -274,8 +274,11 @@ public class InvalidJsonPathException(
  */
 public class InvalidCursorException(detail: String, cause: Throwable? = null) : IllegalArgumentException(detail, cause)
 
-/** A type name doesn't meet the rules of SPEC.md §6. */
-public class InvalidTypeNameException(detail: String) : DelvaException("Invalid type name: $detail")
+/**
+ * A type name, in an insert's type paths, [JsonStore.assignType], a query's type or [ReadableJsonStore.objectsOfType],
+ * doesn't meet the rules of SPEC.md §6. An [IllegalArgumentException], as an invalid JSONPath query or cursor is.
+ */
+public class InvalidTypeNameException(detail: String) : IllegalArgumentException("Invalid type name: $detail")
 
 /** A value is longer than the [maxChars] characters the caller allowed, for example in [SearchHit.readJsonAsString]. */
 public class ResultTooLargeException(public val maxChars: Int) : DelvaException("The JSON text exceeds $maxChars characters")
