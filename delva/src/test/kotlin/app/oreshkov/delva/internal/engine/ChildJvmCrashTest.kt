@@ -228,7 +228,7 @@ class ChildJvmCrashTest {
 
 @OptIn(ExperimentalDelvaApi::class)
 internal fun crashChildOptions(keyed: Boolean = false, vector: Boolean = false) = EngineOptions(
-    CreationOptions(fragmentBytes = 256).withDocumentKey(if (keyed) "$.id" else null)
+    CreationOptions(fragmentBytes = 256, documentKey = if (keyed) "$.id" else null)
         .withVectorField(if (vector) VectorField("$.v", CrashChild.VECTOR_DIMENSIONS, VectorMetric.EUCLIDEAN) else null),
     StoreOptions(encoderBudgetBytes = 1024),
     smallInsertThreshold = 4096,

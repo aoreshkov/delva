@@ -10,7 +10,6 @@ import app.oreshkov.clikit.Output
 import app.oreshkov.clikit.field
 import app.oreshkov.clikit.payloadStream
 import app.oreshkov.clikit.writeObject
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonPathQuery
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.cli.DelvaCommands
@@ -20,7 +19,6 @@ import app.oreshkov.delva.cli.warnAbout
 import app.oreshkov.delva.cli.withReader
 
 /** `delva explain <query> [--where <filter>]`: how a JSONPath search would find its documents, without reading any. */
-@OptIn(ExperimentalDelvaApi::class)
 internal val explain = CommandHandler { context ->
     val query = context.values.required(DelvaCommands.explainQuery)
     context.warnAbout(query, context.values[DelvaCommands.where])

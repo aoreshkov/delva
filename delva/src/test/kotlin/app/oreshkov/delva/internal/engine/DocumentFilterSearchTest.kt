@@ -162,7 +162,7 @@ class DocumentFilterSearchTest {
             val filter = DocumentFilterTemplate.compile("@.ns == \${v}")
             for ((k, v) in values.withIndex()) {
                 val byPath = JsonPathQuery(path.bind("v" to JsonQueryValue.Str(v)))
-                val byFilter = JsonPathQuery(JsonPath.compile("$.items[0].n")).withDocumentFilter(filter.bind("v" to JsonQueryValue.Str(v)))
+                val byFilter = JsonPathQuery(JsonPath.compile("$.items[0].n"), documentFilter = filter.bind("v" to JsonQueryValue.Str(v)))
                 for (query in listOf(byPath, byFilter)) {
                     assertTrue(!store.explain(query).fullScan, "'$v' needs a scan")
                     assertEquals(listOf(NodeRef(docIds[k], 5)), store.search(query).use { r -> r.iterator().asSequence().map { it.node }.toList() }, "'$v'")
@@ -179,7 +179,7 @@ class DocumentFilterSearchTest {
             val ids = List(4) { store.insert("""{"ns":"orders","price":$it,"lines":[$nested]}""") }
             store.insert("""{"ns":"users","price":9,"lines":[$nested]}""")
             store.flush()
-            val query = JsonPathQuery(JsonPath.compile("$.price")).withDocumentFilter(DocumentFilter.compile("@.ns == 'orders'"))
+            val query = JsonPathQuery(JsonPath.compile("$.price"), documentFilter = DocumentFilter.compile("@.ns == 'orders'"))
             store.search(query).use { result ->
                 assertEquals(ids.map { NodeRef(it, 2) }, result.iterator().asSequence().map { it.node }.toList())
                 val search = source(result)
@@ -201,7 +201,7 @@ class DocumentFilterSearchTest {
             store.flush()
             val path = JsonPathQuery(JsonPath.compile("$..price"))
             assertTrue(store.explain(path).fullScan)
-            val query = path.withDocumentFilter(DocumentFilter.compile("@.ns == 'orders'"))
+            val query = path.copy(documentFilter = DocumentFilter.compile("@.ns == 'orders'"))
             val plan = store.explain(query)
             assertEquals("QueryPlan('ns' == 'orders')", plan.toString())
             store.search(query).use { result ->
@@ -212,17 +212,17 @@ class DocumentFilterSearchTest {
                 assertEquals(0, search.documentsFiltered)
             }
             // `$` is the root as `@` is, and the newest hit comes first in descending order.
-            val newest = query.withDocumentFilter(DocumentFilter.compile("\$.ns == 'orders'")).copy(order = SearchOrder.DESCENDING, limit = 1)
+            val newest = query.copy(order = SearchOrder.DESCENDING, limit = 1, documentFilter = DocumentFilter.compile("\$.ns == 'orders'"))
             assertEquals(listOf(Hit(newer.raw, 4, "40")), store.search(newest).use { r -> r.nextPage()!!.hits.map { Hit(it.docId.raw, it.node.nodePre, it.readJsonAsString()) } })
             // A condition the index can't check is tested on each candidate's root.
-            val cheap = path.withDocumentFilter(DocumentFilter.compile("@.ns == 'orders' && @.key != 'a'"))
+            val cheap = path.copy(documentFilter = DocumentFilter.compile("@.ns == 'orders' && @.key != 'a'"))
             store.search(cheap).use { result ->
                 assertEquals(listOf(NodeRef(newer, 4)), result.iterator().asSequence().map { it.node }.toList())
                 assertEquals(1, source(result).documentsFiltered)
             }
             assertEquals(1, store.count(cheap))
             // A filter without terms leaves the search to the path, which needs a scan here.
-            val untermed = path.withDocumentFilter(DocumentFilter.compile("@.key != 'a'"))
+            val untermed = path.copy(documentFilter = DocumentFilter.compile("@.key != 'a'"))
             assertEquals(QueryRejectedException.Reason.NEEDS_SCAN, assertFailsWith<QueryRejectedException> { store.search(untermed) }.reason)
             assertEquals(12, hits(store.search(untermed.copy(scan = ScanPolicy.ALLOW_SCAN))).size)
         }

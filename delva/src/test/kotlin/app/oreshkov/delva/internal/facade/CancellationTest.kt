@@ -62,7 +62,7 @@ class CancellationTest {
     )
 
     private fun open(fs: SimulatedFileSystemIo): JsonStore =
-        JsonStore.open(TestEngines.DIR, EngineOptions(CreationOptions().withDocumentKey("$.id"), log = TestEngines.LOG), fs)
+        JsonStore.open(TestEngines.DIR, EngineOptions(CreationOptions(documentKey = "$.id"), log = TestEngines.LOG), fs)
 
     private fun roots(engine: Engine): List<NodeRef> =
         engine.search(KeyValueQuery("all", JsonQueryValue.Bool(true), ResultMode.WHOLE_DOCUMENT, limit = 100)).use { result ->

@@ -114,7 +114,6 @@ internal val searchPath = CommandHandler { context ->
  * `delva search key [<prefix>]`: whole documents in the order of their keys, in a store created with
  * `--document-key`; the cursor of a page resumes after its last key.
  */
-@OptIn(ExperimentalDelvaApi::class)
 internal val searchKey = CommandHandler { context ->
     val values = context.values
     val query = DocumentKeyQuery(

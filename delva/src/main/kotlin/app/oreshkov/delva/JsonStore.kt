@@ -64,15 +64,12 @@ public interface JsonStore : ReadableJsonStore {
      * nothing; a conflict known when the call starts throws before [source] is read. Repeated docIds count once, and
      * with none it is an [insert].
      */
-    @ExperimentalDelvaApi
     public suspend fun replace(docIds: Collection<DocId>, source: InputStream, types: Map<String, String> = emptyMap()): DocId
 
     /** [replace] with the document in the file [path], opened and closed by the call. */
-    @ExperimentalDelvaApi
     public suspend fun replace(docIds: Collection<DocId>, path: Path, types: Map<String, String> = emptyMap()): DocId
 
     /** [replace] with the document given as a string; meant for small documents. */
-    @ExperimentalDelvaApi
     public suspend fun replace(docIds: Collection<DocId>, json: String, types: Map<String, String> = emptyMap()): DocId
 
     /**
@@ -84,15 +81,12 @@ public interface JsonStore : ReadableJsonStore {
      * The key is read with the document, so a document without one is rejected with [RejectReason.KEY_MISSING]. A store
      * without document keys throws [IllegalStateException].
      */
-    @ExperimentalDelvaApi
     public suspend fun upsert(source: InputStream, types: Map<String, String> = emptyMap()): DocId
 
     /** [upsert] with the document in the file [path], opened and closed by the call. */
-    @ExperimentalDelvaApi
     public suspend fun upsert(path: Path, types: Map<String, String> = emptyMap()): DocId
 
     /** [upsert] with the document given as a string; meant for small documents. */
-    @ExperimentalDelvaApi
     public suspend fun upsert(json: String, types: Map<String, String> = emptyMap()): DocId
 
     /**
@@ -251,10 +245,8 @@ public interface JsonStore : ReadableJsonStore {
          * [java.io.IOException] when the files can't be read, or the writer changed them faster than they could be
          * read.
          */
-        @ExperimentalDelvaApi
         public fun probe(dir: Path): StoreFormat? = probe(dir, JdkFileSystemIo(mmapReads = false))
 
-        @ExperimentalDelvaApi
         internal fun probe(dir: Path, io: FileSystemIo): StoreFormat? = SecondaryEngine.probe(dir, io)
 
         internal fun open(dir: Path, options: EngineOptions, io: FileSystemIo, opening: Opening = Opening.OPEN_OR_CREATE): JsonStore =
@@ -280,27 +272,21 @@ public interface BlockingJsonStore : BlockingReadableJsonStore {
     public fun insert(json: String, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.replace]. */
-    @ExperimentalDelvaApi
     public fun replace(docIds: Collection<DocId>, source: InputStream, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.replace]. */
-    @ExperimentalDelvaApi
     public fun replace(docIds: Collection<DocId>, path: Path, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.replace]. */
-    @ExperimentalDelvaApi
     public fun replace(docIds: Collection<DocId>, json: String, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.upsert]. */
-    @ExperimentalDelvaApi
     public fun upsert(source: InputStream, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.upsert]. */
-    @ExperimentalDelvaApi
     public fun upsert(path: Path, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.upsert]. */
-    @ExperimentalDelvaApi
     public fun upsert(json: String, types: Map<String, String> = emptyMap()): DocId
 
     /** See [JsonStore.insertAll]. */
@@ -342,22 +328,18 @@ public class TypeInfo internal constructor(
  * with it, JSON paths to type names as [JsonStore.insert] takes them, the documents it [replaces], and in a store with a
  * [CreationOptions.documentKey] what it does when its key is taken ([onExistingKey]).
  */
-public class InsertSource @ExperimentalDelvaApi constructor(
+public class InsertSource(
     /** The stream the document's JSON is read from; it isn't closed. */
     public val source: InputStream,
     /** The types to assign with the document: JSON paths to type names, as [JsonStore.insert] takes them. */
     public val types: Map<String, String> = emptyMap(),
-    replaces: Collection<DocId>,
+    replaces: Collection<DocId> = emptyList(),
     onExistingKey: KeyConflict = KeyConflict.FAIL,
 ) {
-    /** A plain insert: the source replaces nothing, and a key that is taken fails it. */
-    public constructor(source: InputStream, types: Map<String, String> = emptyMap()) : this(source, types, emptyList())
-
     /**
      * The documents deleted in the same atomic change as this insert, each once, as [JsonStore.replace] deletes them;
      * empty for a plain insert.
      */
-    @ExperimentalDelvaApi
     public val replaces: List<DocId> = replaces.distinct()
 
     /**
@@ -365,7 +347,6 @@ public class InsertSource @ExperimentalDelvaApi constructor(
      * already has this document's key: [KeyConflict.FAIL] makes the outcome [InsertOutcome.Conflicted],
      * [KeyConflict.REPLACE] replaces that document too, as [JsonStore.upsert] does. Ignored in a store without keys.
      */
-    @ExperimentalDelvaApi
     public val onExistingKey: KeyConflict = onExistingKey
 
     override fun toString(): String = buildString {

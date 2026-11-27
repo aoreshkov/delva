@@ -71,7 +71,6 @@ internal class HitWriter(private val context: CommandContext) {
     /** Whether the store has document keys, which the first hit tells: then each hit names its document's key. */
     private var keyed: Boolean? = null
 
-    @OptIn(ExperimentalDelvaApi::class)
     fun write(hit: SearchHit) {
         count++
         val key = hit.documentKey

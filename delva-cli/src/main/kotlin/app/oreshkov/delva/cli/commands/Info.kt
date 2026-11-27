@@ -65,7 +65,7 @@ private class Summary(
                 "indexed keys" to keys(creation.indexedKeys, "every key"),
                 "excluded keys" to keys(creation.excludedKeys, "none"),
                 "indexed strings" to stringLengths(),
-                "document key" to (creation.documentKeyPath ?: "none"),
+                "document key" to (creation.documentKey ?: "none"),
                 "vector field" to vectorField(),
             ),
         )
@@ -152,7 +152,7 @@ internal fun JsonWriter.creationOptions(creation: CreationOptions): JsonWriter =
     name("excludedKeys").writeArray { creation.excludedKeys.sorted().forEach { value(it) } }
     field("minIndexedStringBytes", creation.minIndexedStringBytes)
     field("maxIndexedStringBytes", creation.maxIndexedStringBytes)
-    field("documentKey", creation.documentKeyPath)
+    field("documentKey", creation.documentKey)
     vectorField(creation)
 }
 
@@ -171,7 +171,3 @@ private fun JsonWriter.vectorField(creation: CreationOptions) {
         field("required", field.required)
     }
 }
-
-/** [CreationOptions.documentKey], which the CLI reports and passes on as it is. */
-@OptIn(ExperimentalDelvaApi::class)
-internal val CreationOptions.documentKeyPath: String? get() = documentKey

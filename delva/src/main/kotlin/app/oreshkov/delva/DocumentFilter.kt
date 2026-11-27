@@ -17,7 +17,6 @@ import app.oreshkov.delva.internal.path.LogicalExpr
  * Compile once, then use it in any number of queries. Immutable and thread-safe; two filters are equal when their texts
  * are.
  */
-@ExperimentalDelvaApi
 public class DocumentFilter internal constructor(
     private val text: String,
     internal val expr: LogicalExpr,
@@ -27,6 +26,7 @@ public class DocumentFilter internal constructor(
      * What in the filter is valid but can't be what was meant, in the order of the text, as [JsonPath.warnings] has
      * for a query; offsets are in the filter's text.
      */
+    @ExperimentalDelvaApi
     public val warnings: List<QueryWarning> = warnings.frozen()
 
     override fun toString(): String = text

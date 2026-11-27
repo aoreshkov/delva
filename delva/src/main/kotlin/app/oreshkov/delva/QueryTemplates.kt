@@ -23,7 +23,6 @@ import app.oreshkov.delva.internal.path.Placeholders
  * Placeholders are an extension of RFC 9535, which has none, and [JsonPath.compile] refuses them. Immutable and
  * thread-safe; two templates are equal when their texts are.
  */
-@ExperimentalDelvaApi
 public class JsonPathTemplate private constructor(private val tree: PathQuery, private val placeholders: Placeholders) {
     /** The names of the placeholders, each once, in the order they first appear in the text. */
     public val parameters: Set<String> get() = placeholders.names
@@ -32,6 +31,7 @@ public class JsonPathTemplate private constructor(private val tree: PathQuery, p
      * The warnings of the template's own text, as [JsonPath.warnings] has them, at offsets in the template's text. A
      * placeholder has no value yet, so it gives none; a pattern bound to one gets its warning from [bind].
      */
+    @ExperimentalDelvaApi
     public val warnings: List<QueryWarning> get() = placeholders.warnings
 
     /**
@@ -81,12 +81,12 @@ public class JsonPathTemplate private constructor(private val tree: PathQuery, p
  *
  * Immutable and thread-safe; two templates are equal when their texts are.
  */
-@ExperimentalDelvaApi
 public class DocumentFilterTemplate private constructor(private val tree: LogicalExpr, private val placeholders: Placeholders) {
     /** The names of the placeholders, each once, in the order they first appear in the text. */
     public val parameters: Set<String> get() = placeholders.names
 
     /** The warnings of the template's own text, with the rules of [JsonPathTemplate.warnings]. */
+    @ExperimentalDelvaApi
     public val warnings: List<QueryWarning> get() = placeholders.warnings
 
     /** The filter with each placeholder replaced by the literal of its value, with the rules of [JsonPathTemplate.bind]. */

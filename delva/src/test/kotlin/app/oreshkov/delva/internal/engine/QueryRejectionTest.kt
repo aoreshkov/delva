@@ -52,7 +52,7 @@ class QueryRejectionTest {
     @Test
     @OptIn(ExperimentalDelvaApi::class)
     fun `the query of a refused search is its path, without the document filter`() {
-        val filtered = JsonPathQuery(JsonPath.compile("$..price")).withDocumentFilter(DocumentFilter.compile("@.note != 'n1'"))
+        val filtered = JsonPathQuery(JsonPath.compile("$..price"), documentFilter = DocumentFilter.compile("@.note != 'n1'"))
         val e = rejected { it.count(filtered) }
         assertFact(e, Reason.NEEDS_SCAN, "no index term narrows the search for $..price", "$..price")
     }

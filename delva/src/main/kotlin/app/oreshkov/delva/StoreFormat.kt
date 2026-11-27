@@ -5,7 +5,6 @@ package app.oreshkov.delva
  * version of Delva may write a new format version and read only its own. A store is in one format for its whole life:
  * format 1, or format 2 when it was created with a [CreationOptions.vectorField].
  */
-@ExperimentalDelvaApi
 public class StoreFormat internal constructor(
     /** The format version the store is in. */
     public val version: Int,

@@ -7,7 +7,6 @@ import app.oreshkov.clikit.JsonLines
 import app.oreshkov.clikit.field
 import app.oreshkov.clikit.payloadStream
 import app.oreshkov.clikit.writeObject
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonPath
 import app.oreshkov.delva.NodeRef
 import app.oreshkov.delva.cli.DelvaCommands
@@ -24,7 +23,6 @@ import app.oreshkov.delva.cli.withReader
  * `delva get --key <key>` finds the document by its key, in a store created with `--document-key`; when no document
  * has the key, it says so on stderr and exits 0, or 1 with `--exit-status`, as a query that finds nothing does.
  */
-@OptIn(ExperimentalDelvaApi::class)
 internal val get = CommandHandler { context ->
     val format = context.jsonFormat()
     val given = context.values[DelvaCommands.getDoc]

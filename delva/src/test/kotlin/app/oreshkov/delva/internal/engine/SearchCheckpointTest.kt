@@ -68,7 +68,7 @@ class SearchCheckpointTest {
 
     @Test
     fun `a count runs its checkpoint before each candidate, and stops where it throws`() {
-        TestEngines.open(options(CreationOptions().withDocumentKey("$.k"))).use { store ->
+        TestEngines.open(options(CreationOptions(documentKey = "$.k"))).use { store ->
             repeat(200) { store.insert("""{"k":"$it","g":${it % 2}}""") }
             store.flush()
             val queries = listOf<Pair<String, (() -> Unit) -> Long>>(

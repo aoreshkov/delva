@@ -53,7 +53,6 @@ internal object ValueArgs {
     }
 
     /** A document filter, an RFC 9535 logical expression whose `@` is the document's root, compiled as [jsonPath] is. */
-    @OptIn(ExperimentalDelvaApi::class)
     val documentFilter: ValueConverter<DocumentFilter> = ValueConverter { raw ->
         try {
             ConversionResult.Ok(DocumentFilter.compile(raw))

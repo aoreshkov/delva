@@ -218,7 +218,6 @@ internal object DelvaCommands {
     val query: Argument.Single<JsonPath> =
         Argument.Single("query", ValueArgs.jsonPath, "An RFC 9535 JSONPath query")
 
-    @OptIn(ExperimentalDelvaApi::class)
     val where: Option.Single<DocumentFilter> = Option.Single(
         "--where",
         ValueArgs.documentFilter,
@@ -226,7 +225,6 @@ internal object DelvaCommands {
         valueName = "filter",
     )
 
-    @OptIn(ExperimentalDelvaApi::class)
     val searchPath: CommandSpec = CommandSpec(
         "path",
         "Find the nodes a JSONPath query selects, in every document",
@@ -291,7 +289,6 @@ internal object DelvaCommands {
     val vectorScan: Option.Flag =
         Option.Flag("--scan", help = "Compare every vector when no index term of --where narrows the search")
 
-    @OptIn(ExperimentalDelvaApi::class)
     val searchVector: CommandSpec = CommandSpec(
         "vector",
         "Find the documents whose vectors are nearest to a vector, in a store created with --vector-field\n\n" +
@@ -317,7 +314,6 @@ internal object DelvaCommands {
     val explainQuery: Argument.Single<JsonPath> =
         Argument.Single("query", ValueArgs.jsonPath, "An RFC 9535 JSONPath query")
 
-    @OptIn(ExperimentalDelvaApi::class)
     val explain: CommandSpec = CommandSpec(
         "explain",
         "Show how a JSONPath search would run\n\nShows how the search would find its documents, without running it.",

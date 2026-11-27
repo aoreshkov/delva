@@ -37,13 +37,13 @@ class QueriesTest {
     fun `a document filter is part of the query's value and survives copy`() {
         val query = JsonPathQuery(JsonPath.compile("$.a"))
         val filter = DocumentFilter.compile("@.kind == 'x'")
-        val filtered = query.withDocumentFilter(filter)
+        val filtered = query.copy(documentFilter = filter)
         assertEquals(filter, filtered.documentFilter)
         assertEquals(filtered, JsonPathQuery(JsonPath.compile("$.a"), documentFilter = DocumentFilter.compile("@.kind == 'x'")))
-        assertEquals(filtered.hashCode(), query.withDocumentFilter(DocumentFilter.compile("@.kind == 'x'")).hashCode())
+        assertEquals(filtered.hashCode(), query.copy(documentFilter = DocumentFilter.compile("@.kind == 'x'")).hashCode())
         assertNotEquals(query, filtered)
         assertEquals(filter, filtered.copy(limit = 3).documentFilter)
-        assertEquals(query, filtered.withDocumentFilter(null))
+        assertEquals(query, filtered.copy(documentFilter = null))
         assertEquals("JsonPathQuery(path=$.a, mode=CONTAINING_ELEMENT, nested=ALL, limit=100, documentFilter=@.kind == 'x')", filtered.toString())
         // Filters are equal by text, as JSONPath queries are.
         assertNotEquals(filter, DocumentFilter.compile("@.kind=='x'"))
@@ -61,8 +61,8 @@ class QueriesTest {
         assertNotEquals(path, bounded)
         assertNotEquals(bounded, path.withMaxDocuments(2))
         assertEquals(1, bounded.copy(limit = 3).maxDocuments)
-        assertEquals(1, bounded.withDocumentFilter(DocumentFilter.compile("@.kind == 'x'")).maxDocuments)
-        assertEquals(DocumentFilter.compile("@.kind == 'x'"), path.withDocumentFilter(DocumentFilter.compile("@.kind == 'x'")).withMaxDocuments(1).documentFilter)
+        assertEquals(1, bounded.copy(documentFilter = DocumentFilter.compile("@.kind == 'x'")).maxDocuments)
+        assertEquals(DocumentFilter.compile("@.kind == 'x'"), path.copy(documentFilter = DocumentFilter.compile("@.kind == 'x'")).withMaxDocuments(1).documentFilter)
         assertEquals(path, bounded.withMaxDocuments(null))
         assertEquals("JsonPathQuery(path=$.a, mode=CONTAINING_ELEMENT, nested=ALL, limit=100, maxDocuments=1)", bounded.toString())
         for (n in listOf(0, -1)) {

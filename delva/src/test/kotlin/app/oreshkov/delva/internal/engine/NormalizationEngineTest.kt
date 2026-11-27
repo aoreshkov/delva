@@ -37,7 +37,7 @@ class NormalizationEngineTest {
     private val decomposedValue = "résumé"
 
     private fun options(normalization: Normalization, stringChunkBytes: Int = 4096, documentKey: String? = null) = EngineOptions(
-        CreationOptions(fragmentBytes = 1024, normalization = normalization).withDocumentKey(documentKey), StoreOptions(encoderBudgetBytes = 4096),
+        CreationOptions(fragmentBytes = 1024, normalization = normalization, documentKey = documentKey), StoreOptions(encoderBudgetBytes = 4096),
         sorterBytes = 4096, keyArenaBytes = 1024, keySeed = 3, log = TestEngines.LOG, backgroundFlush = false,
         stringChunkBytes = stringChunkBytes,
     )
@@ -212,8 +212,8 @@ class NormalizationEngineTest {
             rejected("type path") { store.insert("""{"all":true,"id":"b","a":{}}""", mapOf("$[\"$over\"]" to "t")) }
             assertEquals(1, store.documents().size)
         }
-        assertFailsWith<InvalidJsonPathException> { CreationOptions(normalization = Normalization.NFC).withDocumentKey("$[\"$over\"]") }
-        CreationOptions().withDocumentKey("$[\"$over\"]")
+        assertFailsWith<InvalidJsonPathException> { CreationOptions(normalization = Normalization.NFC, documentKey = "$[\"$over\"]") }
+        CreationOptions(documentKey = "$[\"$over\"]")
     }
 
     @Test

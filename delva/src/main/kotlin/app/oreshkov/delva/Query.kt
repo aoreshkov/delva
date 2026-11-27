@@ -122,7 +122,6 @@ internal fun requireSearchCursor(after: Cursor?, order: SearchOrder) {
  * A store without document keys refuses the query with [IllegalStateException]. Queries are values: two instances with
  * the same settings are equal, and [copy] derives a variant.
  */
-@ExperimentalDelvaApi
 public class DocumentKeyQuery(
     public val prefix: String = "",
     public val limit: Int = 100,
@@ -165,7 +164,6 @@ public class DocumentKeyQuery(
 }
 
 /** What an insert does when a visible document already has its document key ([CreationOptions.documentKey]). */
-@ExperimentalDelvaApi
 public enum class KeyConflict {
     /** The insert throws [WriteConflictException] naming the document and the key; nothing changes. */
     FAIL,
