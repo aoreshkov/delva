@@ -28,6 +28,8 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
   `documentFilter` are set in it or in `copy`: `CreationOptions.withDocumentKey(k)` is now `copy(documentKey = k)`,
   and `JsonPathQuery.withDocumentFilter(f)` is `copy(documentFilter = f)`. The constructors without these settings, and
   the matching `insertSourceOf` overloads, are gone.
+- `delva`: `InvalidTypeNameException` is an `IllegalArgumentException`, as `InvalidJsonPathException` and
+  `InvalidCursorException` are, and no longer a `DelvaException`: a `catch (e: DelvaException)` doesn't catch it.
 
 ### Fixed
 
