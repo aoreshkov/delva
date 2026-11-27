@@ -18,6 +18,17 @@ on-disk format incompatibly; see [Compatibility](project/GUIDE.md#compatibility)
 - `delva-cli`: argument files: `delva @args.txt` reads its arguments from a file, one per line, past the Windows start
   script, which breaks a filter with `|`, `&` or `^` in it.
 
+### Changed
+
+- `delva`: `replace`, document keys, document filters, query templates and `JsonStore.probe` are no longer
+  experimental and need no opt-in; so are `replaceValue`, `upsertValue` and `insertSourceOf`'s `replaces` and
+  `onExistingKey` in `delva-kotlinx-serialization`. Query warnings, `maxDocuments` and vector search stay
+  experimental.
+- `delva`: `CreationOptions`, `JsonPathQuery` and `InsertSource` each have one constructor, and `documentKey` and
+  `documentFilter` are set in it or in `copy`: `CreationOptions.withDocumentKey(k)` is now `copy(documentKey = k)`,
+  and `JsonPathQuery.withDocumentFilter(f)` is `copy(documentFilter = f)`. The constructors without these settings, and
+  the matching `insertSourceOf` overloads, are gone.
+
 ### Fixed
 
 - `delva`: cancelling the collector of a search's `hits`, or a `count`, stops the search before its next document;

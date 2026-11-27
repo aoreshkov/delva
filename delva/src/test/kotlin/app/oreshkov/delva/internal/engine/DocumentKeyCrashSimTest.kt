@@ -81,7 +81,7 @@ class DocumentKeyCrashSimTest {
         val random = Random(seed)
         val t = listOf(32, 256, 4096)[random.nextInt(3)]
         val options = EngineOptions(
-            CreationOptions(fragmentBytes = t).withDocumentKey("$.id"), StoreOptions(encoderBudgetBytes = maxOf(2 * t, 1024)),
+            CreationOptions(fragmentBytes = t, documentKey = "$.id"), StoreOptions(encoderBudgetBytes = maxOf(2 * t, 1024)),
             sorterBytes = 4096,
             keyArenaBytes = 1024,
             smallInsertThreshold = listOf(0L, 1L shl 22)[random.nextInt(2)],

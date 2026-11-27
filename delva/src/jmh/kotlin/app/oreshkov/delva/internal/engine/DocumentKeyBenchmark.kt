@@ -45,7 +45,7 @@ class DocumentKeyBenchmark {
     @Setup
     fun setUp() {
         dir = Files.createTempDirectory("delva-key-bench")
-        store = Engine.open(dir, EngineOptions(CreationOptions().withDocumentKey("$.id"), StoreOptions()), JdkFileSystemIo())
+        store = Engine.open(dir, EngineOptions(CreationOptions(documentKey = "$.id"), StoreOptions()), JdkFileSystemIo())
         for (round in 0 until 4) {
             for (batch in 0 until 100) {
                 val ids = (0 until 1000).map { batch * 1000 + it }.filter { round == 0 || it % 10 == 0 }

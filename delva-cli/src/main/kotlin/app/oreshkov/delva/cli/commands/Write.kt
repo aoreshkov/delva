@@ -54,7 +54,8 @@ internal val init = CommandHandler { context ->
             minIndexedStringBytes = values[DelvaCommands.minIndexedString] ?: defaults.minIndexedStringBytes,
             maxIndexedStringBytes = values[DelvaCommands.maxIndexedString] ?: defaults.maxIndexedStringBytes,
             normalization = values[DelvaCommands.normalization] ?: Normalization.NONE,
-        ).withDocumentKey(values[DelvaCommands.documentKey]).withVectorField(
+            documentKey = values[DelvaCommands.documentKey],
+        ).withVectorField(
             // The command's constraints give the three together, or none of them.
             values[DelvaCommands.vectorField]?.let { path ->
                 VectorField(
@@ -97,7 +98,6 @@ internal val init = CommandHandler { context ->
  * In a store created with `--document-key`, a document whose key another document has isn't inserted (66) unless
  * `--upsert` makes it replace that document in the same change.
  */
-@OptIn(ExperimentalDelvaApi::class)
 internal val insert = CommandHandler { context ->
     val sources = context.values[DelvaCommands.insertFiles]
     val types = context.values.uniqueKeys(DelvaCommands.insertTypes) { it.first }.mapValues { it.value.second }
@@ -114,7 +114,6 @@ internal val insert = CommandHandler { context ->
     }
 }
 
-@OptIn(ExperimentalDelvaApi::class)
 private class Inserter(
     private val context: CommandContext,
     private val store: BlockingJsonStore,

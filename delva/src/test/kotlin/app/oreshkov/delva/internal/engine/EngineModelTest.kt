@@ -37,7 +37,7 @@ import kotlin.test.Test
  */
 class EngineModelTest {
     private fun run(fragmentBytes: Int, hashTerms: Boolean, iterations: Int, maxSize: Int, profiles: List<JsonProfile> = JsonProfile.entries, flushes: Boolean = false, keys: Boolean = false) {
-        val creation = CreationOptions(fragmentBytes = fragmentBytes, hashTerms = hashTerms).withDocumentKey(if (keys) ModelGen.KEY_PATH else null)
+        val creation = CreationOptions(fragmentBytes = fragmentBytes, hashTerms = hashTerms, documentKey = if (keys) ModelGen.KEY_PATH else null)
         val store = StoreOptions(encoderBudgetBytes = maxOf(2 * fragmentBytes, 256), maxDepth = 512)
         val atom = maxOf(fragmentBytes / 4, 64)
         val oracleOptions = OracleOptions(hashTerms = hashTerms, limits = JsonLimits(maxDepth = 512, maxKeyBytes = atom, maxNumberLength = minOf(4096, atom)), documentKey = if (keys) ModelGen.KEY_PATH else null)

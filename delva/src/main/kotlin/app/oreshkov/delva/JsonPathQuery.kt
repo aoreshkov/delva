@@ -14,8 +14,9 @@ package app.oreshkov.delva
  *   [InvalidTypeNameException].
  * - [scan]: what to do when the index can't narrow the search down (see [JsonStore.explain]).
  * - [order]: the order of the hits, as in [KeyValueQuery].
- * - [documentFilter]: only the documents it accepts are searched; set with [withDocumentFilter].
- * - [maxDocuments]: the result ends after the hits of this many documents; set with [withMaxDocuments].
+ * - [documentFilter]: only the documents it accepts are searched.
+ * - [maxDocuments]: the result ends after the hits of this many documents; still experimental, so set with
+ *   [withMaxDocuments].
  *
  * Queries are values: two instances with the same settings are equal, and [copy] derives a variant.
  */
@@ -32,8 +33,10 @@ public class JsonPathQuery private constructor(
     documentFilter: DocumentFilter?,
     maxDocuments: Int?,
 ) {
-    /** A search of the documents [documentFilter] accepts, or of every document when it is null. */
-    @ExperimentalDelvaApi
+    /**
+     * A search of the documents [documentFilter] accepts, or of every document when it is null, without a bound on
+     * [maxDocuments], which [withMaxDocuments] sets.
+     */
     public constructor(
         path: JsonPath,
         mode: ResultMode = ResultMode.CONTAINING_ELEMENT,
@@ -44,28 +47,14 @@ public class JsonPathQuery private constructor(
         type: String? = null,
         scan: ScanPolicy = ScanPolicy.REJECT,
         order: SearchOrder = SearchOrder.ASCENDING,
-        documentFilter: DocumentFilter?,
+        documentFilter: DocumentFilter? = null,
     ) : this(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, null)
-
-    /** A search of every document. */
-    public constructor(
-        path: JsonPath,
-        mode: ResultMode = ResultMode.CONTAINING_ELEMENT,
-        nested: NestedHits = NestedHits.ALL,
-        limit: Int = 100,
-        maxBytes: Long = Long.MAX_VALUE,
-        after: Cursor? = null,
-        type: String? = null,
-        scan: ScanPolicy = ScanPolicy.REJECT,
-        order: SearchOrder = SearchOrder.ASCENDING,
-    ) : this(path, mode, nested, limit, maxBytes, after, type, scan, order, null, null)
 
     /**
      * The condition a document has to meet to be searched (SPEC.md §10.5), or null to search every document. A
      * comparison of one of its root's members with a literal is an index term the search requires, as one in [path]
      * is: a query whose path alone would need a scan doesn't when the filter names such a term.
      */
-    @ExperimentalDelvaApi
     public val documentFilter: DocumentFilter? = documentFilter
 
     /**
@@ -83,19 +72,14 @@ public class JsonPathQuery private constructor(
         requireSearchCursor(after, order)
     }
 
-    /** This query with [documentFilter] set to [filter], or removed with null. */
-    @ExperimentalDelvaApi
-    public fun withDocumentFilter(filter: DocumentFilter?): JsonPathQuery =
-        JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, filter, maxDocuments)
-
     /** This query with [maxDocuments] set to [n], or removed with null; [n] must be positive. */
     @ExperimentalDelvaApi
     public fun withMaxDocuments(n: Int?): JsonPathQuery =
         JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, n)
 
     /**
-     * This query with the given settings changed, the [documentFilter] and [maxDocuments] kept; the result is validated
-     * like a new instance.
+     * This query with the given settings changed, [maxDocuments] kept; the result is validated like a new instance. A
+     * [documentFilter] of null searches every document.
      */
     public fun copy(
         path: JsonPath = this.path,
@@ -107,6 +91,7 @@ public class JsonPathQuery private constructor(
         type: String? = this.type,
         scan: ScanPolicy = this.scan,
         order: SearchOrder = this.order,
+        documentFilter: DocumentFilter? = this.documentFilter,
     ): JsonPathQuery = JsonPathQuery(path, mode, nested, limit, maxBytes, after, type, scan, order, documentFilter, maxDocuments)
 
     override fun equals(other: Any?): Boolean =

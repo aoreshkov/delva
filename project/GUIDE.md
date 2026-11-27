@@ -45,11 +45,10 @@ val id = store.blocking().insert(Path.of("catalog-2GB.json"))
 ## Versions
 
 Documents are immutable, so a new version of one is a new insert, and docIds grow with each insert. `replace`
-(experimental) inserts the new version and deletes the old one in one atomic change, and throws
-`WriteConflictException` without changing anything when the old one is gone, as when another writer replaced it first:
+inserts the new version and deletes the old one in one atomic change, and throws `WriteConflictException` without
+changing anything when the old one is gone, as when another writer replaced it first:
 
 ```kotlin
-@OptIn(ExperimentalDelvaApi::class)
 val next = store.blocking().replace(listOf(id), """{"session":"s-42","state":"closed"}""")
 ```
 
@@ -71,9 +70,11 @@ past them. Here a [document filter](#document-filters) picks the session's versi
 
 ```kotlin
 @OptIn(ExperimentalDelvaApi::class)
-val newestItems = JsonPathQuery(JsonPath.compile("$.items[*].sku"), order = SearchOrder.DESCENDING)
-    .withDocumentFilter(DocumentFilter.compile("@.session == 's-42'"))
-    .withMaxDocuments(1)
+val newestItems = JsonPathQuery(
+    JsonPath.compile("$.items[*].sku"),
+    order = SearchOrder.DESCENDING,
+    documentFilter = DocumentFilter.compile("@.session == 's-42'"),
+).withMaxDocuments(1)
 val skus = store.blocking().search(newestItems).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() }
 ```
 
@@ -82,14 +83,13 @@ can change which document is the newest.
 
 ## Document keys
 
-When every document has a name of its own, create the store with a **document key** (experimental): the path of a
+When every document has a name of its own, create the store with a **document key**: the path of a
 string member that no two visible documents share. An insert of a key that is taken throws `WriteConflictException`;
 `upsert` replaces the document that has it in one atomic change; `get` finds a document by its key, and a
 `DocumentKeyQuery` lists documents in key order:
 
 ```kotlin
-@OptIn(ExperimentalDelvaApi::class)
-JsonStore.create(dir, CreationOptions().withDocumentKey("$.session")).use { sessions ->
+JsonStore.create(dir, CreationOptions(documentKey = "$.session")).use { sessions ->
     val db = sessions.blocking()
     db.upsert("""{"session":"s-42","state":"open"}""")
     db.upsert("""{"session":"s-42","state":"closed"}""") // replaces the first
@@ -162,14 +162,13 @@ println(warnings.single())   // offset 18: '(?i)a1' isn't I-Regexp (RFC 9485), s
 
 ## Document filters
 
-A **document filter** (experimental) limits a search to the documents whose root meets a condition: an RFC 9535 filter
+A **document filter** limits a search to the documents whose root meets a condition: an RFC 9535 filter
 expression in which `@` is the document itself, which a path alone can't test. Its comparisons of root members with
 values are index terms like the query's own, so `$..sku` needs no scan once the filter names one:
 
 ```kotlin
 blocking.insert("""{"kind":"order","items":[{"sku":"C3","qty":5}]}""")
-@OptIn(ExperimentalDelvaApi::class)
-val orderSkus = JsonPathQuery(JsonPath.compile("$..sku")).withDocumentFilter(DocumentFilter.compile("@.kind == 'order'"))
+val orderSkus = JsonPathQuery(JsonPath.compile("$..sku"), documentFilter = DocumentFilter.compile("@.kind == 'order'"))
 println(blocking.explain(orderSkus))                                          // QueryPlan('kind' == 'order')
 blocking.search(orderSkus).use { result ->
     for (hit in result) println("${hit.path} = ${hit.readJsonAsString()}")    // $['items'][0]['sku'] = "C3"
@@ -272,13 +271,11 @@ that, it is too slow: faster scans and an approximate index are on the [roadmap]
 
 ## Templates
 
-A **template** (experimental) is a query or a document filter with `${name}` placeholders where literals go. It is
+A **template** is a query or a document filter with `${name}` placeholders where literals go. It is
 compiled once, and each `bind` puts values in as literals, never as text, so no value can change what the query asks:
 
 ```kotlin
-@OptIn(ExperimentalDelvaApi::class)
 val qtyOf = JsonPathTemplate.compile("$..[?@.sku == \${sku}].qty")
-@OptIn(ExperimentalDelvaApi::class)
 val a1 = JsonPathQuery(qtyOf.bind("sku" to JsonQueryValue.Str("A1")))
 println(a1.path)                                                              // $..[?@.sku == 'A1'].qty
 blocking.search(a1).use { result -> for (hit in result) println(hit.readJsonAsString()) }   // 2
@@ -368,7 +365,7 @@ versions of its own, under the [policy in its README](../cli-kit/README.md#versi
 
 Until 1.0, the public API and the on-disk format can change in incompatible ways between minor versions. A store
 written by one version is not guaranteed to be readable by another; the format version in the store's metadata makes
-such a mismatch an `UnsupportedFormatException` rather than a misread, and `JsonStore.probe` (experimental) tells
+such a mismatch an `UnsupportedFormatException` rather than a misread, and `JsonStore.probe` tells
 whether a store opens without opening it ([SPEC §8](SPEC.md#8-consistency)).
 
 Delva is compiled with Kotlin language and API version 2.4, so it needs the Kotlin 2.4 standard library or newer,

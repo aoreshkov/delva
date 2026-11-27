@@ -2,7 +2,6 @@ package app.oreshkov.delva.serialization
 
 import app.oreshkov.delva.BlockingJsonStore
 import app.oreshkov.delva.DocId
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InsertSource
 import app.oreshkov.delva.JsonStore
 import app.oreshkov.delva.KeyConflict
@@ -32,7 +31,6 @@ public suspend inline fun <reified T> JsonStore.insertValue(value: T, json: Json
     insertValue(json.serializersModule.serializer<T>(), value, json, types)
 
 /** Inserts [value], encoded as [insertValue] encodes it, and deletes [docIds] in one atomic change ([JsonStore.replace]). */
-@ExperimentalDelvaApi
 public suspend fun <T> JsonStore.replaceValue(
     docIds: Collection<DocId>,
     serializer: SerializationStrategy<T>,
@@ -42,7 +40,6 @@ public suspend fun <T> JsonStore.replaceValue(
 ): DocId = replace(docIds, json.encodeToString(serializer, value), types)
 
 /** [replaceValue] with the serializer [json]'s module has for [T]. */
-@ExperimentalDelvaApi
 public suspend inline fun <reified T> JsonStore.replaceValue(
     docIds: Collection<DocId>,
     value: T,
@@ -51,7 +48,6 @@ public suspend inline fun <reified T> JsonStore.replaceValue(
 ): DocId = replaceValue(docIds, json.serializersModule.serializer<T>(), value, json, types)
 
 /** Inserts [value], encoded as [insertValue] encodes it, replacing the document with its key ([JsonStore.upsert]). */
-@ExperimentalDelvaApi
 public suspend fun <T> JsonStore.upsertValue(
     serializer: SerializationStrategy<T>,
     value: T,
@@ -60,7 +56,6 @@ public suspend fun <T> JsonStore.upsertValue(
 ): DocId = upsert(json.encodeToString(serializer, value), types)
 
 /** [upsertValue] with the serializer [json]'s module has for [T]. */
-@ExperimentalDelvaApi
 public suspend inline fun <reified T> JsonStore.upsertValue(value: T, json: Json = Json, types: Map<String, String> = emptyMap()): DocId =
     upsertValue(json.serializersModule.serializer<T>(), value, json, types)
 
@@ -77,7 +72,6 @@ public inline fun <reified T> BlockingJsonStore.insertValue(value: T, json: Json
     insertValue(json.serializersModule.serializer<T>(), value, json, types)
 
 /** See [JsonStore.replaceValue]. */
-@ExperimentalDelvaApi
 public fun <T> BlockingJsonStore.replaceValue(
     docIds: Collection<DocId>,
     serializer: SerializationStrategy<T>,
@@ -87,7 +81,6 @@ public fun <T> BlockingJsonStore.replaceValue(
 ): DocId = replace(docIds, json.encodeToString(serializer, value), types)
 
 /** See [JsonStore.replaceValue]. */
-@ExperimentalDelvaApi
 public inline fun <reified T> BlockingJsonStore.replaceValue(
     docIds: Collection<DocId>,
     value: T,
@@ -96,7 +89,6 @@ public inline fun <reified T> BlockingJsonStore.replaceValue(
 ): DocId = replaceValue(docIds, json.serializersModule.serializer<T>(), value, json, types)
 
 /** See [JsonStore.upsertValue]. */
-@ExperimentalDelvaApi
 public fun <T> BlockingJsonStore.upsertValue(
     serializer: SerializationStrategy<T>,
     value: T,
@@ -105,42 +97,28 @@ public fun <T> BlockingJsonStore.upsertValue(
 ): DocId = upsert(json.encodeToString(serializer, value), types)
 
 /** See [JsonStore.upsertValue]. */
-@ExperimentalDelvaApi
 public inline fun <reified T> BlockingJsonStore.upsertValue(value: T, json: Json = Json, types: Map<String, String> = emptyMap()): DocId =
     upsertValue(json.serializersModule.serializer<T>(), value, json, types)
 
 /**
  * One document for [JsonStore.insertAll]: [value], encoded by [serializer] with [json] when this is called, so a value
- * that can't be encoded fails here, before the batch starts. [types] as [InsertSource.types].
+ * that can't be encoded fails here, before the batch starts. [types], [replaces] and [onExistingKey] as
+ * [InsertSource] takes them.
  */
 public fun <T> insertSourceOf(
     serializer: SerializationStrategy<T>,
     value: T,
     json: Json = Json,
     types: Map<String, String> = emptyMap(),
-): InsertSource = InsertSource(json.encodeToString(serializer, value).byteInputStream(), types)
-
-/** [insertSourceOf] with the serializer [json]'s module has for [T]. */
-public inline fun <reified T> insertSourceOf(value: T, json: Json = Json, types: Map<String, String> = emptyMap()): InsertSource =
-    insertSourceOf(json.serializersModule.serializer<T>(), value, json, types)
-
-/** [insertSourceOf], for a document that [replaces] others or, with a document key, [onExistingKey] (see [InsertSource]). */
-@ExperimentalDelvaApi
-public fun <T> insertSourceOf(
-    serializer: SerializationStrategy<T>,
-    value: T,
-    json: Json = Json,
-    types: Map<String, String> = emptyMap(),
-    replaces: Collection<DocId>,
+    replaces: Collection<DocId> = emptyList(),
     onExistingKey: KeyConflict = KeyConflict.FAIL,
 ): InsertSource = InsertSource(json.encodeToString(serializer, value).byteInputStream(), types, replaces, onExistingKey)
 
-/** [insertSourceOf] with [replaces] and [onExistingKey], and the serializer [json]'s module has for [T]. */
-@ExperimentalDelvaApi
+/** [insertSourceOf] with the serializer [json]'s module has for [T]. */
 public inline fun <reified T> insertSourceOf(
     value: T,
     json: Json = Json,
     types: Map<String, String> = emptyMap(),
-    replaces: Collection<DocId>,
+    replaces: Collection<DocId> = emptyList(),
     onExistingKey: KeyConflict = KeyConflict.FAIL,
 ): InsertSource = insertSourceOf(json.serializersModule.serializer<T>(), value, json, types, replaces, onExistingKey)

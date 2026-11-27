@@ -174,7 +174,6 @@ private fun jsonString(text: String): String = buildString {
 }
 
 /** The filter of [nearestChunks], compiled once. */
-@OptIn(ExperimentalDelvaApi::class)
 private val OF_SOURCE = DocumentFilterTemplate.compile("@.source == \${source}")
 
 private val TEXT_PATH = JsonPath.compile("$.text")

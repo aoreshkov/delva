@@ -59,13 +59,13 @@ class VectorFieldTest {
     }
 
     @Test
-    fun `creation options keep their vector field through copy and withDocumentKey`() {
+    fun `creation options keep their vector field through copy, document key included`() {
         val options = CreationOptions(fragmentBytes = 4096, excludedKeys = setOf("embedding")).withVectorField(field)
         assertEquals(field, options.vectorField)
         assertNull(CreationOptions().vectorField)
         assertEquals(field, options.copy(hashTerms = false).vectorField)
-        assertEquals(field, options.withDocumentKey("$.id").vectorField)
-        assertEquals("$.id", options.withDocumentKey("$.id").withVectorField(field).documentKey)
+        assertEquals(field, options.copy(documentKey = "$.id").vectorField)
+        assertEquals("$.id", options.copy(documentKey = "$.id").withVectorField(field).documentKey)
         assertNull(options.withVectorField(null).vectorField)
         assertEquals(CreationOptions(fragmentBytes = 4096, excludedKeys = setOf("embedding")), options.withVectorField(null))
 
@@ -81,20 +81,20 @@ class VectorFieldTest {
 
     @Test
     fun `the vector field and the document key can't hold one another`() {
-        val keyed = CreationOptions().withDocumentKey("$.id")
+        val keyed = CreationOptions(documentKey = "$.id")
         for (path in listOf("$.id", "$['id']", "$.id.v", "$.id[0]")) {
             val e = assertFailsWith<IllegalArgumentException>(path) { keyed.withVectorField(VectorField(path, 3, VectorMetric.COSINE)) }
             assertContains(e.message!!, "overlap")
         }
         val nested = CreationOptions().withVectorField(VectorField("$.meta.v", 3, VectorMetric.COSINE))
         for (key in listOf("$.meta", "$.meta.v", "$.meta.v[1]")) {
-            assertFailsWith<IllegalArgumentException>(key) { nested.withDocumentKey(key) }
+            assertFailsWith<IllegalArgumentException>(key) { nested.copy(documentKey = key) }
         }
         // Siblings, and names that only share a prefix of their characters, are apart.
         for (path in listOf("$.v", "$.ids", "$.i", "$[0]", "$.meta.id")) {
             assertEquals(path, keyed.withVectorField(VectorField(path, 3, VectorMetric.COSINE)).vectorField?.path)
         }
-        assertEquals("$.meta.w", nested.withDocumentKey("$.meta.w").documentKey)
+        assertEquals("$.meta.w", nested.copy(documentKey = "$.meta.w").documentKey)
     }
 
     @Test
@@ -103,10 +103,10 @@ class VectorFieldTest {
         val composed = Char(0xE9).toString()
         val decomposed = "e" + Char(0x301)
         assertNotEquals(composed, decomposed)
-        val nfc = CreationOptions(normalization = Normalization.NFC).withDocumentKey("$['$composed']")
+        val nfc = CreationOptions(normalization = Normalization.NFC, documentKey = "$['$composed']")
         assertFailsWith<IllegalArgumentException> { nfc.withVectorField(VectorField("$['$decomposed'].v", 3, VectorMetric.COSINE)) }
         // Without normalization they are different keys.
-        val none = CreationOptions().withDocumentKey("$['$composed']")
+        val none = CreationOptions(documentKey = "$['$composed']")
         assertEquals(3, none.withVectorField(VectorField("$['$decomposed'].v", 3, VectorMetric.COSINE)).vectorField?.dimensions)
 
         val tooLong = "x" + Char(0x316).toString().repeat(Nfc.MAX_COMBINING_RUN + 1)

@@ -194,9 +194,12 @@ class MaxDocumentsSearchTest {
     fun `every hit of the newest matching document, in pages smaller than the document`() {
         TestEngines.open(engineOptions).use { store ->
             val ids = (0 until 4).map { store.insert(three(it % 2)).raw }
-            val newestOfG0 = JsonPathQuery(JsonPath.compile("$.items[?@.k == 1]"), limit = 2, order = SearchOrder.DESCENDING)
-                .withDocumentFilter(DocumentFilter.compile("@.g == 0"))
-                .withMaxDocuments(1)
+            val newestOfG0 = JsonPathQuery(
+                JsonPath.compile("$.items[?@.k == 1]"),
+                limit = 2,
+                order = SearchOrder.DESCENDING,
+                documentFilter = DocumentFilter.compile("@.g == 0"),
+            ).withMaxDocuments(1)
             store.search(newestOfG0).use { result ->
                 val first = result.nextPage()!!
                 assertEquals(listOf(NodeRef(DocId(ids[2]), 7), NodeRef(DocId(ids[2]), 5)), first.hits.map { it.node })

@@ -82,7 +82,6 @@ class GuideExampleTest {
         JsonStore.openOrCreate(dir.resolve("replace")).use { store ->
             val id = store.blocking().insert("""{"session":"s-42","state":"open"}""")
 
-            @OptIn(ExperimentalDelvaApi::class)
             val next = store.blocking().replace(listOf(id), """{"session":"s-42","state":"closed"}""")
 
             val states = store.blocking().search(KeyValueQuery("session", JsonQueryValue.Str("s-42"))).use { result ->
@@ -90,7 +89,6 @@ class GuideExampleTest {
             }
             assertEquals(listOf(next to """{"session":"s-42","state":"closed"}"""), states)
             val conflict = assertFailsWith<WriteConflictException> {
-                @OptIn(ExperimentalDelvaApi::class)
                 store.blocking().replace(listOf(id), """{"session":"s-42","state":"lost"}""")
             }
             assertEquals(listOf(id), conflict.conflicting)
@@ -101,8 +99,7 @@ class GuideExampleTest {
     fun `a store with a document key upserts, gets and lists by key, as the guide shows`() {
         var id: DocId? = null
         var keys: List<String?> = emptyList()
-        @OptIn(ExperimentalDelvaApi::class)
-        JsonStore.create(dir.resolve("keys"), CreationOptions().withDocumentKey("$.session")).use { sessions ->
+        JsonStore.create(dir.resolve("keys"), CreationOptions(documentKey = "$.session")).use { sessions ->
             val db = sessions.blocking()
             db.upsert("""{"session":"s-42","state":"open"}""")
             db.upsert("""{"session":"s-42","state":"closed"}""") // replaces the first
@@ -138,9 +135,11 @@ class GuideExampleTest {
             store.blocking().insert("""{"session":"s-7","items":[{"sku":"E5"}]}""")
 
             @OptIn(ExperimentalDelvaApi::class)
-            val newestItems = JsonPathQuery(JsonPath.compile("$.items[*].sku"), order = SearchOrder.DESCENDING)
-                .withDocumentFilter(DocumentFilter.compile("@.session == 's-42'"))
-                .withMaxDocuments(1)
+            val newestItems = JsonPathQuery(
+                JsonPath.compile("$.items[*].sku"),
+                order = SearchOrder.DESCENDING,
+                documentFilter = DocumentFilter.compile("@.session == 's-42'"),
+            ).withMaxDocuments(1)
             val skus = store.blocking().search(newestItems).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() }
             assertEquals(listOf("\"D4\"", "\"C3\"", "\"A1\""), skus)
 
@@ -216,20 +215,16 @@ class GuideExampleTest {
             assertEquals(listOf("2"), blocking.search(caseless).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() })
 
             blocking.insert("""{"kind":"order","items":[{"sku":"C3","qty":5}]}""")
-            @OptIn(ExperimentalDelvaApi::class)
-            val orderSkus = JsonPathQuery(JsonPath.compile("$..sku")).withDocumentFilter(DocumentFilter.compile("@.kind == 'order'"))
+            val orderSkus = JsonPathQuery(JsonPath.compile("$..sku"), documentFilter = DocumentFilter.compile("@.kind == 'order'"))
             assertEquals("QueryPlan('kind' == 'order')", blocking.explain(orderSkus).toString())
             val orders = blocking.search(orderSkus).use { result -> result.iterator().asSequence().map { "${it.path} = ${it.readJsonAsString()}" }.toList() }
             assertEquals(listOf("""$['items'][0]['sku'] = "C3""""), orders)
 
-            @OptIn(ExperimentalDelvaApi::class)
             val qtyOf = JsonPathTemplate.compile("$..[?@.sku == \${sku}].qty")
-            @OptIn(ExperimentalDelvaApi::class)
             val a1 = JsonPathQuery(qtyOf.bind("sku" to JsonQueryValue.Str("A1")))
             assertEquals("$..[?@.sku == 'A1'].qty", a1.path.toString())
             assertEquals(listOf("2"), blocking.search(a1).use { result -> result.iterator().asSequence().map { it.readJsonAsString() }.toList() })
             // A value with quotes in it stays a value.
-            @OptIn(ExperimentalDelvaApi::class)
             val injected = JsonPathQuery(qtyOf.bind("sku" to JsonQueryValue.Str("x' || @.qty > -1 || 'x")))
             assertEquals(0L, blocking.count(injected))
 

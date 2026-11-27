@@ -7,9 +7,7 @@ public final class app/oreshkov/delva/serialization/ReadValuesKt {
 }
 
 public final class app/oreshkov/delva/serialization/StoreValuesKt {
-	public static final fun insertSourceOf (Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/serialization/json/Json;Ljava/util/Map;)Lapp/oreshkov/delva/InsertSource;
 	public static final fun insertSourceOf (Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/serialization/json/Json;Ljava/util/Map;Ljava/util/Collection;Lapp/oreshkov/delva/KeyConflict;)Lapp/oreshkov/delva/InsertSource;
-	public static synthetic fun insertSourceOf$default (Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/serialization/json/Json;Ljava/util/Map;ILjava/lang/Object;)Lapp/oreshkov/delva/InsertSource;
 	public static synthetic fun insertSourceOf$default (Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/serialization/json/Json;Ljava/util/Map;Ljava/util/Collection;Lapp/oreshkov/delva/KeyConflict;ILjava/lang/Object;)Lapp/oreshkov/delva/InsertSource;
 	public static final fun insertValue (Lapp/oreshkov/delva/BlockingJsonStore;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/serialization/json/Json;Ljava/util/Map;)J
 	public static final fun insertValue (Lapp/oreshkov/delva/JsonStore;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/serialization/json/Json;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

@@ -10,7 +10,6 @@ package app.oreshkov.delva.examples
 
 import app.oreshkov.delva.BlockingJsonStore
 import app.oreshkov.delva.DocId
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.JsonQueryValue
 import app.oreshkov.delva.KeyValueQuery
 import app.oreshkov.delva.SearchOrder
@@ -24,7 +23,6 @@ import app.oreshkov.delva.WriteConflictException
  * With no version stored yet, two writers can both insert a first one; the newer is then current, and the next save
  * replaces only that one.
  */
-@OptIn(ExperimentalDelvaApi::class)
 fun saveVersion(db: BlockingJsonStore, keyMember: String, key: String, json: String): DocId {
     val lookup = KeyValueQuery(keyMember, JsonQueryValue.Str(key), limit = 1, order = SearchOrder.DESCENDING)
     while (true) {

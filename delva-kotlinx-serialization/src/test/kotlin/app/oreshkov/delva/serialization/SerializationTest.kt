@@ -4,7 +4,6 @@ import app.oreshkov.delva.CreationOptions
 import app.oreshkov.delva.DocId
 import app.oreshkov.delva.DocumentFilterTemplate
 import app.oreshkov.delva.DocumentRejectedException
-import app.oreshkov.delva.ExperimentalDelvaApi
 import app.oreshkov.delva.InsertOutcome
 import app.oreshkov.delva.JsonPath
 import app.oreshkov.delva.JsonPathQuery
@@ -42,7 +41,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
-@OptIn(ExperimentalDelvaApi::class)
 class SerializationTest {
     @Serializable
     data class Item(val sku: String, val qty: Int)
@@ -146,7 +144,7 @@ class SerializationTest {
 
     @Test
     fun `replace, upsert and insertAll take values`() {
-        val keyed = CreationOptions().withDocumentKey("$.id")
+        val keyed = CreationOptions(documentKey = "$.id")
         JsonStore.openOrCreate(dir.resolve("keyed"), keyed).use { store ->
             val db = store.blocking()
             val first = db.insertValue(order)
@@ -179,7 +177,7 @@ class SerializationTest {
 
     @Test
     fun `the suspending store takes and gives values too`() = runTest {
-        JsonStore.openOrCreate(dir.resolve("suspend"), CreationOptions().withDocumentKey("$.id")).use { store ->
+        JsonStore.openOrCreate(dir.resolve("suspend"), CreationOptions(documentKey = "$.id")).use { store ->
             val docId: DocId = store.insertValue(order)
             val upserted = store.upsertValue(Order.serializer(), order.copy(customer = "bob"))
             val replaced = store.replaceValue(listOf(upserted), order.copy(customer = "cy"))
@@ -212,7 +210,7 @@ class SerializationTest {
             val byValue = db.search(KeyValueQuery("customer", element.getValue("customer").toQueryValue())).decodeAll { it.decode<Order>().id }
             assertEquals(listOf("o-2"), byValue)
             val ofCustomer = DocumentFilterTemplate.compile("@.customer == \${customer}")
-            val query = JsonPathQuery(JsonPath.compile("$.items[0]")).withDocumentFilter(ofCustomer.bind("customer" to element.getValue("customer").toQueryValue()))
+            val query = JsonPathQuery(JsonPath.compile("$.items[0]"), documentFilter = ofCustomer.bind("customer" to element.getValue("customer").toQueryValue()))
             assertEquals(listOf(Item("A1", 2)), db.search(query).decodeAll { it.decode<Item>() })
         }
     }

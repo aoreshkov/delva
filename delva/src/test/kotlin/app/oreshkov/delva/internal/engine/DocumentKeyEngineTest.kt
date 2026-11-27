@@ -48,7 +48,7 @@ class DocumentKeyEngineTest {
         keyPath: String? = "$.id",
         startWriterThread: Boolean = true,
     ) = EngineOptions(
-        CreationOptions(fragmentBytes = t, normalization = normalization).withDocumentKey(keyPath), StoreOptions(encoderBudgetBytes = maxOf(2 * t, 1024)),
+        CreationOptions(fragmentBytes = t, normalization = normalization, documentKey = keyPath), StoreOptions(encoderBudgetBytes = maxOf(2 * t, 1024)),
         sorterBytes = 4096, keyArenaBytes = 1024, smallInsertThreshold = threshold, keySeed = 23, log = TestEngines.LOG,
         backgroundFlush = false, memtableBytes = memtableBytes, segmentBlockBytes = 512, startWriterThread = startWriterThread,
         compaction = CompactionOptions(bytesPerSecond = 0, minMergeSegments = 2),
@@ -137,8 +137,8 @@ class DocumentKeyEngineTest {
             assertEquals(docId, store.get("k1"))
             assertEquals(RejectReason.KEY_MISSING, assertFailsWith<DocumentRejectedException> { store.insert("""{"meta":{"the key":["x"]}}""") }.reason)
         }
-        assertFailsWith<InvalidJsonPathException> { CreationOptions().withDocumentKey("$") }
-        assertFailsWith<InvalidJsonPathException> { CreationOptions().withDocumentKey("$..id") }
+        assertFailsWith<InvalidJsonPathException> { CreationOptions(documentKey = "$") }
+        assertFailsWith<InvalidJsonPathException> { CreationOptions(documentKey = "$..id") }
     }
 
     @Test
@@ -311,7 +311,7 @@ class DocumentKeyEngineTest {
         assertFailsWith<CreationOptionsMismatchException> { TestEngines.open(options(), fs).close() }
         val dir = java.nio.file.Files.createTempDirectory("delva-keys")
         try {
-            JsonStore.create(dir, CreationOptions().withDocumentKey("$.id")).close()
+            JsonStore.create(dir, CreationOptions(documentKey = "$.id")).close()
             JsonStore.open(dir).use { store ->
                 assertEquals("$.id", store.creationOptions.documentKey)
                 store.blocking().insert(doc("a"))

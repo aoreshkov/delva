@@ -66,11 +66,9 @@ public interface ReadableJsonStore : AutoCloseable {
      * Starts a search of documents in key order (SPEC.md §3.3) on the current state; close the result when done. A store
      * without document keys throws [IllegalStateException].
      */
-    @ExperimentalDelvaApi
     public fun search(query: DocumentKeyQuery): SearchResult
 
     /** How many documents the key-order [search] returns for [query], counting no further than [atMost]; see the other [count]. */
-    @ExperimentalDelvaApi
     public suspend fun count(query: DocumentKeyQuery, atMost: Long = Long.MAX_VALUE): Long
 
     /**
@@ -78,7 +76,6 @@ public interface ReadableJsonStore : AutoCloseable {
      * (SPEC.md §3.3); with [Normalization.NFC], [key] is normalized first. A store without document keys throws
      * [IllegalStateException].
      */
-    @ExperimentalDelvaApi
     public suspend fun get(key: String): DocId?
 
     /**
@@ -216,15 +213,12 @@ public interface BlockingReadableJsonStore {
     public fun count(query: JsonPathQuery, atMost: Long = Long.MAX_VALUE): Long
 
     /** See [ReadableJsonStore.search]. */
-    @ExperimentalDelvaApi
     public fun search(query: DocumentKeyQuery): SearchResult
 
     /** See [ReadableJsonStore.count]. */
-    @ExperimentalDelvaApi
     public fun count(query: DocumentKeyQuery, atMost: Long = Long.MAX_VALUE): Long
 
     /** See [ReadableJsonStore.get]. */
-    @ExperimentalDelvaApi
     public fun get(key: String): DocId?
 
     /** See [ReadableJsonStore.search]; the search runs on the caller's thread. */

@@ -68,7 +68,6 @@ public interface SearchHit {
      * The key of the hit's document in a store with [CreationOptions.documentKey], null in a store without one. Known
      * already for a [DocumentKeyQuery] hit, and looked up in the key index when first read for others.
      */
-    @ExperimentalDelvaApi
     public val documentKey: String?
 
     /**

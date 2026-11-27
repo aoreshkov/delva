@@ -172,7 +172,7 @@ class StoreOptionsTest {
         val keyed = CreationOptions(normalization = Normalization.NFC, documentKey = "$.id")
         assertEquals("$.id", keyed.documentKey)
         assertEquals(keyed, keyed.copy())
-        assertNull(keyed.withDocumentKey(null).documentKey)
+        assertNull(keyed.copy(documentKey = null).documentKey)
     }
 
     @Test
